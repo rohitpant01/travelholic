@@ -1,0 +1,76 @@
+{
+  "expo": {
+    "name": "TravelHolic",
+    "slug": "travelholic",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#00B4B4"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.travelholic.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TravelHolic uses your location to show nearby travelers.",
+        "NSLocationAlwaysUsageDescription": "TravelHolic uses your location to show nearby travelers.",
+        "NSCameraUsageDescription": "TravelHolic uses the camera for photo verification selfies.",
+        "NSPhotoLibraryUsageDescription": "TravelHolic uses your photo library for profile and travel photos."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#00B4B4"
+      },
+      "package": "com.travelholic.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY"
+        }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow TravelHolic to use your location to find nearby travelers."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow TravelHolic to access your photos.",
+          "cameraPermission": "Allow TravelHolic to use your camera for verification."
+        }
+      ],
+      "expo-font",
+      "@react-native-community/datetimepicker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
+    },
+    "newArchEnabled": true
+  }
+}
