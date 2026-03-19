@@ -23,7 +23,7 @@ export const API_BASE_URL = 'http://192.168.0.170:5000/api';
 // Get from: https://console.cloud.google.com
 // Enable: Maps SDK for Android, Maps SDK for iOS, Geocoding API, Places API
 // ================================================================
-export const GOOGLE_MAPS_API_KEY = 'AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY';
+export const GOOGLE_MAPS_API_KEY = '';
 export const GOOGLE_WEB_CLIENT_ID = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
 export const GOOGLE_ANDROID_CLIENT_ID = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com';
 export const GOOGLE_IOS_CLIENT_ID = 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com';
