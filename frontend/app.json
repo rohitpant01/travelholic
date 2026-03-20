@@ -36,7 +36,7 @@
       },
       "package": "com.travelholic",
       "googleServicesFile": "./google-services.json",
-      "softwareKeyboardLayoutMode": "adjustResize",
+      "softwareKeyboardLayoutMode": "resize",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY"
