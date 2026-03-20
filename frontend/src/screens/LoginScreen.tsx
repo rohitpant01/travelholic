@@ -12,6 +12,7 @@ import { authAPI } from '../api/services';
 import { setUser, setToken } from '../store/slices/authSlice';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
 import apiClient from '../api/client';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 
 
 export default function LoginScreen() {
@@ -27,9 +28,16 @@ export default function LoginScreen() {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
+
+    let finalIdentifier = emailOrPhone.trim();
+    // Auto +91 if it's 10 digits
+    if (/^\d{10}$/.test(finalIdentifier)) {
+      finalIdentifier = `+91${finalIdentifier}`;
+    }
+
     setLoading(true);
     try {
-      const res = await authAPI.login({ emailOrPhone, password });
+      const res = await authAPI.login({ emailOrPhone: finalIdentifier, password });
       const { token, user } = res.data;
       await AsyncStorage.setItem('token', token);
       await AsyncStorage.setItem('user', JSON.stringify(user));
@@ -64,12 +72,12 @@ export default function LoginScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.form} keyboardShouldPersistTaps="handled">
-        <Text style={styles.label}>Email or Phone</Text>
+        <Text style={styles.label}>Email or Mobile Number</Text>
         <View style={styles.inputWrapper}>
           <Ionicons name="mail-outline" size={20} color={COLORS.textLight} style={styles.icon} />
           <TextInput
             style={styles.input}
-            placeholder="Enter email or phone"
+            placeholder="Email or 10-digit mobile"
             value={emailOrPhone}
             onChangeText={setEmailOrPhone}
             autoCapitalize="none"
@@ -134,6 +142,17 @@ export default function LoginScreen() {
         >
           <Text style={styles.registerText}>Create Account</Text>
         </TouchableOpacity>
+
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>Or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <View style={{ marginBottom: 40 }}>
+          <GoogleSignInButton title="Sign in with Google" />
+        </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );

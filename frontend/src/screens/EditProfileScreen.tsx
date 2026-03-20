@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, Alert, ActivityIndicator, Image, Platform
+  ScrollView, Alert, ActivityIndicator, Image, Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
@@ -14,6 +15,7 @@ import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '../utils/theme';
 import { Dimensions } from 'react-native';
 
 const { width: W } = Dimensions.get('window');
+import { GOOGLE_MAPS_API_KEY } from '../api/client';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
@@ -27,12 +29,26 @@ export default function EditProfileScreen() {
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [bio, setBio] = useState(user?.bio || '');
-  const [city, setCity] = useState(user?.location?.city || '');
-  const [country, setCountry] = useState(user?.location?.country || '');
+  const [city, setCity] = useState(user?.city || user?.location?.city || '');
+  const [country, setCountry] = useState(user?.country || user?.location?.country || '');
+  const [coordinates, setCoordinates] = useState<number[]>(user?.location?.coordinates || [0, 0]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [photos, setPhotos] = useState<any[]>(user?.photos || []);
+
+  // Travel Matching states
+  const [originCity, setOriginCity] = useState(user?.origin?.city || '');
+  const [originCoords, setOriginCoords] = useState<number[]>(user?.origin?.location?.coordinates || [0, 0]);
+  const [destinationCity, setDestinationCity] = useState(user?.destination?.city || '');
+  const [destinationCoords, setDestinationCoords] = useState<number[]>(user?.destination?.location?.coordinates || [0, 0]);
+  const [travelDate, setTravelDate] = useState(user?.travelDate ? new Date(user.travelDate).toISOString().split('T')[0] : '');
+  
+  const [activeField, setActiveField] = useState<'city' | 'origin' | 'destination'>('city');
 
   const handleSave = async () => {
     if (!firstName || !lastName) return Alert.alert('Error', 'Name is required');
+    if (!city.trim()) return Alert.alert('Error', 'City is required');
+    if (!country.trim()) return Alert.alert('Error', 'Country is required');
     
     setLoading(true);
     try {
@@ -41,7 +57,17 @@ export default function EditProfileScreen() {
         lastName,
         bio,
         city,
-        country
+        country,
+        coordinates,
+        origin: { 
+          city: originCity, 
+          location: { type: 'Point', coordinates: originCoords } 
+        },
+        destination: { 
+          city: destinationCity, 
+          location: { type: 'Point', coordinates: destinationCoords } 
+        },
+        travelDate: travelDate || undefined
       });
       dispatch(updateUser(res.data.user));
       Alert.alert('Success', 'Profile updated successfully');
@@ -50,6 +76,79 @@ export default function EditProfileScreen() {
       Alert.alert('Error', error.response?.data?.error || 'Update failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSuggestions = async (text: string, field: 'city' | 'origin' | 'destination' = 'city') => {
+    setActiveField(field);
+    if (field === 'city') setCity(text);
+    else if (field === 'origin') setOriginCity(text);
+    else if (field === 'destination') setDestinationCity(text);
+
+    if (text.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&types=(cities)&key=${GOOGLE_MAPS_API_KEY}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.status === 'OK') {
+        setSuggestions(data.predictions);
+        setShowSuggestions(true);
+      } else if (data.status === 'REQUEST_DENIED') {
+        console.warn('Google Places API Request Denied:', data.error_message);
+        setSuggestions([]);
+        setShowSuggestions(false);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+    }
+  };
+
+  const selectSuggestion = async (item: any) => {
+    try {
+      // Get Details for city/country breakdown and coordinates
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${item.place_id}&fields=address_components,geometry&key=${GOOGLE_MAPS_API_KEY}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.status === 'OK') {
+        const comps = data.result.address_components;
+        const cityVal = comps.find((c: any) => c.types.includes('locality'))?.long_name || 
+                        comps.find((c: any) => c.types.includes('administrative_area_level_2'))?.long_name || 
+                        item.description.split(',')[0];
+        const countryVal = comps.find((c: any) => c.types.includes('country'))?.long_name || '';
+        
+        const lat = data.result.geometry.location.lat;
+        const lng = data.result.geometry.location.lng;
+
+        if (activeField === 'city') {
+          setCity(cityVal);
+          setCountry(countryVal);
+          setCoordinates([lng, lat]);
+        } else if (activeField === 'origin') {
+          setOriginCity(cityVal);
+          setOriginCoords([lng, lat]);
+        } else if (activeField === 'destination') {
+          setDestinationCity(cityVal);
+          setDestinationCoords([lng, lat]);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching place details:', e);
+      if (activeField === 'city') setCity(item.structured_formatting.main_text);
+      else if (activeField === 'origin') setOriginCity(item.structured_formatting.main_text);
+      else if (activeField === 'destination') setDestinationCity(item.structured_formatting.main_text);
+    } finally {
+      setSuggestions([]);
+      setShowSuggestions(false);
     }
   };
 
@@ -75,17 +174,38 @@ export default function EditProfileScreen() {
     setUploading(true);
     try {
       const formData = new FormData();
+      
+      // 1. Clean the path (remove query params for extension detection)
+      const cleanPath = uri.split('?')[0];
+      const extension = cleanPath.split('.').pop()?.toLowerCase() || 'jpg';
+      
+      // 2. Standardize MIME (strict mapping)
+      const type = extension === 'png' ? 'image/png' : 'image/jpeg';
+      
+      // 3. Simple filename (avoid special chars)
+      const name = `image_${Date.now()}.${extension}`;
+
+      // 4. URI must start with file:// for most Android/Expo environments
+      const finalUri = Platform.OS === 'android' && !uri.startsWith('file://') ? `file://${uri}` : uri;
+
       formData.append('photos', {
-        uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
-        name: `photo_${Date.now()}.jpg`,
-        type: 'image/jpeg',
+        uri: finalUri,
+        name: name,
+        type: type,
       } as any);
 
       const res = await userAPI.uploadPhotos(formData);
       setPhotos(res.data.photos);
       dispatch(updateUser({ photos: res.data.photos }));
     } catch (error: any) {
-      Alert.alert('Upload Failed', error.response?.data?.error || 'Could not upload photo');
+      console.error('PHOTO UPLOAD ERROR:', error);
+      let msg = 'Could not upload photo';
+      if (error.response?.data?.error) {
+        msg = error.response.data.error;
+      } else if (error.message) {
+        msg = `${error.message}${error.code ? ` (${error.code})` : ''}`;
+      }
+      Alert.alert('Upload Failed', msg);
     } finally {
       setUploading(false);
     }
@@ -123,7 +243,11 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={26} color={COLORS.text} />
@@ -136,14 +260,17 @@ export default function EditProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Photo Management Section */}
         <Text style={styles.sectionTitle}>Photos</Text>
         <View style={styles.photoGrid}>
           {Array.from({ length: 6 }).map((_, index) => {
             const photo = photos[index];
             return (
-              <View key={index} style={[styles.photoSlot, photo?.isProfile && styles.photoSlotProfile]}>
+              <View 
+                key={photo?._id || photo?.publicId || index} 
+                style={[styles.photoSlot, photo?.isProfile && styles.photoSlotProfile]}
+              >
                 {photo ? (
                   <>
                     <Image source={{ uri: photo.url }} style={styles.photo} />
@@ -220,9 +347,30 @@ export default function EditProfileScreen() {
               <TextInput
                 style={styles.input}
                 value={city}
-                onChangeText={setCity}
+                onChangeText={(t) => fetchSuggestions(t, 'city')}
                 placeholder="City"
+                onFocus={() => {
+                  setActiveField('city');
+                  if (city.length >= 3) setShowSuggestions(true);
+                }}
               />
+              {showSuggestions && activeField === 'city' && suggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 200 }}>
+                    {suggestions.map((item, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.suggestionItem}
+                        onPress={() => selectSuggestion(item)}
+                      >
+                        <Text style={styles.suggestionText} numberOfLines={2}>
+                          {item.description}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
             <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
               <Text style={styles.label}>Country</Text>
@@ -234,11 +382,86 @@ export default function EditProfileScreen() {
               />
             </View>
           </View>
+
+          {/* Travel Matching Section */}
+          <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Travel Plan</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Departure City (Origin)</Text>
+            <TextInput
+              style={styles.input}
+              value={originCity}
+              onChangeText={(t) => fetchSuggestions(t, 'origin')}
+              placeholder="Where are you starting from?"
+              onFocus={() => {
+                setActiveField('origin');
+                if (originCity.length >= 3) setShowSuggestions(true);
+              }}
+            />
+            {showSuggestions && activeField === 'origin' && suggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 200 }}>
+                  {suggestions.map((item, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.suggestionItem}
+                      onPress={() => selectSuggestion(item)}
+                    >
+                      <Text style={styles.suggestionText} numberOfLines={2}>
+                        {item.description}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Destination City</Text>
+            <TextInput
+              style={styles.input}
+              value={destinationCity}
+              onChangeText={(t) => fetchSuggestions(t, 'destination')}
+              placeholder="Where are you going?"
+              onFocus={() => {
+                setActiveField('destination');
+                if (destinationCity.length >= 3) setShowSuggestions(true);
+              }}
+            />
+            {showSuggestions && activeField === 'destination' && suggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 200 }}>
+                  {suggestions.map((item, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.suggestionItem}
+                      onPress={() => selectSuggestion(item)}
+                    >
+                      <Text style={styles.suggestionText} numberOfLines={2}>
+                        {item.description}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Travel Date (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input}
+              value={travelDate}
+              onChangeText={setTravelDate}
+              placeholder="e.g. 2024-12-25"
+            />
+          </View>
         </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -286,5 +509,28 @@ const styles = StyleSheet.create({
   },
   bioInput: { minHeight: 80, textAlignVertical: 'top' },
   charCount: { textAlign: 'right', fontSize: 12, color: COLORS.textLight, marginTop: 4 },
-  row: { flexDirection: 'row' },
+  row: { flexDirection: 'row', zIndex: 100 },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    zIndex: 1000,
+    marginTop: 4,
+    ...SHADOW.md,
+  },
+  suggestionItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: COLORS.text,
+  },
 });

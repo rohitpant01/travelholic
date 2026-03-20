@@ -13,6 +13,7 @@ import { authAPI } from '../../api/services';
 import { setUser, setToken } from '../../store/slices/authSlice';
 import { COLORS, FONTS, RADIUS, SPACING } from '../../utils/theme';
 import apiClient from '../../api/client';
+import GoogleSignInButton from '../../components/GoogleSignInButton';
 
 export default function Step1AccountScreen() {
   const navigation = useNavigation<any>();
@@ -70,7 +71,7 @@ export default function Step1AccountScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.white }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <RegisterHeader step={1} totalSteps={7} title="Create Account" subtitle="Tell us about yourself" />
       <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
 
@@ -144,6 +145,14 @@ export default function Step1AccountScreen() {
           </LinearGradient>
         </TouchableOpacity>
 
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>Or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <GoogleSignInButton title="Sign up with Google" />
+
         <TouchableOpacity 
           style={styles.loginLink} 
           onPress={() => navigation.navigate('Login')}
@@ -179,4 +188,7 @@ const styles = StyleSheet.create({
   loginLink: { marginTop: 24, alignItems: 'center', paddingBottom: 20 },
   loginLinkText: { fontSize: FONTS.sm, color: COLORS.textSecondary },
   loginLinkBold: { color: COLORS.teal, fontWeight: '700' },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24, gap: 12 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  dividerText: { fontSize: FONTS.sm, color: COLORS.textLight },
 });

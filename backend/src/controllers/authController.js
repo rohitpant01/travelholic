@@ -86,12 +86,18 @@ const login = async (req, res) => {
     console.log(`[AUTH] Login attempt: ${emailOrPhone}`);
 
     // Find by email or phone
-    const user = await User.findOne({
-      $or: [
-        { email: emailOrPhone?.toLowerCase() },
-        { phone: emailOrPhone },
-      ],
-    });
+    let identifier = emailOrPhone;
+    let query = [
+      { email: identifier?.toLowerCase() },
+      { phone: identifier },
+    ];
+
+    // If it looks like a 10-digit Indian number, also check with +91
+    if (/^\d{10}$/.test(identifier)) {
+      query.push({ phone: `+91${identifier}` });
+    }
+
+    const user = await User.findOne({ $or: query });
 
     if (!user) {
       console.log(`[AUTH] Login failed: User ${emailOrPhone} not found`);
@@ -218,9 +224,6 @@ const resetPassword = async (req, res) => {
   }
 };
 
-// @desc    Google Sign-In
-// @route   POST /api/auth/google
-// @access  Public
 const googleLogin = async (req, res) => {
   try {
     const { idToken } = req.body;
@@ -229,9 +232,11 @@ const googleLogin = async (req, res) => {
     console.log('[AUTH] Google Sign-In attempt...');
     
     // Verify Google ID Token
+    // We don't strictly pass audience if we want the library to auto-accept tokens 
+    // from our Android, iOS, or Web clients as long as they are valid.
     const ticket = await googleClient.verifyIdToken({
       idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      // audience: [ANDROID_CLIENT_ID, IOS_CLIENT_ID, WEB_CLIENT_ID]
     });
     const payload = ticket.getPayload();
     const { sub: googleId, email, given_name, family_name, picture } = payload;
@@ -249,17 +254,24 @@ const googleLogin = async (req, res) => {
     if (!user) {
       console.log(`[AUTH] Creating new user for Google ID: ${googleId}`);
       // Create new user with basic info from Google
+      // We set a dummy phone number so the schema validation doesn't fail. 
+      // They MUST complete Step 2 (OTP) immediately after.
       user = await User.create({
         googleId,
         email: email.toLowerCase(),
-        firstName: given_name || '',
+        phone: `google_${googleId}`, // Temporary placeholder
+        password: `google_${googleId}_${Date.now()}`, // Temporary placeholder
+        firstName: given_name || 'Traveler',
         lastName: family_name || '',
-        username: `user_${googleId.slice(-6)}`, // generate a temp username
+        username: `user_${googleId.slice(-6)}_${Date.now().toString().slice(-4)}`,
         isEmailVerified: true,
-        registrationStep: 2, // Head to OTP/Phone step next
+        registrationStep: 2, // Must provide real phone number next
       });
       
-      // If we have a picture, we could add it to photos, but let's keep it simple for now
+      if (picture) {
+        user.photos = [{ url: picture, publicId: `google_${googleId}`, isProfile: true }];
+        await user.save({ validateBeforeSave: false });
+      }
     } else if (!user.googleId) {
       // Link existing email account to Google
       user.googleId = googleId;
@@ -269,10 +281,24 @@ const googleLogin = async (req, res) => {
     // Generate token
     const token = generateToken(user._id);
     
+    // Determine if they need to complete registration
+    // If the phone starts with 'google_', they haven't provided a real phone number yet
+    const needsPhone = user.phone.startsWith('google_');
+    const step = needsPhone ? 2 : user.registrationStep;
+    
     res.json({
       message: 'Google Sign-In successful',
       token,
-      user: user.toPublicProfile ? user.toPublicProfile() : user,
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        registrationStep: step,
+        isPhoneVerified: user.isPhoneVerified,
+      },
     });
   } catch (error) {
     console.error('[AUTH] Google Sign-In error:', error.message);

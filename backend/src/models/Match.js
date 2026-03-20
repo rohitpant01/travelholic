@@ -16,7 +16,15 @@ const matchSchema = new mongoose.Schema({
     sentAt: Date,
     sentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
+  // Per-user unread message counts (key = userId, value = count)
+  unreadCounts: {
+    type: Map,
+    of: Number,
+    default: {},
+  },
   isActive: { type: Boolean, default: true },
+  pinnedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  mutedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, {
   timestamps: true,
 });
@@ -47,8 +55,20 @@ const messageSchema = new mongoose.Schema({
   text: { type: String, default: '' },
   imageUrl: { type: String, default: null },
   imagePublicId: { type: String, default: null },
-  type: { type: String, enum: ['text', 'image'], default: 'text' },
-  isRead: { type: Boolean, default: false },
+  voiceUrl: { type: String, default: null },
+  voicePublicId: { type: String, default: null },
+  latitude: { type: Number, default: null },
+  longitude: { type: Number, default: null },
+  type: { type: String, enum: ['text', 'image', 'voice', 'location'], default: 'text' },
+  deliveredTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  edited: { type: Boolean, default: false },
+  isDeleted: { type: Boolean, default: false },
+  reactions: [{
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    emoji: String,
+  }],
+  replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
   readAt: Date,
 }, {
   timestamps: true,

@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Alert, Dimensions
+  Image, Alert, Dimensions, Modal, TextInput, ActivityIndicator,
+  KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootState } from '../store';
-import { logout } from '../store/slices/authSlice';
+import { logout, setUser } from '../store/slices/authSlice';
+import { userAPI } from '../api/services';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
+import { GOOGLE_MAPS_API_KEY } from '../api/client';
 
 const { width: W } = Dimensions.get('window');
 
@@ -19,6 +22,130 @@ export default function ProfileScreen() {
   const dispatch = useDispatch();
   const { user } = useSelector((s: RootState) => s.auth);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [showAddTrip, setShowAddTrip] = useState(false);
+  const [submittingTrip, setSubmittingTrip] = useState(false);
+  const [tripForm, setTripForm] = useState({
+    _id: '',
+    origin: '',
+    destination: '',
+    startDate: '',
+    endDate: '',
+    details: ''
+  });
+  const [isEditingTrip, setIsEditingTrip] = useState(false);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeField, setActiveField] = useState<'origin' | 'destination'>('origin');
+
+  const fetchSuggestions = async (text: string, field: 'origin' | 'destination') => {
+    setActiveField(field);
+    setTripForm(f => ({ ...f, [field]: text }));
+
+    if (text.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&types=(cities)&key=${GOOGLE_MAPS_API_KEY}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.status === 'OK') {
+        setSuggestions(data.predictions);
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+    }
+  };
+
+  const selectSuggestion = async (item: any) => {
+    const cityVal = item.structured_formatting.main_text || item.description.split(',')[0];
+    setTripForm(f => ({ ...f, [activeField]: cityVal }));
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  const handleAddTrip = async () => {
+    if (!tripForm.origin || !tripForm.destination || !tripForm.startDate || !tripForm.endDate) {
+      Alert.alert('Error', 'Please fill in all mandatory fields (Origin, Destination, Start Date, End Date)');
+      return;
+    }
+
+    setSubmittingTrip(true);
+    try {
+      const payload = {
+        origin: { city: tripForm.origin },
+        destination: { city: tripForm.destination },
+        startDate: tripForm.startDate,
+        endDate: tripForm.endDate,
+        details: tripForm.details
+      };
+
+      let res;
+      if (isEditingTrip && tripForm._id) {
+        res = await userAPI.updateCompletedTrip(tripForm._id, payload);
+      } else {
+        res = await userAPI.addCompletedTrip(payload);
+      }
+
+      if (res.data) {
+        dispatch(setUser({ ...user!, completedTrips: res.data.trips }));
+        setShowAddTrip(false);
+        resetTripForm();
+        Alert.alert('Success', isEditingTrip ? 'Trip updated!' : 'Trip added to your timeline!');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.error || 'Failed to save trip');
+    } finally {
+      setSubmittingTrip(false);
+    }
+  };
+
+  const handleDeleteTrip = (tripId: string) => {
+    Alert.alert(
+      'Delete Trip',
+      'Are you sure you want to delete this trip?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await userAPI.deleteCompletedTrip(tripId);
+              dispatch(setUser({ ...user!, completedTrips: res.data.trips }));
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete trip');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const openEditTrip = (trip: any) => {
+    setTripForm({
+      _id: trip._id,
+      origin: trip.origin.city,
+      destination: trip.destination.city,
+      startDate: trip.startDate ? new Date(trip.startDate).toISOString().split('T')[0] : '',
+      endDate: trip.endDate ? new Date(trip.endDate).toISOString().split('T')[0] : '',
+      details: trip.details || ''
+    });
+    setIsEditingTrip(true);
+    setShowAddTrip(true);
+  };
+
+  const resetTripForm = () => {
+    setTripForm({ _id: '', origin: '', destination: '', startDate: '', endDate: '', details: '' });
+    setIsEditingTrip(false);
+  };
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -36,7 +163,6 @@ export default function ProfileScreen() {
 
   const profilePhoto = user?.photos?.find(p => p.isProfile)?.url || user?.photos?.[0]?.url;
   const photos = user?.photos || [];
-
   const interests = user?.interests || [];
   const languages = user?.languages || [];
   const lookingFor = user?.lookingFor || [];
@@ -104,34 +230,86 @@ export default function ProfileScreen() {
           <View style={styles.heroLocation}>
             <Ionicons name="location" size={14} color="rgba(255,255,255,0.85)" />
             <Text style={styles.heroLocationText}>
-              {user?.location?.city || user?.city || 'Unknown'}{(user?.location?.city || user?.city) && (user?.location?.country || user?.country) ? ', ' : ''}{user?.location?.country || user?.country || ''}
+              {user?.location?.city || user?.city || 'Unknown'}
+              {(user?.location?.city || user?.city) && (user?.location?.country || user?.country) ? ', ' : ''}
+              {user?.location?.country || user?.country || ''}
             </Text>
           </View>
         </View>
       </View>
 
-      {/* Stats row */}
+      {/* ── Stats row ── */}
+      {/* ✅ The Likes stat is now a TouchableOpacity that opens WhoLikedMe.   */}
+      {/* All other stats remain plain Views.                                  */}
       <View style={styles.statsRow}>
-        <View style={styles.stat}>
+
+        {/* Likes — tappable */}
+        <TouchableOpacity
+          style={styles.stat}
+          onPress={() => navigation.navigate('WhoLikedMe')}
+          activeOpacity={0.7}
+        >
           <Text style={styles.statNumber}>{user?.likesReceived || 0}</Text>
-          <Text style={styles.statLabel}>Likes</Text>
-        </View>
+          <View style={styles.statLabelRow}>
+            <Text style={[styles.statLabel, styles.statLabelTeal]}>Likes</Text>
+            <Ionicons name="chevron-forward" size={11} color={COLORS.teal} />
+          </View>
+        </TouchableOpacity>
+
         <View style={styles.statDivider} />
-        <View style={styles.stat}>
+
+        {/* Matches — tappable */}
+        <TouchableOpacity
+          style={styles.stat}
+          onPress={() => navigation.navigate('MyMatches')}
+          activeOpacity={0.7}
+        >
           <Text style={styles.statNumber}>{user?.matchesCount || 0}</Text>
-          <Text style={styles.statLabel}>Matches</Text>
-        </View>
+          <View style={styles.statLabelRow}>
+            <Text style={[styles.statLabel, styles.statLabelTeal]}>Matches</Text>
+            <Ionicons name="chevron-forward" size={11} color={COLORS.teal} />
+          </View>
+        </TouchableOpacity>
+
         <View style={styles.statDivider} />
+
         <View style={styles.stat}>
           <Text style={styles.statNumber}>{user?.tripsCompleted || 0}</Text>
           <Text style={styles.statLabel}>Trips</Text>
         </View>
+
         <View style={styles.statDivider} />
+
         <View style={styles.stat}>
           <Text style={styles.statNumber}>{user?.countriesVisited?.length || 0}</Text>
           <Text style={styles.statLabel}>Countries</Text>
         </View>
+
       </View>
+      
+      {/* ── Verification Banner ── */}
+      {!user?.isPhotoVerified && (
+        <TouchableOpacity 
+          style={styles.verifyBanner} 
+          onPress={() => navigation.navigate('Verification')}
+          activeOpacity={0.8}
+        >
+          <LinearGradient 
+            colors={[COLORS.tealLight, '#F0FFFF']} 
+            style={styles.verifyBannerGrad}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          >
+            <View style={styles.verifyIconBG}>
+              <Ionicons name="shield-checkmark" size={24} color={COLORS.teal} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.verifyTitle}>Verify Your Identity</Text>
+              <Text style={styles.verifySubtitle}>Get the blue badge & build trust ✨</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.teal} />
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
 
       {/* Bio */}
       {user?.bio ? (
@@ -211,6 +389,218 @@ export default function ProfileScreen() {
         </View>
       ) : null}
 
+      {/* Document Trip Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>My Travels</Text>
+          <TouchableOpacity 
+            style={styles.addTripBtn} 
+            onPress={() => setShowAddTrip(true)}
+          >
+            <Ionicons name="add-circle" size={18} color={COLORS.teal} />
+            <Text style={styles.addTripBtnText}>Document a Trip</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {user?.tripsCompleted > 0 ? (
+          <View style={styles.travelRow}>
+            <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
+            <Text style={styles.travelText}>
+              You have recorded <Text style={styles.travelValue}>{user.tripsCompleted}</Text> past trips.
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.emptyTravelText}>Showcase your travel experience by documenting where you've been!</Text>
+        )}
+      </View>
+
+      {/* Add Trip Modal */}
+      <Modal
+        visible={showAddTrip}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddTrip(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Document a Trip</Text>
+              <TouchableOpacity onPress={() => setShowAddTrip(false)}>
+                <Ionicons name="close-circle" size={28} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView 
+              contentContainerStyle={{ padding: 25 }}
+              keyboardShouldPersistTaps="handled" 
+              nestedScrollEnabled={true}
+            >
+              <Text style={styles.modalSubtitle}>
+                {isEditingTrip ? 'Update your trip details' : 'Share where you have been!'}
+              </Text>
+
+              <Text style={styles.inputLabel}>Where did you start? (Origin) *</Text>
+              <View style={{ zIndex: 1000 }}>
+                <TextInput 
+                  style={styles.tripInput}
+                  placeholder="e.g. New Delhi"
+                  value={tripForm.origin}
+                  onChangeText={(t) => fetchSuggestions(t, 'origin')}
+                  onFocus={() => {
+                    setActiveField('origin');
+                    if (tripForm.origin.length >= 3) setShowSuggestions(true);
+                  }}
+                />
+                {showSuggestions && activeField === 'origin' && suggestions.length > 0 && (
+                  <View style={styles.modalSuggestionsContainer}>
+                    <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 150 }}>
+                      {suggestions.map((item, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={styles.suggestionItem}
+                          onPress={() => selectSuggestion(item)}
+                        >
+                          <Text style={styles.suggestionText}>{item.description}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.inputLabel}>Where did you go? (Destination) *</Text>
+              <View style={{ zIndex: 900 }}>
+                <TextInput 
+                  style={styles.tripInput}
+                  placeholder="e.g. Bali, Indonesia"
+                  value={tripForm.destination}
+                  onChangeText={(t) => fetchSuggestions(t, 'destination')}
+                  onFocus={() => {
+                    setActiveField('destination');
+                    if (tripForm.destination.length >= 3) setShowSuggestions(true);
+                  }}
+                />
+                {showSuggestions && activeField === 'destination' && suggestions.length > 0 && (
+                  <View style={styles.modalSuggestionsContainer}>
+                    <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 150 }}>
+                      {suggestions.map((item, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={styles.suggestionItem}
+                          onPress={() => selectSuggestion(item)}
+                        >
+                          <Text style={styles.suggestionText}>{item.description}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ width: '48%' }}>
+                  <Text style={styles.inputLabel}>Start Date *</Text>
+                  <TextInput 
+                    style={styles.tripInput}
+                    placeholder="YYYY-MM-DD"
+                    value={tripForm.startDate}
+                    onChangeText={(t) => setTripForm(f => ({ ...f, startDate: t }))}
+                  />
+                </View>
+                <View style={{ width: '48%' }}>
+                  <Text style={styles.inputLabel}>End Date *</Text>
+                  <TextInput 
+                    style={styles.tripInput}
+                    placeholder="YYYY-MM-DD"
+                    value={tripForm.endDate}
+                    onChangeText={(t) => setTripForm(f => ({ ...f, endDate: t }))}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.inputLabel}>Highlights (Optional)</Text>
+              <TextInput 
+                style={[styles.tripInput, { height: 80, textAlignVertical: 'top' }]}
+                placeholder="Any highlights or memories?"
+                multiline
+                numberOfLines={3}
+                value={tripForm.details}
+                onChangeText={(t) => setTripForm(f => ({ ...f, details: t }))}
+              />
+
+              <TouchableOpacity 
+                style={[styles.submitTripBtn, submittingTrip && { opacity: 0.7 }]}
+                onPress={handleAddTrip}
+                disabled={submittingTrip}
+              >
+                {submittingTrip ? <ActivityIndicator color={COLORS.white} /> : (
+                  <Text style={styles.submitTripBtnText}>
+                    {isEditingTrip ? 'Update Trip' : 'Document Trip'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Profile Sections */}
+      <View style={styles.historySection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.historyTitle}>My Trip History</Text>
+          <TouchableOpacity 
+            style={styles.addTripMiniBtn}
+            onPress={() => {
+              resetTripForm();
+              setShowAddTrip(true);
+            }}
+          >
+            <Ionicons name="add" size={20} color={COLORS.white} />
+            <Text style={styles.addTripMiniBtnText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+
+        {user?.completedTrips && user.completedTrips.length > 0 ? (
+          user.completedTrips.map((trip: any, index: number) => (
+            <View key={trip._id || index} style={styles.tripItem}>
+              <View style={styles.tripItemContent}>
+                <View style={styles.tripIconContainer}>
+                  <Ionicons name="airplane" size={24} color={COLORS.teal} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 15 }}>
+                  <Text style={styles.tripCities}>{trip.origin.city} → {trip.destination.city}</Text>
+                  <Text style={styles.tripDates}>
+                    {trip.startDate ? new Date(trip.startDate).toLocaleDateString() : ''} - 
+                    {trip.endDate ? new Date(trip.endDate).toLocaleDateString() : ''}
+                    ({trip.duration} days)
+                  </Text>
+                  {trip.details && (
+                    <Text style={styles.tripDetailsText} numberOfLines={1}>{trip.details}</Text>
+                  )}
+                </View>
+                <View style={styles.tripActions}>
+                  <TouchableOpacity onPress={() => openEditTrip(trip)} style={styles.tripActionBtn}>
+                    <Ionicons name="create-outline" size={22} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDeleteTrip(trip._id)} style={styles.tripActionBtn}>
+                    <Ionicons name="trash-outline" size={22} color="#FF5252" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View style={styles.emptyTripsContainer}>
+            <Ionicons name="trail-sign-outline" size={40} color={COLORS.textSecondary} />
+            <Text style={styles.emptyTripsText}>No trips documented yet</Text>
+          </View>
+        )}
+      </View>
+
       {/* Action buttons */}
       <View style={styles.actionBtns}>
         <TouchableOpacity
@@ -262,6 +652,8 @@ const styles = StyleSheet.create({
   heroAge: { fontSize: FONTS.base, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
   heroLocation: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   heroLocationText: { fontSize: FONTS.sm, color: 'rgba(255,255,255,0.85)' },
+
+  // ── Stats ──
   statsRow: {
     flexDirection: 'row', backgroundColor: COLORS.white,
     marginHorizontal: 20, marginTop: -24,
@@ -270,7 +662,45 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center' },
   statNumber: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.teal },
   statLabel: { fontSize: FONTS.xs, color: COLORS.textSecondary, marginTop: 2 },
+  // ✅ NEW: teal label + chevron for the tappable Likes stat
+  statLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 1, marginTop: 2 },
+  statLabelTeal: { color: COLORS.teal, fontWeight: '700' },
   statDivider: { width: 1, backgroundColor: COLORS.border },
+
+  verifyBanner: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.teal + '30',
+  },
+  verifyBannerGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  verifyIconBG: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW.sm,
+  },
+  verifyTitle: {
+    fontSize: FONTS.base,
+    fontWeight: '700',
+    color: COLORS.teal,
+  },
+  verifySubtitle: {
+    fontSize: FONTS.xs,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+
   section: { paddingHorizontal: 20, paddingTop: 24 },
   sectionTitle: { fontSize: FONTS.base, fontWeight: '800', color: COLORS.text, marginBottom: 12 },
   bioText: { fontSize: FONTS.base, color: COLORS.textSecondary, lineHeight: 22 },
@@ -316,4 +746,71 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF0EF',
   },
   logoutText: { color: COLORS.error, fontWeight: '700', fontSize: FONTS.base },
+
+  // New Styles
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  addTripBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.tealLight, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12 },
+  addTripBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.teal },
+  emptyTravelText: { fontSize: 13, color: COLORS.textSecondary, fontStyle: 'italic' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: COLORS.white, height: '80%', borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 25, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text },
+  modalSubtitle: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 15 },
+  modalSuggestionsContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginTop: 4,
+    ...SHADOW.md,
+  },
+  
+  historySection: { backgroundColor: COLORS.white, marginTop: 15, padding: 25 },
+  historyTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
+  
+  addTripMiniBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: COLORS.teal, 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 10 
+  },
+  addTripMiniBtnText: { color: COLORS.white, fontSize: 12, fontWeight: '700', marginLeft: 4 },
+
+  tripItem: { 
+    backgroundColor: '#F8FBFA', 
+    borderRadius: 20, 
+    padding: 15, 
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E8F5F2'
+  },
+  tripItemContent: { flexDirection: 'row', alignItems: 'center' },
+  tripIconContainer: { width: 50, height: 50, borderRadius: 15, backgroundColor: '#E8F5F2', alignItems: 'center', justifyContent: 'center' },
+  tripCities: { fontSize: 16, fontWeight: '800', color: COLORS.text },
+  tripDates: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  tripDetailsText: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4, fontStyle: 'italic' },
+  tripActions: { flexDirection: 'row', alignItems: 'center' },
+  tripActionBtn: { padding: 8, marginLeft: 5 },
+
+  emptyTripsContainer: { alignItems: 'center', paddingVertical: 40 },
+  emptyTripsText: { color: COLORS.textSecondary, marginTop: 10, fontSize: 14 },
+
+  inputLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 8, marginTop: 15 },
+  tripInput: { backgroundColor: '#F8FBFA', borderWidth: 1, borderColor: '#E8F5F2', borderRadius: 14, padding: 15, fontSize: 15, color: COLORS.text },
+  suggestionItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  submitTripBtn: { backgroundColor: COLORS.teal, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginTop: 30, ...SHADOW.md },
+  submitTripBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '800' },
 });

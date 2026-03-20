@@ -64,7 +64,7 @@ export default function Step3PersonalScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.white }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <RegisterHeader step={3} totalSteps={7} title="Personal Details"
         subtitle="Help others know you better" onBack={() => {
           if (navigation.canGoBack()) {

@@ -28,6 +28,7 @@ interface User {
   likesReceived?: number;
   matchesCount?: number;
   tripsCompleted?: number;
+  completedTrips?: any[];
   maxDiscoveryDistance?: number;
 }
 

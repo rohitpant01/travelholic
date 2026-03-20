@@ -3,6 +3,9 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder,
   Dimensions, Image, ActivityIndicator, Alert
 } from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../store';
+import { fetchNotifications } from '../store/slices/notificationSlice';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,8 +28,13 @@ interface Profile {
   interests?: string[];
   location?: { city?: string; country?: string };
   isPhotoVerified?: boolean;
+  isOnline?: boolean;
+  lastSeen?: string;
   distanceKm?: number;
   lookingFor?: string[];
+  origin?: { city?: string };
+  destination?: { city?: string };
+  travelDate?: string;
 }
 
 function TravelerCard({ profile, onLike, onSkip, onSuperLike, isTop }: {
@@ -92,7 +100,6 @@ function TravelerCard({ profile, onLike, onSkip, onSuperLike, isTop }: {
   ).current;
 
   const photos = profile.photos || [];
-
   return (
     <Animated.View
       style={[
@@ -103,7 +110,6 @@ function TravelerCard({ profile, onLike, onSkip, onSuperLike, isTop }: {
       ]}
       {...(isTop ? panResponder.panHandlers : {})}
     >
-      {/* Photo */}
       <View style={styles.photoContainer}>
         {profilePhoto ? (
           <Image source={{ uri: photos[photoIndex]?.url || profilePhoto }} style={styles.photo} />
@@ -113,32 +119,38 @@ function TravelerCard({ profile, onLike, onSkip, onSuperLike, isTop }: {
           </View>
         )}
 
-        {/* Photo navigation dots */}
+        {/* Swipe indicators */}
         {photos.length > 1 && (
           <View style={styles.dotRow}>
-            {photos.map((_: any, i: number) => (
-              <TouchableOpacity key={i} onPress={() => setPhotoIndex(i)}>
-                <View style={[styles.photoDot, photoIndex === i && styles.photoDotActive]} />
-              </TouchableOpacity>
+            {photos.map((_, idx) => (
+              <View key={idx} style={[styles.photoDot, idx === photoIndex && styles.photoDotActive]} />
             ))}
           </View>
         )}
 
-        {/* Photo navigation tap zones */}
-        <TouchableOpacity
-          style={styles.prevPhotoZone}
-          onPress={() => setPhotoIndex(i => Math.max(0, i - 1))}
-        />
-        <TouchableOpacity
-          style={styles.nextPhotoZone}
-          onPress={() => setPhotoIndex(i => Math.min(photos.length - 1, i + 1))}
-        />
+        {/* Tap areas */}
+        {photos.length > 1 && (
+          <View style={StyleSheet.absoluteFill}>
+            <TouchableOpacity 
+              style={styles.prevPhotoZone} 
+              onPress={() => setPhotoIndex(i => Math.max(0, i - 1))} 
+              activeOpacity={1} 
+            />
+            <TouchableOpacity 
+              style={styles.nextPhotoZone} 
+              onPress={() => setPhotoIndex(i => Math.min(photos.length - 1, i + 1))} 
+              activeOpacity={1} 
+            />
+          </View>
+        )}
 
-        {/* Gradient overlay */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.75)']}
-          style={styles.photoOverlay}
-        />
+        {/* Verified badge */}
+        {profile.isPhotoVerified && (
+          <View style={styles.verifiedBadge}>
+            <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
+            <Text style={styles.verifiedText}>Verified</Text>
+          </View>
+        )}
 
         {/* Like/Skip/SuperLike indicators */}
         {isTop && (
@@ -155,31 +167,58 @@ function TravelerCard({ profile, onLike, onSkip, onSuperLike, isTop }: {
           </>
         )}
 
-        {/* Verified badge */}
-        {profile.isPhotoVerified && (
-          <View style={styles.verifiedBadge}>
-            <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-            <Text style={styles.verifiedText}>Verified</Text>
-          </View>
-        )}
+        {/* Gradient overlay */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.75)']}
+          style={styles.photoOverlay}
+        />
 
         {/* Profile info overlay */}
         <View style={styles.cardInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.cardName}>{profile.firstName}</Text>
+            {profile.isOnline && <View style={styles.onlineDot} />}
             {profile.age && <Text style={styles.cardAge}>{profile.age}</Text>}
           </View>
+
           <View style={styles.locationRow}>
             <Ionicons name="location" size={14} color="rgba(255,255,255,0.85)" />
             <Text style={styles.cardLocation}>
-              {profile.location?.city || 'Unknown'}{profile.distanceKm ? ` · ${profile.distanceKm} km` : ''}
+              {profile.location?.city || profile.city || 'Unknown'}{profile.distanceKm ? ` · ${profile.distanceKm} km` : ''}
             </Text>
           </View>
+
+          {/* Travel Info */}
+          {(profile.destination?.city || profile.origin?.city) && (
+            <View style={styles.travelInfo}>
+              {profile.destination?.city && (
+                <View style={styles.travelRow}>
+                  <Ionicons name="airplane-outline" size={14} color={COLORS.white} />
+                  <Text style={styles.travelText}>To {profile.destination.city}</Text>
+                </View>
+              )}
+              {profile.origin?.city && (
+                <View style={styles.travelRow}>
+                  <Ionicons name="log-out-outline" size={14} color={COLORS.white} />
+                  <Text style={styles.travelText}>From {profile.origin.city}</Text>
+                </View>
+              )}
+              {profile.travelDate && (
+                <View style={styles.travelRow}>
+                  <Ionicons name="calendar-outline" size={14} color={COLORS.white} />
+                  <Text style={styles.travelText}>
+                    {new Date(profile.travelDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {profile.interests && profile.interests.length > 0 && (
             <View style={styles.interestRow}>
-              {profile.interests.slice(0, 3).map(i => (
-                <View key={i} style={styles.interestBadge}>
-                  <Text style={styles.interestBadgeText}>{i}</Text>
+              {profile.interests.slice(0, 3).map((interest, idx) => (
+                <View key={`${interest}-${idx}`} style={styles.interestBadge}>
+                  <Text style={styles.interestBadgeText}>{interest}</Text>
                 </View>
               ))}
             </View>
@@ -192,6 +231,8 @@ function TravelerCard({ profile, onLike, onSkip, onSuperLike, isTop }: {
 
 export default function DiscoverScreen() {
   const navigation = useNavigation<any>();
+  const dispatch = useDispatch<AppDispatch>();
+  const { unreadCount } = useSelector((state: RootState) => state.notification);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [matchPopup, setMatchPopup] = useState<{ name: string; photo?: string } | null>(null);
@@ -202,22 +243,35 @@ export default function DiscoverScreen() {
       let lat: number | undefined;
       let lng: number | undefined;
       let { status } = await Location.requestForegroundPermissionsAsync();
+      
       if (status === 'granted') {
-        let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lat = loc.coords.latitude;
-        lng = loc.coords.longitude;
+        // Optimization: Get last known position for near-instant load
+        const lastLoc = await Location.getLastKnownPositionAsync();
+        if (lastLoc) {
+          lat = lastLoc.coords.latitude;
+          lng = lastLoc.coords.longitude;
+        } else {
+          // Fallback to current if no last known exists
+          const currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          lat = currentLoc.coords.latitude;
+          lng = currentLoc.coords.longitude;
+        }
       }
       
       const res = await discoverAPI.getProfiles(lat, lng);
       setProfiles(res.data.profiles);
     } catch (e) {
+      console.error('[FETCH PROFILES ERROR]', e);
       Alert.alert('Error', 'Could not load profiles');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchProfiles(); }, []);
+  useEffect(() => { 
+    fetchProfiles();
+    dispatch(fetchNotifications());
+  }, []);
 
   const removeTop = () => setProfiles(p => p.slice(1));
 
@@ -256,9 +310,24 @@ export default function DiscoverScreen() {
           <Text style={styles.logoEmoji}>✈️</Text>
           <Text style={styles.logoText}>Discover</Text>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-          <Ionicons name="options-outline" size={26} color={COLORS.text} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Notifications')}
+            style={styles.notificationBtn}
+          >
+            <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
+            <Ionicons name="options-outline" size={26} color={COLORS.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Cards area */}
@@ -333,6 +402,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg, paddingTop: 56, paddingBottom: 12,
     backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  notificationBtn: { position: 'relative', padding: 4 },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: COLORS.orange,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.white,
+    paddingHorizontal: 2,
+  },
+  badgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '800',
+  },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logoEmoji: { fontSize: 24 },
   logoText: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.text },
@@ -384,6 +474,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4,
   },
   interestBadgeText: { color: COLORS.white, fontSize: FONTS.xs, fontWeight: '600' },
+  travelInfo: { marginBottom: 10, gap: 4 },
+  travelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  travelText: { color: COLORS.white, fontSize: FONTS.sm, fontWeight: '600' },
   actions: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
     paddingVertical: 16, paddingHorizontal: 40, gap: 20,
@@ -420,4 +513,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28, paddingVertical: 12, marginTop: 8,
   },
   matchChatBtnText: { color: COLORS.teal, fontWeight: '800', fontSize: FONTS.base },
+  onlineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.success, borderWidth: 1.5, borderColor: COLORS.white, marginLeft: 4 },
 });

@@ -3,6 +3,7 @@
     "name": "TravelHolic",
     "slug": "travelholic",
     "version": "1.0.0",
+    "scheme": "travelholic",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,7 +17,8 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.travelholic.app",
+      "bundleIdentifier": "com.travelholic",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "googleMapsApiKey": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY"
       },
@@ -32,18 +34,21 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#00B4B4"
       },
-      "package": "com.travelholic.app",
+      "package": "com.travelholic",
+      "googleServicesFile": "./google-services.json",
+      "softwareKeyboardLayoutMode": "adjustResize",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY"
         }
       },
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -63,14 +68,30 @@
           "cameraPermission": "Allow TravelHolic to use your camera for verification."
         }
       ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow TravelHolic to save photos to your library.",
+          "savePhotosPermission": "Allow TravelHolic to save photos to your library."
+        }
+      ],
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
+    "newArchEnabled": true,
     "extra": {
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "6f07a716-0ff2-4eac-8462-3a2fa834fcad"
       }
     },
-    "newArchEnabled": true
+    "owner": "rohitpant01"
   }
 }

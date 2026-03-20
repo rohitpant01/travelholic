@@ -50,6 +50,23 @@ const userSchema = new mongoose.Schema({
   dreamDestination: { type: String, default: '' },
   maxDiscoveryDistance: { type: Number, default: 50, min: 10, max: 100 }, // km
 
+  // Travel Plan
+  origin: {
+    city: String,
+    location: {
+      type: { type: String, enum: ['Point'], default: 'Point' },
+      coordinates: { type: [Number], default: [0, 0] },
+    }
+  },
+  destination: {
+    city: String,
+    location: {
+      type: { type: String, enum: ['Point'], default: 'Point' },
+      coordinates: { type: [Number], default: [0, 0] },
+    }
+  },
+  travelDate: { type: Date },
+
   // Photos
   photos: [photoSchema],
 
@@ -107,9 +124,41 @@ const userSchema = new mongoose.Schema({
   isOnline: { type: Boolean, default: false },
   profileComplete: { type: Boolean, default: false },
   registrationStep: { type: Number, default: 1 },
+  lastSeenPrivacy: { 
+    type: String, 
+    enum: ['everyone', 'matches', 'nobody'], 
+    default: 'everyone' 
+  },
+  activityStatus: {
+    type: String,
+    enum: ['Online', 'Planning Trip', 'Exploring', 'Traveling'],
+    default: 'Online'
+  },
 
   // Push notifications
   pushToken: String,
+
+  // Membership
+  memberStatus: {
+    type: String,
+    enum: ['Free', 'Explorer', 'Premium', 'Elite'],
+    default: 'Free'
+  },
+
+  // Travel History
+  completedTrips: [{
+    origin: { city: String },
+    destination: { city: String },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
+    duration: Number, // in days
+    details: String,
+    createdAt: { type: Date, default: Date.now }
+  }],
+
+  // Social
+  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
 }, {
   timestamps: true,

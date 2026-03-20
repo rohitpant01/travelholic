@@ -13,6 +13,7 @@ interface ToastMessage {
   matchId: string;
   userId: string;
   unreadCount?: number;
+  isTrip?: boolean;
 }
 
 interface Props {
@@ -56,14 +57,22 @@ export default function MessageToast({ message, onDismiss }: Props) {
   const handlePress = () => {
     if (message) {
       dismiss();
-      // Only navigate to chat if there's an actual match
       if (message.matchId) {
-        navigation.navigate('Chat', {
-          matchId: message.matchId,
-          userName: message.senderName,
-          userPhoto: message.senderPhoto,
-          userId: message.userId,
-        });
+        if (message.isTrip) {
+          navigation.navigate('Chat', {
+            type: 'group',
+            chatId: message.matchId,
+            userName: message.senderName,
+          });
+        } else {
+          navigation.navigate('Chat', {
+            type: 'individual',
+            chatId: message.matchId,
+            userName: message.senderName,
+            userPhoto: message.senderPhoto,
+            userId: message.userId,
+          });
+        }
       }
     }
   };

@@ -16,6 +16,8 @@ const userRoutes = require("./src/routes/user");
 const discoverRoutes = require("./src/routes/discover");
 const matchRoutes = require("./src/routes/matches");
 const chatRoutes = require("./src/routes/chat");
+const tripRoutes = require("./src/routes/trips");
+const notificationRoutes = require("./src/routes/notification");
 
 const app = express();
 const server = http.createServer(app);
@@ -26,24 +28,50 @@ connectDB();
 // Initialize socket
 initSocket(server);
 
-// Security
-app.use(helmet());
+// ── Global Request Logger (ABSOLUTE TOP) ──────────────────────
+app.use((req, res, next) => {
+  const logPrefix = `[${new Date().toISOString()}] ${req.method} ${req.url}`;
+  
+  if (req.method === 'OPTIONS') {
+    console.log(`${logPrefix} - Preflight Headers:`, req.headers);
+  } else {
+    console.log(`${logPrefix} - Size: ${req.headers['content-length'] || 0} bytes`);
+  }
+  
+  if (req.headers['content-type']?.includes('multipart/form-data')) {
+    console.log('[DEBUG] MULTIPART Headers:', req.headers);
+  }
+  next();
+});
+
+// Security (Temporarily disabled for debugging)
+// app.use(helmet());
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "*",
+    // Reflect origin to allow credentials (e.g. cookies/headers) from any device
+    origin: true,
     credentials: true,
   })
 );
 
-// Global Request Logger
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - ${req.headers['content-length'] || 0} bytes`);
-  if (req.headers['content-type']?.includes('multipart/form-data')) {
-    console.log('[MULTIPART] Detected:', req.headers['content-type']);
-  }
-  next();
+// ── Test Routes (after CORS) ──────────────────────────────────
+app.get("/api/test", (req, res) => {
+  res.json({ 
+    message: "API IS REACHABLE (GET)", 
+    time: new Date().toISOString(),
+    env: process.env.NODE_ENV
+  });
 });
+
+app.post("/api/test-upload", (req, res) => {
+  res.json({ message: "API IS REACHABLE (POST)", body: req.body });
+});
+
+// Rate limit
+
+// Body parsing
+// (Move logger before everything else)
 
 // Rate limit
 const limiter = rateLimit({
@@ -78,6 +106,8 @@ app.use("/api/user", userRoutes);
 app.use("/api/discover", discoverRoutes);
 app.use("/api/matches", matchRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/trips", tripRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // 404
 app.use((req, res) => {
@@ -88,6 +118,7 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('❌ [SERVER ERROR]', err);
   if (err.name === 'MulterError') {
+    console.error('📦 [MULTER ERROR DETAILS]:', JSON.stringify(err, null, 2));
     return res.status(400).json({ error: `Upload error: ${err.message}` });
   }
   res.status(500).json({ error: err.message || "Server error" });

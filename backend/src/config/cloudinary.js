@@ -28,6 +28,15 @@ const selfieStorage = new CloudinaryStorage({
   },
 });
 
+// Storage for voice messages
+const voiceStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'travelholic/voice',
+    resource_type: 'video', // Audio is handled as 'video' in Cloudinary
+  },
+});
+
 const uploadPhoto = multer({
   storage: photoStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
@@ -36,6 +45,18 @@ const uploadPhoto = multer({
       cb(null, true);
     } else {
       cb(new Error('Only image files are allowed'), false);
+    }
+  },
+});
+
+const uploadVoice = multer({
+  storage: voiceStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('audio/') || file.originalname.match(/\.(mp3|wav|m4a|aac)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files are allowed'), false);
     }
   },
 });
@@ -52,6 +73,24 @@ const uploadSelfie = multer({
   },
 });
 
+// Unified storage for chat (both image and voice)
+const chatMediaStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    const isAudio = file.mimetype.startsWith('audio/') || file.originalname.match(/\.(mp3|wav|m4a|aac)$/i);
+    return {
+      folder: isAudio ? 'travelholic/voice' : 'travelholic/photos',
+      resource_type: isAudio ? 'video' : 'image',
+      allowed_formats: isAudio ? undefined : ['jpg', 'jpeg', 'png', 'webp'],
+    };
+  },
+});
+
+const uploadChatMedia = multer({
+  storage: chatMediaStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
+
 // Delete image from Cloudinary
 const deleteImage = async (publicId) => {
   try {
@@ -61,4 +100,11 @@ const deleteImage = async (publicId) => {
   }
 };
 
-module.exports = { cloudinary, uploadPhoto, uploadSelfie, deleteImage };
+module.exports = { 
+  cloudinary, 
+  uploadPhoto, 
+  uploadSelfie, 
+  uploadVoice, 
+  uploadChatMedia, // Exported for unified chat routes
+  deleteImage 
+};

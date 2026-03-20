@@ -13,6 +13,7 @@ const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log(`[AUTH] Token verified for userId: ${decoded.userId}`);
     const user = await User.findById(decoded.userId).select('-password -otp -otpExpiry');
 
     if (!user) {
