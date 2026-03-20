@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { cacheDirectory, downloadAsync } from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import { Socket } from 'socket.io-client';
@@ -905,9 +906,23 @@ export default function ChatScreen() {
   };
 
   const handleSendImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
+    const result = await ImagePicker.launchImageLibraryAsync({ 
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, 
+      quality: 0.8 
+    });
+    
     if (!result.canceled && result.assets[0]) {
-      const uri = Platform.OS === 'ios' ? result.assets[0].uri.replace('file://', '') : result.assets[0].uri;
+      const originalUri = result.assets[0].uri;
+      
+      // Perform image manipulation: Resize to max 1024px width and compress
+      // This significantly reduces upload time without meaningful quality loss for mobile chat
+      const manipulated = await ImageManipulator.manipulateAsync(
+        originalUri,
+        [{ resize: { width: 1024 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      const uri = Platform.OS === 'ios' ? manipulated.uri.replace('file://', '') : manipulated.uri;
       const tempId = `temp-img-${Date.now()}`;
       const optimisticMsg: any = {
         _id: tempId,

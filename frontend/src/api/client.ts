@@ -12,9 +12,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //   Local (Expo simulator): 'http://localhost:5000/api'
 //   Production (Render):    'https://travelholic-api.onrender.com/api'
 // ================================================================
-export const API_BASE_URL = 'http://172.22.152.2:5001/api';
+export const API_BASE_URL = 'http://10.116.98.2:5001/api';
 // Use 'http://localhost:5000/api' for iOS Simulator
-// Use 'http://10.105.69.11:5001/api' for physical device (your PC IP)
+// Use 'http://10.116.98.2:5001/api' for physical device (your PC IP)
 // ⚠️ IMPORTANT: For the APK to work, your PC and Phone MUST be on the same WiFi!
 
 // ================================================================
@@ -26,7 +26,7 @@ export const API_BASE_URL = 'http://172.22.152.2:5001/api';
 // ================================================================
 //   "ios" > "config" > "googleMapsApiKey"
 // ================================================================
-export const GOOGLE_MAPS_API_KEY = '';
+export const GOOGLE_MAPS_API_KEY = 'AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY';
 export const GOOGLE_WEB_CLIENT_ID = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
 export const GOOGLE_ANDROID_CLIENT_ID = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com';
 export const GOOGLE_IOS_CLIENT_ID = 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com';
