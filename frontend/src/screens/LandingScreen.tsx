@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Animated, Dimensions, ImageBackground, StatusBar
+  Animated, Dimensions, ImageBackground, StatusBar, Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -58,7 +58,11 @@ export default function LandingScreen() {
         ]}
       >
         <View style={styles.logoRow}>
-          <Text style={styles.logoEmoji}>✈️</Text>
+          <Image 
+            source={require('../../assets/logo.png')} 
+            style={styles.logoImage} 
+            resizeMode="contain" 
+          />
           <Text style={styles.logoText}>TravelHolic</Text>
         </View>
 
@@ -152,7 +156,7 @@ const styles = StyleSheet.create({
     ...SHADOW.lg,
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 8 },
-  logoEmoji: { fontSize: 28 },
+  logoImage: { width: 32, height: 32 },
   logoText: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.teal },
   tagline: {
     fontSize: FONTS.xxxl, fontWeight: '800',

@@ -73,12 +73,18 @@ export default function Step6InterestsScreen() {
 
     setLoading(true);
     try {
-      const res = await userAPI.updateProfile({
+      // Update user profile with interests, languages, and advance registration step
+      await userAPI.updateProfile({
         interests: selectedInterests,
         languages: selectedLanguages,
-        registrationStep: 7,
+        registrationStep: 8, // Changed from 7 to 8
       });
-      dispatch(updateUser(res.data.user));
+      // Dispatch update to Redux store
+      dispatch(updateUser({
+        interests: selectedInterests,
+        languages: selectedLanguages,
+        registrationStep: 8, // Changed from 7 to 8
+      }));
       navigation.navigate('Register_Step7');
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.error || 'Update failed');
@@ -89,7 +95,7 @@ export default function Step6InterestsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
-      <RegisterHeader step={6} totalSteps={7} title="Travel Interests"
+      <RegisterHeader step={7} totalSteps={8} title="Travel Interests"
         subtitle="What kind of traveler are you?" onBack={() => {
           if (navigation.canGoBack()) {
             navigation.goBack();

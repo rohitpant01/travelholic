@@ -17,10 +17,17 @@ export default function Step2OTPScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const dispatch = useDispatch();
-  const { phone, userId } = route.params;
+  
+  const { phone: initialPhone, userId } = route.params || {};
+  const isGooglePhone = initialPhone?.startsWith('google_');
+  
+  const [phone, setPhone] = useState(isGooglePhone ? '' : initialPhone);
+  const [isPhoneEntered, setIsPhoneEntered] = useState(!isGooglePhone);
+  const [sendingOTP, setSendingOTP] = useState(false);
+
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
-  const [resendTimer, setResendTimer] = useState(60);
+  const [resendTimer, setResendTimer] = useState(isGooglePhone ? 0 : 60);
   const inputs = useRef<TextInput[]>([]);
 
   useEffect(() => {
@@ -29,6 +36,24 @@ export default function Step2OTPScreen() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const handleSendInitialOTP = async () => {
+    if (phone.length < 10) return Alert.alert('Error', 'Please enter a valid 10-digit number');
+    let finalPhone = phone.trim();
+    if (/^\d{10}$/.test(finalPhone)) finalPhone = `+91${finalPhone}`;
+    
+    setSendingOTP(true);
+    try {
+      await authAPI.sendOTP(finalPhone, true);
+      setPhone(finalPhone);
+      setIsPhoneEntered(true);
+      setResendTimer(60);
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.error || 'Failed to send OTP');
+    } finally {
+      setSendingOTP(false);
+    }
+  };
 
   const handleOtpChange = (text: string, index: number) => {
     const newOtp = [...otp];
@@ -47,7 +72,9 @@ export default function Step2OTPScreen() {
       console.log(`[OTP] Attempting verification for ${phone}, code: ${code}`);
       await authAPI.verifyOTP(phone, code, userId);
       console.log('[OTP] Verification success. Navigating to Step 3.');
-      dispatch(updateUser({ isPhoneVerified: true, registrationStep: 3 }));
+      
+      // Update the user's phone in Redux state alongside the verified status
+      dispatch(updateUser({ phone: phone, isPhoneVerified: true, registrationStep: 4 }));
       navigation.navigate('Register_Step3');
     } catch (error: any) {
       console.error('[OTP] Verification error:', error.response?.data || error.message);
@@ -69,26 +96,72 @@ export default function Step2OTPScreen() {
     }
   };
 
+  if (!isPhoneEntered) {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+        <RegisterHeader
+          step={3} totalSteps={8}
+          title="Add Phone Number" subtitle="We need this to verify your account"
+          onBack={() => {
+          Alert.alert('Exit Registration', 'Do you want to log out and exit? You can resume later.', [
+            { text: 'Stay', style: 'cancel' },
+            { text: 'Exit & Logout', style: 'destructive', onPress: async () => {
+                await AsyncStorage.removeItem('token');
+                await AsyncStorage.removeItem('user');
+                dispatch(logout());
+              } 
+            }
+          ]);
+        }}
+        />
+        <View style={styles.content}>
+          <Text style={styles.label}>Mobile Number *</Text>
+          <View style={styles.inputWrapper}>
+            <Text style={styles.countryCode}>+91</Text>
+            <View style={styles.divider} />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter 10-digit number"
+              value={phone.replace('+91', '')}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              maxLength={10}
+              placeholderTextColor={COLORS.textLight}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.verifyBtn, { marginTop: 40 }, sendingOTP && { opacity: 0.7 }]}
+            onPress={handleSendInitialOTP}
+            disabled={sendingOTP}
+          >
+            <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.verifyBtnGrad}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              {sendingOTP ? <ActivityIndicator color={COLORS.white} /> : (
+                <Text style={styles.verifyBtnText}>Send OTP</Text>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
       <RegisterHeader
-        step={2} totalSteps={7}
+        step={3} totalSteps={8}
         title="Verify Phone" subtitle={`Enter the OTP sent to ${phone}`}
         onBack={() => {
-          if (navigation.canGoBack()) {
-            navigation.goBack();
-          } else {
-            // If we can't go back (root screen), logout to return to landing
-            Alert.alert('Exit', 'Do you want to exit registration?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Exit', style: 'destructive', onPress: async () => {
-                  await AsyncStorage.removeItem('token');
-                  await AsyncStorage.removeItem('user');
-                  dispatch(logout());
-                } 
-              }
-            ]);
-          }
+          Alert.alert('Exit Registration', 'Do you want to log out and exit? You can resume later.', [
+            { text: 'Stay', style: 'cancel' },
+            { text: 'Exit & Logout', style: 'destructive', onPress: async () => {
+                await AsyncStorage.removeItem('token');
+                await AsyncStorage.removeItem('user');
+                dispatch(logout());
+              } 
+            }
+          ]);
         }}
       />
       <View style={styles.content}>
@@ -168,4 +241,9 @@ const styles = StyleSheet.create({
   resendLabel: { fontSize: FONTS.sm, color: COLORS.textSecondary },
   resendBtn: { fontSize: FONTS.sm, fontWeight: '700', color: COLORS.teal },
   resendDisabled: { color: COLORS.textLight },
+  label: { fontSize: FONTS.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.border, paddingHorizontal: 14, paddingVertical: 12 },
+  countryCode: { fontSize: FONTS.md, color: COLORS.text, fontWeight: '600' },
+  divider: { width: 1, height: 24, backgroundColor: COLORS.border, marginHorizontal: 12 },
+  input: { flex: 1, fontSize: FONTS.base, color: COLORS.text },
 });

@@ -44,6 +44,43 @@ export default function EditProfileScreen() {
   const [travelDate, setTravelDate] = useState(user?.travelDate ? new Date(user.travelDate).toISOString().split('T')[0] : '');
   
   const [activeField, setActiveField] = useState<'city' | 'origin' | 'destination'>('city');
+  
+  // Email management states
+  const [email, setEmail] = useState(user?.email || '');
+  const [password, setPassword] = useState('');
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+
+  const handleChangeEmail = async () => {
+    if (!email || !email.includes('@')) return Alert.alert('Error', 'Valid email required');
+    if (user?.authProvider === 'local' && !password) return Alert.alert('Error', 'Password required to change email');
+
+    setEmailLoading(true);
+    try {
+      const res = await authAPI.changeEmail(email, password);
+      dispatch(updateUser(res.data.user));
+      Alert.alert('Email Updated', 'Verification code sent to your new email. Please verify to continue.', [
+        { text: 'OK' }
+      ]);
+      // Note: App.tsx will automatically redirect to verification screen because isEmailVerified is now false
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.error || 'Failed to update email');
+    } finally {
+      setEmailLoading(false);
+      setIsChangingEmail(false);
+      setPassword('');
+    }
+  };
+
+  const verifyNow = async () => {
+    try {
+      await authAPI.sendEmailOTP(user?.email, user?._id);
+      dispatch(updateUser({ isEmailVerified: false })); // Ensure state triggers redirect
+      Alert.alert('Code Sent', 'Check your inbox for the verification code.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send verification code');
+    }
+  };
 
   const handleSave = async () => {
     if (!firstName || !lastName) return Alert.alert('Error', 'Name is required');
@@ -318,6 +355,66 @@ export default function EditProfileScreen() {
             />
           </View>
 
+          {/* Email Management Section */}
+          <View style={styles.emailContainer}>
+            <View style={styles.emailHeader}>
+              <Text style={styles.label}>Email Address</Text>
+              {user?.isEmailVerified ? (
+                <View style={styles.verifiedBadge}>
+                  <Ionicons name="checkmark-circle" size={14} color={COLORS.teal} />
+                  <Text style={styles.verifiedText}>Verified</Text>
+                </View>
+              ) : (
+                <TouchableOpacity onPress={verifyNow}>
+                  <Text style={styles.verifyNowText}>Verify Now</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {!isChangingEmail ? (
+              <View style={styles.emailDisplay}>
+                <Text style={styles.emailValue}>{user?.email}</Text>
+                <TouchableOpacity onPress={() => setIsChangingEmail(true)}>
+                  <Text style={styles.changeBtnText}>Change</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.changeEmailBox}>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="New Email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                {user?.authProvider === 'local' && (
+                  <TextInput
+                    style={[styles.input, { marginTop: 10 }]}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Enter Current Password"
+                    secureTextEntry
+                  />
+                )}
+                <View style={styles.changeEmailActions}>
+                  <TouchableOpacity onPress={() => setIsChangingEmail(false)} style={styles.cancelLink}>
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={handleChangeEmail} 
+                    style={styles.confirmSmallBtn}
+                    disabled={emailLoading}
+                  >
+                    {emailLoading ? <ActivityIndicator size="small" color={COLORS.white} /> : (
+                      <Text style={styles.confirmSmallBtnText}>Update & Verify</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Last Name</Text>
             <TextInput
@@ -533,4 +630,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text,
   },
+  // Email management styles
+  emailContainer: {
+    backgroundColor: '#F8FAFC', padding: 16, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: '#E2E8F0', marginVertical: 8
+  },
+  emailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  verifiedText: { color: COLORS.teal, fontSize: 12, fontWeight: '700' },
+  verifyNowText: { color: COLORS.error, fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
+  emailDisplay: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  emailValue: { fontSize: 16, color: COLORS.text, fontWeight: '500' },
+  changeBtnText: { color: COLORS.teal, fontWeight: '700', fontSize: 14 },
+  changeEmailBox: { gap: 8 },
+  changeEmailActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16, marginTop: 12 },
+  cancelLink: { paddingHorizontal: 4 },
+  cancelText: { color: COLORS.textSecondary, fontSize: 14 },
+  confirmSmallBtn: { backgroundColor: COLORS.teal, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  confirmSmallBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 14 },
 });

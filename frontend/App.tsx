@@ -29,6 +29,7 @@ import LandingScreen from './src/screens/LandingScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import Step1AccountScreen from './src/screens/register/Step1AccountScreen';
+import EmailVerificationScreen from './src/screens/register/EmailVerificationScreen';
 import Step2OTPScreen from './src/screens/register/Step2OTPScreen';
 import Step3PersonalScreen from './src/screens/register/Step3PersonalScreen';
 import Step4LocationScreen from './src/screens/register/Step4LocationScreen';
@@ -60,6 +61,7 @@ export type RootStackParamList = {
   Login: undefined;
   ForgotPassword: undefined;
   Register_Step1: undefined;
+  Register_EmailVerify: { email: string; userId: string };
   Register_Step2: { phone: string; userId: string };
   Register_Step3: undefined;
   Register_Step4: undefined;
@@ -382,12 +384,11 @@ function AppNavigator() {
         setActiveToast({
           senderName: data.sender?.firstName || data.senderName || (isGroupMessage ? 'Trip Member' : 'Match'),
           senderPhoto: data.sender?.photos?.[0]?.url || data.senderPhoto,
-          text: isGroupMessage && groupName
-            ? `[${groupName}] ${data.text || (data.type === 'voice' ? '🎤 Voice' : data.type === 'image' ? '📷 Photo' : data.type === 'location' ? '📍 Location' : '')}`
-            : data.text || (data.type === 'voice' ? '🎤 Voice message' : data.type === 'image' ? '📷 Photo' : data.type === 'location' ? '📍 Location' : ''),
+          text: data.text || (data.type === 'voice' ? '🎤 Voice' : data.type === 'image' ? '📷 Photo' : data.type === 'location' ? '📍 Location' : ''),
           matchId,
           userId: senderId,
           isTrip: isGroupMessage,
+          groupName: groupName,
           unreadCount: data.unreadCount,
         });
       }
@@ -488,32 +489,43 @@ function AppNavigator() {
     );
   }
 
-  return (
-    <View style={{ flex: 1 }}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!isAuthenticated ? (
-          <Stack.Screen name="Auth" component={AuthStack} />
-        ) : !user?.isPhoneVerified ? (
-          <Stack.Screen
-            name="Register_Step2"
-            component={Step2OTPScreen}
-            initialParams={{ phone: user?.phone, userId: user?._id }}
-          />
-        ) : user?.registrationStep < 8 ? (
-          <Stack.Screen name="Onboarding">
-            {() => (
-              <OnboardingStack
-                initialRoute={
-                  user?.registrationStep === 4 ? 'Register_Step4' :
-                    user?.registrationStep === 5 ? 'Register_Step5' :
-                      user?.registrationStep === 6 ? 'Register_Step6' :
-                        user?.registrationStep === 7 ? 'Register_Step7' :
-                          'Register_Step3'
-                }
-              />
-            )}
-          </Stack.Screen>
-        ) : (
+    const isNewUser = (user?.registrationStep || 0) < 9;
+    const needsEmailVerify = !user?.isEmailVerified;
+    const needsPhoneVerify = !user?.isPhoneVerified;
+
+    return (
+      <View style={{ flex: 1 }}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {!isAuthenticated ? (
+            <Stack.Screen name="Auth" component={AuthStack} />
+          ) : (isNewUser && needsEmailVerify) ? (
+            <Stack.Screen
+              name="Register_EmailVerify"
+              component={EmailVerificationScreen}
+              initialParams={{ email: user?.email, userId: user?._id }}
+            />
+          ) : (isNewUser && needsPhoneVerify) ? (
+            <Stack.Screen
+              name="Register_Step2"
+              component={Step2OTPScreen}
+              initialParams={{ phone: user?.phone, userId: user?._id }}
+            />
+          ) : isNewUser ? (
+            <Stack.Screen name="Onboarding">
+              {() => (
+                <OnboardingStack
+                  initialRoute={
+                    user?.registrationStep === 4 ? 'Register_Step3' :
+                      user?.registrationStep === 5 ? 'Register_Step4' :
+                        user?.registrationStep === 6 ? 'Register_Step5' :
+                          user?.registrationStep === 7 ? 'Register_Step6' :
+                            user?.registrationStep === 8 ? 'Register_Step7' :
+                              'Register_Step3'
+                  }
+                />
+              )}
+            </Stack.Screen>
+          ) : (
           <>
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen 

@@ -12,7 +12,20 @@
           "package_name": "com.travelholic"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "898480493172-jk9gdd6ikil0e4285gcs7e424j5do5qd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.travelholic",
+            "certificate_hash": "3a2253c7629ed4210ff1ad9a7416e6409d790db6"
+          }
+        },
+        {
+          "client_id": "898480493172-uel9195jfcbbrp655ajv21frtsblpd5g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyANV8k1MElitODRXjynV7_ddZaC0XZNyBo"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "898480493172-uel9195jfcbbrp655ajv21frtsblpd5g.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

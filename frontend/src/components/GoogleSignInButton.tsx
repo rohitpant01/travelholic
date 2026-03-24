@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert, Image as RNImage } from 'react-native';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,86 +9,99 @@ import { setUser, setToken } from '../store/slices/authSlice';
 import { COLORS, FONTS, RADIUS } from '../utils/theme';
 import apiClient from '../api/client';
 
-WebBrowser.maybeCompleteAuthSession();
-
-// Note: Replace these with your actual Client IDs from Google Cloud Console
-const webClientId = '501144459095-tqeh6a5a6stgcb4dlb8hvd70daa0fcqv.apps.googleusercontent.com';
-const iosClientId = 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com';
-const androidClientId = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com';
+// 🛠️ Configure Google Sign-In (Web Client ID is needed for idToken)
+GoogleSignin.configure({
+  webClientId: '898480493172-uel9195jfcbbrp655ajv21frtsblpd5g.apps.googleusercontent.com',
+  offlineAccess: true,
+});
 
 export default function GoogleSignInButton({ title = "Continue with Google" }: { title?: string }) {
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: webClientId,
-    iosClientId: iosClientId,
-    androidClientId: androidClientId,
-  });
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      handleGoogleLogin(id_token);
-    } else if (response?.type === 'error') {
-      Alert.alert('Authentication Error', 'Failed to authenticate with Google.');
-    }
-  }, [response]);
-
-  const handleGoogleLogin = async (idToken: string) => {
+  const handlePress = async () => {
     setLoading(true);
     try {
-      const res = await authAPI.googleLogin(idToken);
-      const { token, user } = res.data;
+      // Check if Google Play Services are available
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
-      await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // Force account picker by clearing any active memory of previous sessions
+      try {
+        await GoogleSignin.signOut();
+      } catch (e) {
+        // Ignore error if they are not currently signed in
+      }
+
+      // Sign in natively — no proxy, no redirect URIs needed!
+      const userInfo = await GoogleSignin.signIn();
       
-      dispatch(setToken(token));
-      dispatch(setUser(user));
+      console.log('[GOOGLE AUTH] Sign-in successful:', userInfo.data?.user?.email);
 
-      // If user is from Google but hasn't completed phone verification,
-      // the backend assigns them registrationStep: 2 and a dummy phone.
-      if (user.registrationStep === 2 && user.phone.startsWith('google_')) {
-        navigation.navigate('Register_Step2', { phone: '', userId: user._id });
+      const idToken = userInfo.data?.idToken;
+
+      if (!idToken) {
+        Alert.alert('Error', 'Could not get ID token from Google. Please try again.');
         return;
       }
-      
+
+      // Send to your backend
+      await handleGoogleLogin(idToken);
+
     } catch (error: any) {
-      console.error('Google login error', error);
-      Alert.alert('Google Sign-In Failed', error.response?.data?.error || 'Could not verify Google account');
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        console.log('[GOOGLE AUTH] User cancelled sign-in');
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        console.log('[GOOGLE AUTH] Sign-in already in progress');
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Error', 'Google Play Services are not available on this device.');
+      } else {
+        console.error('[GOOGLE AUTH] Error:', error);
+        Alert.alert('Google Sign-In Failed', error.message || 'An unknown error occurred.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePress = () => {
-    if (webClientId.includes('YOUR_WEB_CLIENT_ID')) {
-      Alert.alert(
-        "Configuration Missing", 
-        "Please provide your Google Web Client ID in frontend/src/components/GoogleSignInButton.tsx to enable Google Auth."
-      );
-      return;
+  const handleGoogleLogin = async (idToken: string) => {
+    try {
+      const res = await authAPI.googleLogin(idToken);
+      
+      if (res.data.isNewUser) {
+        navigation.navigate('Register_Step1', { googleProfile: res.data.googleProfile });
+        return;
+      }
+
+      const { token, user } = res.data;
+
+      await AsyncStorage.setItem('token', token);
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      dispatch(setToken(token));
+      dispatch(setUser(user));
+
+    } catch (error: any) {
+      console.error('Google login error', error);
+      Alert.alert('Google Sign-In Failed', error.response?.data?.error || 'Could not verify Google account');
     }
-    promptAsync();
   };
 
   return (
     <TouchableOpacity
       style={[styles.container, loading && styles.disabled]}
       onPress={handlePress}
-      disabled={loading || !request}
+      disabled={loading}
       activeOpacity={0.8}
     >
       {loading ? (
         <ActivityIndicator color={COLORS.text} />
       ) : (
         <>
-          <Image 
-            source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }} 
-            style={styles.logo} 
+          <RNImage
+            source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }}
+            style={styles.logo}
           />
           <Text style={styles.text}>{title}</Text>
         </>

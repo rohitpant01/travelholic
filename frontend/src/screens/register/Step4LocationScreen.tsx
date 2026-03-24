@@ -84,7 +84,7 @@ export default function Step4LocationScreen() {
         countriesVisited: form.countriesVisited.split(',').map(s => s.trim()).filter(Boolean),
         coordinates: [form.longitude, form.latitude],
         formattedAddress: `${form.city}, ${form.country}`,
-        registrationStep: 5,
+        registrationStep: 6,
       });
       dispatch(updateUser(res.data.user));
       navigation.navigate('Register_Step5');
@@ -98,8 +98,9 @@ export default function Step4LocationScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.white }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <RegisterHeader step={4} totalSteps={7} title="Your Location"
-        subtitle="Help travelers find you nearby" onBack={() => {
+      <RegisterHeader
+        step={5} totalSteps={8}
+        title="Your Location" subtitle="Help us find travelers near you" onBack={() => {
           if (navigation.canGoBack()) {
             navigation.goBack();
           } else {

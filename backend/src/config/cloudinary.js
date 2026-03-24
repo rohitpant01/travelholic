@@ -82,6 +82,7 @@ const chatMediaStorage = new CloudinaryStorage({
       folder: isAudio ? 'travelholic/voice' : 'travelholic/photos',
       resource_type: isAudio ? 'video' : 'image',
       allowed_formats: isAudio ? undefined : ['jpg', 'jpeg', 'png', 'webp'],
+      transformation: isAudio ? undefined : [{ width: 1080, crop: 'limit', quality: 'auto' }],
     };
   },
 });

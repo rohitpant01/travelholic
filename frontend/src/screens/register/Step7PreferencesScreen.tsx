@@ -53,7 +53,7 @@ export default function Step7PreferencesScreen() {
         preferredAgeMax: ageRange[1],
         budget,
         tripDuration,
-        registrationStep: 8,
+        registrationStep: 9,
         profileComplete: true,
       });
       dispatch(updateUser(res.data.user));
@@ -67,7 +67,7 @@ export default function Step7PreferencesScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
-      <RegisterHeader step={7} totalSteps={7} title="Travel Preferences"
+      <RegisterHeader step={8} totalSteps={8} title="Travel Preferences"
         subtitle="Find your perfect travel match" onBack={() => {
           if (navigation.canGoBack()) {
             navigation.goBack();

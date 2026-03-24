@@ -126,10 +126,10 @@ export default function Step5PhotosScreen() {
 
       dispatch(updateUser({
         photos: data.photos,
-        registrationStep: 6,
+        registrationStep: 7,
       }));
 
-      await userAPI.updateProfile({ registrationStep: 6 });
+      await userAPI.updateProfile({ registrationStep: 7 });
       navigation.navigate('Register_Step6');
     } catch (err: any) {
       console.log('UPLOAD ERROR:', err);
@@ -152,8 +152,8 @@ export default function Step5PhotosScreen() {
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
 
       <RegisterHeader
-        step={5}
-        totalSteps={7}
+        step={6}
+        totalSteps={8}
         title="Add Your Photos"
         subtitle="Min. 3 photos · Max. 6 photos"
         onBack={() => navigation.goBack()}

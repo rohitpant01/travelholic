@@ -286,6 +286,30 @@ export default function ProfileScreen() {
         </View>
 
       </View>
+
+      {/* ── Email Verification Banner ── */}
+      {!user?.isEmailVerified && (user?.registrationStep || 0) >= 9 && (
+        <TouchableOpacity 
+          style={styles.verifyBanner} 
+          onPress={() => navigation.navigate('EditProfile')}
+          activeOpacity={0.8}
+        >
+          <LinearGradient 
+            colors={['#FFF5F5', '#FFF0F0']} 
+            style={[styles.verifyBannerGrad, { borderColor: COLORS.error + '20', borderWidth: 1 }]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          >
+            <View style={[styles.verifyIconBG, { backgroundColor: '#FFEEED' }]}>
+              <Ionicons name="mail-unread-outline" size={24} color={COLORS.error} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.verifyTitle, { color: COLORS.error }]}>Verify Your Email</Text>
+              <Text style={styles.verifySubtitle}>Complete verification in Edit Profile 📧</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.error} />
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
       
       {/* ── Verification Banner ── */}
       {!user?.isPhotoVerified && (

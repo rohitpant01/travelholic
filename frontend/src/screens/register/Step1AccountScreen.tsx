@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,13 +17,21 @@ import GoogleSignInButton from '../../components/GoogleSignInButton';
 
 export default function Step1AccountScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const googleProfile = route.params?.googleProfile;
+
   const [form, setForm] = useState({
-    firstName: '', lastName: '', username: '',
-    email: '', phone: '', password: '', confirmPassword: '',
+    firstName: googleProfile?.firstName || '', 
+    lastName: googleProfile?.lastName || '', 
+    username: '',
+    email: googleProfile?.email || '', 
+    phone: '', 
+    password: '', 
+    confirmPassword: '',
   });
 
   const update = (key: string, val: string) => setForm(f => ({ ...f, [key]: val }));
@@ -40,7 +48,12 @@ export default function Step1AccountScreen() {
     setLoading(true);
     try {
       console.log('[REG] Attempting registration for:', email);
-      const res = await authAPI.register({ firstName, lastName, username, email, phone, password });
+      const res = await authAPI.register({ 
+        firstName, lastName, username, email, phone, password,
+        googleId: googleProfile?.googleId,
+        picture: googleProfile?.picture,
+        authProvider: googleProfile ? 'google' : 'local'
+      });
       const { token, user } = res.data;
       console.log('[REG] Registration success. User ID:', user._id);
       
@@ -50,8 +63,7 @@ export default function Step1AccountScreen() {
       dispatch(setToken(token));
       dispatch(setUser(user));
       
-      console.log('[REG] Navigating to OTP verification screen');
-      navigation.navigate('Register_Step2', { phone, userId: user._id });
+      console.log('[REG] Registration successful. Root Navigator will handle redirection.');
     } catch (error: any) {
       console.error('[REG] Registration error:', error.response?.data || error.message);
       Alert.alert('Registration Failed', error.response?.data?.error || 'Something went wrong');
@@ -72,26 +84,33 @@ export default function Step1AccountScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.white }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <RegisterHeader step={1} totalSteps={7} title="Create Account" subtitle="Tell us about yourself" />
+      <RegisterHeader step={1} totalSteps={8} title="Create Account" subtitle="Tell us about yourself" />
       <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
 
-        {fields.map(f => (
-          <View key={f.key} style={styles.field}>
-            <Text style={styles.label}>{f.label}</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name={f.icon as any} size={18} color={COLORS.textLight} style={styles.icon} />
-              <TextInput
-                style={styles.input}
-                placeholder={f.placeholder}
-                value={(form as any)[f.key]}
-                onChangeText={v => update(f.key, f.lower ? v.toLowerCase() : v)}
-                autoCapitalize={f.lower || f.email ? 'none' : 'words'}
-                keyboardType={f.email ? 'email-address' : f.phone ? 'phone-pad' : 'default'}
-                placeholderTextColor={COLORS.textLight}
-              />
+        {fields.map(f => {
+          const isEmailLocked = googleProfile && f.key === 'email';
+          return (
+            <View key={f.key} style={styles.field}>
+              <Text style={styles.label}>{f.label}</Text>
+              <View style={[styles.inputWrapper, isEmailLocked && styles.inputDisabled]}>
+                <Ionicons name={f.icon as any} size={18} color={COLORS.textLight} style={styles.icon} />
+                <TextInput
+                  style={[styles.input, isEmailLocked && { color: COLORS.textLight }]}
+                  placeholder={f.placeholder}
+                  value={(form as any)[f.key]}
+                  onChangeText={v => update(f.key, f.lower ? v.toLowerCase() : v)}
+                  autoCapitalize={f.lower || f.email ? 'none' : 'words'}
+                  keyboardType={f.email ? 'email-address' : f.phone ? 'phone-pad' : 'default'}
+                  placeholderTextColor={COLORS.textLight}
+                  editable={!isEmailLocked}
+                />
+                {isEmailLocked && (
+                  <Ionicons name="lock-closed" size={14} color={COLORS.textLight} />
+                )}
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
 
         <View style={styles.field}>
           <Text style={styles.label}>Password</Text>
@@ -178,6 +197,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background, borderRadius: RADIUS.md,
     borderWidth: 1.5, borderColor: COLORS.border,
     paddingHorizontal: 12, paddingVertical: 12,
+  },
+  inputDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+    opacity: 0.8,
   },
   inputError: { borderColor: COLORS.error },
   icon: { marginRight: 8 },

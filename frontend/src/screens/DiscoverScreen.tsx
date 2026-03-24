@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder,
-  Dimensions, Image, ActivityIndicator, Alert
+  Dimensions, Image, ActivityIndicator, Alert, Modal
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store';
@@ -35,6 +35,7 @@ interface Profile {
   origin?: { city?: string };
   destination?: { city?: string };
   travelDate?: string;
+  city?: string;
 }
 
 function TravelerCard({ profile, onLike, onSkip, onSuperLike, isTop }: {
@@ -232,10 +233,19 @@ function TravelerCard({ profile, onLike, onSkip, onSuperLike, isTop }: {
 export default function DiscoverScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch<AppDispatch>();
+  const { user } = useSelector((state: RootState) => state.auth);
   const { unreadCount } = useSelector((state: RootState) => state.notification);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [matchPopup, setMatchPopup] = useState<{ name: string; photo?: string } | null>(null);
+  const [showVerifyPopup, setShowVerifyPopup] = useState(false);
+
+  useEffect(() => {
+    // Show popup for already registered users who are NOT verified
+    if (user && !user.isEmailVerified && (user.registrationStep || 0) >= 9) {
+      setShowVerifyPopup(true);
+    }
+  }, [user?.isEmailVerified, user?.registrationStep]);
 
   const fetchProfiles = async () => {
     setLoading(true);
@@ -391,6 +401,43 @@ export default function DiscoverScreen() {
           </LinearGradient>
         </View>
       )}
+
+      {/* Email Verification Pop-up for Existing Users */}
+      <Modal
+        visible={showVerifyPopup}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowVerifyPopup(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.verifyPopupCard}>
+            <View style={styles.verifyIconCircle}>
+              <Ionicons name="mail-unread" size={32} color={COLORS.teal} />
+            </View>
+            <Text style={styles.verifyTitle}>Verify Your Email</Text>
+            <Text style={styles.verifyDesc}>
+              Please verify your email address to keep your account secure and unlock all features.
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.verifyBtn} 
+              onPress={() => {
+                setShowVerifyPopup(false);
+                navigation.navigate('EditProfile');
+              }}
+            >
+              <Text style={styles.verifyBtnText}>Verify Now</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.laterBtn} 
+              onPress={() => setShowVerifyPopup(false)}
+            >
+              <Text style={styles.laterBtnText}>Maybe Later</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -514,4 +561,31 @@ const styles = StyleSheet.create({
   },
   matchChatBtnText: { color: COLORS.teal, fontWeight: '800', fontSize: FONTS.base },
   onlineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.success, borderWidth: 1.5, borderColor: COLORS.white, marginLeft: 4 },
+
+  // Verification Popup Styles
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center', alignItems: 'center', padding: 20
+  },
+  verifyPopupCard: {
+    backgroundColor: COLORS.white, borderRadius: 24, padding: 24,
+    width: '100%', alignItems: 'center', ...SHADOW.lg
+  },
+  verifyIconCircle: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: 'rgba(20, 184, 166, 0.1)',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 16
+  },
+  verifyTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, marginBottom: 8 },
+  verifyDesc: { 
+    fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', 
+    lineHeight: 20, marginBottom: 24 
+  },
+  verifyBtn: {
+    backgroundColor: COLORS.teal, width: '100%', paddingVertical: 14,
+    borderRadius: 14, alignItems: 'center', marginBottom: 12
+  },
+  verifyBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
+  laterBtn: { paddingVertical: 8 },
+  laterBtnText: { color: COLORS.textLight, fontSize: 14, fontWeight: '600' },
 });

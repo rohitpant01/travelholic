@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const { generateToken } = require('../middleware/auth');
 const { sendOTP, verifyOTP } = require('../utils/otp');
+const { sendEmailOTP } = require('../utils/email');
 const { OAuth2Client } = require('google-auth-library');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -11,9 +12,9 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const register = async (req, res) => {
   try {
     console.log('[DEBUG] Registration body:', JSON.stringify(req.body, null, 2));
-    const { firstName, lastName, username, email, phone, password } = req.body;
+    const { firstName, lastName, username, email, phone, password, authProvider } = req.body;
     console.log(`[AUTH] Registration attempt: ${email} (${phone})`);
-
+    
     // Check for existing users
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
@@ -35,23 +36,44 @@ const register = async (req, res) => {
 
     // Create user
     console.log(`[AUTH] Creating user for ${email}...`);
-    const user = await User.create({
+    const isGoogle = !!req.body.googleId || req.body.authProvider === 'google';
+    
+    const userPayload = {
       firstName,
       lastName,
       username: username.toLowerCase(),
       email: email.toLowerCase(),
       phone,
-      password,
-      registrationStep: 2,
-    });
+      password: password || `google_${Date.now()}_${Math.random().toString(36).slice(-8)}`,
+      registrationStep: 2, // New users start at Step 2 (Email Verification)
+      isPhoneVerified: false, // New users must verify phone
+      authProvider: authProvider || (isGoogle ? 'google' : 'local')
+    };
+    if (req.body.googleId) userPayload.googleId = req.body.googleId;
+    if (req.body.picture) {
+      userPayload.photos = [{ url: req.body.picture, publicId: `google_${req.body.googleId}`, isProfile: true }];
+    }
 
-    // Send OTP to phone
-    console.log(`[AUTH] Sending OTP to ${phone}...`);
+    const user = await User.create(userPayload);
+
+    // Initial Verification Flow for ALL users (including Google)
+    // Step 2: Email Verification is next
+    userPayload.registrationStep = 2;
+    
+    console.log(`[AUTH] Sending Email OTP to ${email}...`);
+    const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log('=========================================');
+    console.log(`📧  VERIFICATION CODE FOR ${email}: ${emailOtp}`);
+    console.log('=========================================');
+    user.emailOtp = emailOtp;
+    user.emailOtpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    user.isEmailVerified = false; // Ensure it's false
+    await user.save({ validateBeforeSave: false });
+
     try {
-      await sendOTP(phone);
-    } catch (otpError) {
-      console.error('[AUTH] OTP send failed:', otpError.message);
-      // Don't fail registration if OTP fails — user can resend
+      await sendEmailOTP(email, emailOtp);
+    } catch (emailError) {
+      console.error('[AUTH] Email OTP send failed:', emailError.message);
     }
 
     const token = generateToken(user._id);
@@ -134,15 +156,31 @@ const login = async (req, res) => {
 // @access  Public
 const sendOTPHandler = async (req, res) => {
   try {
-    const { phone } = req.body;
+    const { phone, checkExists } = req.body;
     if (!phone) return res.status(400).json({ error: 'Phone number required' });
 
-    console.log(`[AUTH] Resending OTP to ${phone}...`);
-    await sendOTP(phone);
-    res.json({ message: 'OTP sent successfully' });
-  } catch (error) {
-    console.error('[AUTH] Send OTP error:', error.message);
-    res.status(500).json({ error: error.message });
+    if (checkExists) {
+      const existingUser = await User.findOne({ phone });
+      if (existingUser) {
+        return res.status(400).json({ error: 'This phone number is already registered to another account.' });
+      }
+    }
+
+    const finalPhone = phone; // Use a consistent variable name
+    console.log(`[AUTH] Sending Phone OTP to ${finalPhone}...`);
+    try {
+      await sendOTP(finalPhone);
+      console.log('=========================================');
+      console.log(`📱  PHONE VERIFICATION REQUESTED FOR ${finalPhone}`);
+      console.log('=========================================');
+      res.json({ message: 'OTP sent successfully' });
+    } catch (error) {
+      console.error('[AUTH] Send OTP error:', error.message);
+      res.status(500).json({ error: error.message });
+    }
+  } catch (outerError) {
+    console.error('[AUTH] Outer Send OTP error:', outerError.message);
+    res.status(500).json({ error: outerError.message });
   }
 };
 
@@ -163,12 +201,13 @@ const verifyOTPHandler = async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    // Mark phone as verified
+    // Mark phone as verified and save the actual phone
     console.log(`[AUTH] OTP Verified for ${phone}. Updating user ${userId}...`);
     if (userId) {
       const updatedUser = await User.findByIdAndUpdate(userId, {
+        phone: phone, // <-- Save the verified phone!
         isPhoneVerified: true,
-        registrationStep: 3,
+        registrationStep: 4,
       }, { new: true });
       
       if (!updatedUser) {
@@ -231,12 +270,13 @@ const googleLogin = async (req, res) => {
 
     console.log('[AUTH] Google Sign-In attempt...');
     
-    // Verify Google ID Token
-    // We don't strictly pass audience if we want the library to auto-accept tokens 
-    // from our Android, iOS, or Web clients as long as they are valid.
+    // Verify Google ID Token — accept tokens from any of our client IDs
     const ticket = await googleClient.verifyIdToken({
       idToken,
-      // audience: [ANDROID_CLIENT_ID, IOS_CLIENT_ID, WEB_CLIENT_ID]
+      audience: [
+        process.env.GOOGLE_CLIENT_ID,
+        '898480493172-jk9gdd6ikil0e4285gcs7e424j5do5qd.apps.googleusercontent.com', // Android
+      ],
     });
     const payload = ticket.getPayload();
     const { sub: googleId, email, given_name, family_name, picture } = payload;
@@ -252,53 +292,64 @@ const googleLogin = async (req, res) => {
     });
 
     if (!user) {
-      console.log(`[AUTH] Creating new user for Google ID: ${googleId}`);
-      // Create new user with basic info from Google
-      // We set a dummy phone number so the schema validation doesn't fail. 
-      // They MUST complete Step 2 (OTP) immediately after.
-      user = await User.create({
-        googleId,
-        email: email.toLowerCase(),
-        phone: `google_${googleId}`, // Temporary placeholder
-        password: `google_${googleId}_${Date.now()}`, // Temporary placeholder
-        firstName: given_name || 'Traveler',
-        lastName: family_name || '',
-        username: `user_${googleId.slice(-6)}_${Date.now().toString().slice(-4)}`,
-        isEmailVerified: true,
-        registrationStep: 2, // Must provide real phone number next
+      console.log(`[AUTH] New Google user, forwarding to step 1 (ID: ${googleId})`);
+      return res.status(200).json({
+        isNewUser: true,
+        message: 'Google Sign-In successful. Please complete registration.',
+        googleProfile: {
+          googleId,
+          email: email.toLowerCase(),
+          firstName: given_name || '',
+          lastName: family_name || '',
+          picture: picture || ''
+        }
       });
-      
-      if (picture) {
-        user.photos = [{ url: picture, publicId: `google_${googleId}`, isProfile: true }];
-        await user.save({ validateBeforeSave: false });
-      }
     } else if (!user.googleId) {
       // Link existing email account to Google
+      console.log(`[AUTH] Linking existing account ${email} to Google...`);
       user.googleId = googleId;
+      user.authProvider = 'google';
       await user.save({ validateBeforeSave: false });
+    }
+
+    // Trigger Email OTP for existing users if not verified
+    if (!user.isEmailVerified) {
+      console.log(`[AUTH] Existing user ${user.email} not verified. Sending OTP...`);
+      const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      user.emailOtp = emailOtp;
+      user.emailOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+      if (user.registrationStep < 2) user.registrationStep = 2;
+      await user.save({ validateBeforeSave: false });
+
+      console.log('=========================================');
+      console.log(`📧  VERIFICATION CODE (LOGIN) FOR ${user.email}: ${emailOtp}`);
+      console.log('=========================================');
+
+      try {
+        await sendEmailOTP(user.email, emailOtp);
+      } catch (emailError) {
+        console.error('[AUTH] Login Email OTP failed:', emailError.message);
+      }
     }
 
     // Generate token
     const token = generateToken(user._id);
     
-    // Determine if they need to complete registration
-    // If the phone starts with 'google_', they haven't provided a real phone number yet
-    const needsPhone = user.phone.startsWith('google_');
-    const step = needsPhone ? 2 : user.registrationStep;
+    // Determine current effective step
+    let effectiveStep = user.registrationStep || 2;
+    if (!user.isEmailVerified) effectiveStep = 2;
+    else if (!user.isPhoneVerified && effectiveStep < 3) effectiveStep = 3;
+
+    const step = user.registrationStep;
     
-    res.json({
+    res.status(200).json({
       message: 'Google Sign-In successful',
       token,
       user: {
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        username: user.username,
-        email: user.email,
-        phone: user.phone,
-        registrationStep: step,
-        isPhoneVerified: user.isPhoneVerified,
+        ...user.toObject(),
+        registrationStep: effectiveStep,
       },
+      isNewUser: false,
     });
   } catch (error) {
     console.error('[AUTH] Google Sign-In error:', error.message);
@@ -306,4 +357,158 @@ const googleLogin = async (req, res) => {
   }
 };
 
-module.exports = { register, login, sendOTPHandler, verifyOTPHandler, forgotPassword, resetPassword, googleLogin };
+// @desc    Send Email OTP
+// @route   POST /api/auth/send-email-otp
+// @access  Private (or Public if userId provided)
+const sendEmailOTPHandler = async (req, res) => {
+  try {
+    const { email, userId } = req.body;
+    if (!email && !userId) return res.status(400).json({ error: 'Email or User ID required' });
+
+    let user;
+    if (userId) {
+      user = await User.findById(userId);
+    } else {
+      user = await User.findOne({ email: email.toLowerCase() });
+    }
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log('=========================================');
+    console.log(`📧  RESEND VERIFICATION CODE FOR ${user.email}: ${emailOtp}`);
+    console.log('=========================================');
+    user.emailOtp = emailOtp;
+    user.emailOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    await sendEmailOTP(user.email, emailOtp);
+    res.json({ message: 'Verification email sent successfully' });
+  } catch (error) {
+    console.error('[AUTH] Send Email OTP error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Verify Email OTP
+// @route   POST /api/auth/verify-email-otp
+// @access  Public
+const verifyEmailOTPHandler = async (req, res) => {
+  try {
+    const { email, code, userId } = req.body;
+    if (!code) return res.status(400).json({ error: 'Verification code required' });
+
+    let user;
+    if (userId) {
+      user = await User.findById(userId);
+    } else {
+      user = await User.findOne({ email: email.toLowerCase() });
+    }
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Check if expired
+    if (user.emailOtpExpiry && user.emailOtpExpiry < new Date()) {
+      return res.status(400).json({ error: 'Verification code has expired' });
+    }
+
+    if (user.emailOtp !== code) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    // Success
+    user.isEmailVerified = true;
+    user.emailOtp = undefined;
+    user.emailOtpExpiry = undefined;
+    
+    // Auto-advance to next step (Phone OTP)
+    if (user.registrationStep < 3) {
+      user.registrationStep = 3;
+      
+      // OPTIONAL: Send Phone OTP immediately upon successful email verification
+      console.log(`[AUTH] Email verified. Triggering Phone OTP for ${user.phone}`);
+      try {
+        await sendOTP(user.phone);
+        console.log('=========================================');
+        console.log(`📱  AUTO-SENT PHONE OTP FOR ${user.phone}`);
+        console.log('=========================================');
+      } catch (otpError) {
+        console.error('[AUTH] Phone OTP auto-send failed:', otpError.message);
+      }
+    }
+
+    await user.save({ validateBeforeSave: false });
+    res.json({ message: 'Email verified successfully', verified: true });
+  } catch (error) {
+    console.error('[AUTH] Verify Email OTP error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const changeEmail = async (req, res) => {
+  try {
+    const { newEmail, password } = req.body;
+    const userId = req.user._id;
+
+    if (!newEmail) return res.status(400).json({ error: 'New email required' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Verify password if local
+    if (user.authProvider === 'local') {
+      if (!password) return res.status(400).json({ error: 'Password required' });
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) return res.status(401).json({ error: 'Incorrect password' });
+    }
+
+    // Check availability
+    const existing = await User.findOne({ email: newEmail.toLowerCase() });
+    if (existing) return res.status(400).json({ error: 'Email already taken' });
+
+    // Update
+    user.email = newEmail.toLowerCase();
+    user.isEmailVerified = false;
+
+    const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.emailOtp = emailOtp;
+    user.emailOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    console.log('=========================================');
+    console.log(`📧  CHANGE EMAIL OTP FOR ${user.email}: ${emailOtp}`);
+    console.log('=========================================');
+
+    try {
+      await sendEmailOTP(user.email, emailOtp);
+    } catch (err) {
+      console.error('[AUTH] Change email OTP send failed:', err.message);
+    }
+
+    res.json({
+      message: 'Email updated successfully. Please verify your new email.',
+      user: {
+        _id: user._id,
+        email: user.email,
+        isEmailVerified: false,
+        registrationStep: 2
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = {
+  register,
+  login,
+  sendOTPHandler,
+  verifyOTPHandler,
+  forgotPassword,
+  resetPassword,
+  googleLogin,
+  sendEmailOTPHandler,
+  verifyEmailOTPHandler,
+  changeEmail
+};
+

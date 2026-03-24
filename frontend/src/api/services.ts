@@ -7,12 +7,17 @@ export const authAPI = {
   register: (data: any) => apiClient.post('/auth/register', data),
   login: (data: any) => apiClient.post('/auth/login', data),
   googleLogin: (idToken: string) => apiClient.post('/auth/google', { idToken }),
-  sendOTP: (phone: string) => apiClient.post('/auth/send-otp', { phone }),
+  sendOTP: (phone: string, checkExists?: boolean) => apiClient.post('/auth/send-otp', { phone, checkExists }),
   verifyOTP: (phone: string, code: string, userId: string) =>
     apiClient.post('/auth/verify-otp', { phone, code, userId }),
   forgotPassword: (phone: string) => apiClient.post('/auth/forgot-password', { phone }),
   resetPassword: (phone: string, code: string, newPassword: string) =>
     apiClient.post('/auth/reset-password', { phone, code, newPassword }),
+  sendEmailOTP: (email?: string, userId?: string) => apiClient.post('/auth/send-email-otp', { email, userId }),
+  verifyEmailOTP: (email: string | undefined, code: string, userId?: string) =>
+    apiClient.post('/auth/verify-email-otp', { email, code, userId }),
+  changeEmail: (newEmail: string, password?: string) =>
+    apiClient.post('/auth/change-email', { newEmail, password }),
 };
 
 // ============================================================

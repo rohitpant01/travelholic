@@ -22,6 +22,7 @@ interface User {
   lookingFor?: string[];
   location?: any;
   isPhoneVerified: boolean;
+  isEmailVerified: boolean;
   isPhotoVerified: boolean;
   profileComplete: boolean;
   registrationStep: number;
@@ -30,6 +31,7 @@ interface User {
   tripsCompleted?: number;
   completedTrips?: any[];
   maxDiscoveryDistance?: number;
+  authProvider?: string;
 }
 
 interface AuthState {

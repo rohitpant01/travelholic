@@ -24,6 +24,7 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, required: true, unique: true, trim: true },
   password: { type: String, required: true, minlength: 6 },
   googleId: { type: String, unique: true, sparse: true },
+  authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
 
   // Verification
   isEmailVerified: { type: Boolean, default: false },
@@ -32,6 +33,8 @@ const userSchema = new mongoose.Schema({
   verificationSelfieUrl: String,
   otp: String,
   otpExpiry: Date,
+  emailOtp: String,
+  emailOtpExpiry: Date,
 
   // Personal Details
   dob: { type: Date },

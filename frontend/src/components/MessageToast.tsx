@@ -14,6 +14,7 @@ interface ToastMessage {
   userId: string;
   unreadCount?: number;
   isTrip?: boolean;
+  groupName?: string;
 }
 
 interface Props {
@@ -99,7 +100,11 @@ export default function MessageToast({ message, onDismiss }: Props) {
           )}
         </View>
         <View style={styles.textArea}>
-          <Text style={styles.senderName} numberOfLines={1}>{message.senderName}</Text>
+          <Text style={styles.senderName} numberOfLines={1}>
+            {message.isTrip && message.groupName 
+              ? `${message.groupName} (${message.senderName})` 
+              : message.senderName}
+          </Text>
           <Text style={styles.messageText} numberOfLines={1}>{message.text}</Text>
         </View>
         <TouchableOpacity style={styles.dismissBtn} onPress={dismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
