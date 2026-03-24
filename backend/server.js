@@ -55,6 +55,15 @@ app.use(
   })
 );
 
+// ── Main Home Route ──────────────────────────────────────────
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "TravelHolic Backend API is LIVE 🚀",
+    status: "Active",
+    time: new Date().toISOString()
+  });
+});
+
 // ── Test Routes (after CORS) ──────────────────────────────────
 app.get("/api/test", (req, res) => {
   res.json({ 
