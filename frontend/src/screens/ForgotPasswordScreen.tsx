@@ -4,8 +4,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  Alert, ActivityIndicator, KeyboardAvoidingView, Platform
+  Alert, ActivityIndicator, Platform
 } from 'react-native';
+import KeyboardWrapper from '../components/KeyboardWrapper';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,19 +15,19 @@ import { COLORS, FONTS, RADIUS, SPACING } from '../utils/theme';
 
 export function ForgotPasswordScreen() {
   const navigation = useNavigation<any>();
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [otp, setOtp] = useState('');
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [step, setStep] = useState<'email' | 'otp'>('email');
   const [loading, setLoading] = useState(false);
 
   const sendOTP = async () => {
-    if (!phone) return Alert.alert('Error', 'Enter your phone number');
+    if (!email) return Alert.alert('Error', 'Enter your email address');
     setLoading(true);
     try {
-      await authAPI.forgotPassword(phone);
+      await authAPI.forgotPassword(email);
       setStep('otp');
-      Alert.alert('OTP Sent', 'Check your phone for the reset code');
+      Alert.alert('OTP Sent', 'Check your email for the reset code');
     } catch (e: any) {
       Alert.alert('Error', e.response?.data?.error || 'Failed to send OTP');
     } finally { setLoading(false); }
@@ -37,7 +38,7 @@ export function ForgotPasswordScreen() {
     if (newPassword.length < 6) return Alert.alert('Error', 'Password must be at least 6 characters');
     setLoading(true);
     try {
-      await authAPI.resetPassword(phone, otp, newPassword);
+      await authAPI.resetPassword(email, otp, newPassword);
       Alert.alert('Success', 'Password reset! Please login.', [
         { text: 'OK', onPress: () => navigation.navigate('Login') },
       ]);
@@ -47,29 +48,32 @@ export function ForgotPasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.white }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardWrapper 
+      backgroundColor={COLORS.white} 
+      contentContainerStyle={{ flexGrow: 1 }}
+    >
       <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reset Password</Text>
         <Text style={styles.headerSubtitle}>
-          {step === 'phone' ? "Enter your phone to receive OTP" : "Enter OTP and new password"}
+          {step === 'email' ? "Enter your email to receive OTP" : "Enter OTP and new password"}
         </Text>
       </LinearGradient>
 
       <View style={styles.form}>
-        {step === 'phone' ? (
+        {step === 'email' ? (
           <>
-            <Text style={styles.label}>Phone Number</Text>
+            <Text style={styles.label}>Email Address</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="call-outline" size={18} color={COLORS.textLight} style={styles.icon} />
+              <Ionicons name="mail-outline" size={18} color={COLORS.textLight} style={styles.icon} />
               <TextInput
                 style={styles.input}
-                placeholder="+919876543210"
-                value={phone} onChangeText={setPhone}
-                keyboardType="phone-pad"
+                placeholder="name@example.com"
+                value={email} onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
                 placeholderTextColor={COLORS.textLight}
               />
             </View>
@@ -113,7 +117,7 @@ export function ForgotPasswordScreen() {
           </>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardWrapper>
   );
 }
 

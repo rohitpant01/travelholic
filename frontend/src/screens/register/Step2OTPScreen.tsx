@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  Alert, ActivityIndicator, Keyboard
+  Alert, ActivityIndicator, Platform
 } from 'react-native';
+import KeyboardWrapper from '../../components/KeyboardWrapper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +13,8 @@ import { authAPI } from '../../api/services';
 import { updateUser, logout } from '../../store/slices/authSlice';
 import { RootState } from '../../store';
 import { COLORS, FONTS, RADIUS, SPACING } from '../../utils/theme';
+import CountryCodePicker from '../../components/CountryCodePicker';
+import { COUNTRIES, CountryData } from '../../data/countries';
 
 export default function Step2OTPScreen() {
   const navigation = useNavigation<any>();
@@ -28,6 +31,7 @@ export default function Step2OTPScreen() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(isGooglePhone ? 0 : 60);
+  const [countryCode, setCountryCode] = useState<CountryData>(COUNTRIES[0]); // Default India +91
   const inputs = useRef<TextInput[]>([]);
 
   useEffect(() => {
@@ -40,7 +44,9 @@ export default function Step2OTPScreen() {
   const handleSendInitialOTP = async () => {
     if (phone.length < 10) return Alert.alert('Error', 'Please enter a valid 10-digit number');
     let finalPhone = phone.trim();
-    if (/^\d{10}$/.test(finalPhone)) finalPhone = `+91${finalPhone}`;
+    if (/^\d{10}$/.test(finalPhone) && !finalPhone.startsWith('+')) {
+      finalPhone = `${countryCode.dial}${finalPhone}`;
+    }
     
     setSendingOTP(true);
     try {
@@ -98,7 +104,10 @@ export default function Step2OTPScreen() {
 
   if (!isPhoneEntered) {
     return (
-      <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+      <KeyboardWrapper 
+        backgroundColor={COLORS.white} 
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
         <RegisterHeader
           step={3} totalSteps={8}
           title="Add Phone Number" subtitle="We need this to verify your account"
@@ -116,18 +125,19 @@ export default function Step2OTPScreen() {
         />
         <View style={styles.content}>
           <Text style={styles.label}>Mobile Number *</Text>
-          <View style={styles.inputWrapper}>
-            <Text style={styles.countryCode}>+91</Text>
-            <View style={styles.divider} />
-            <TextInput
-              style={styles.input}
-              placeholder="Enter 10-digit number"
-              value={phone.replace('+91', '')}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              maxLength={10}
-              placeholderTextColor={COLORS.textLight}
-            />
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+            <CountryCodePicker selected={countryCode} onSelect={setCountryCode} />
+            <View style={[styles.inputWrapper, { flex: 1, marginBottom: 0 }]}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter 10-digit number"
+                value={phone.replace('+91', '')}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                maxLength={10}
+                placeholderTextColor={COLORS.textLight}
+              />
+            </View>
           </View>
 
           <TouchableOpacity
@@ -143,12 +153,15 @@ export default function Step2OTPScreen() {
             </LinearGradient>
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardWrapper>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+    <KeyboardWrapper 
+      backgroundColor={COLORS.white} 
+      contentContainerStyle={{ flexGrow: 1 }}
+    >
       <RegisterHeader
         step={3} totalSteps={8}
         title="Verify Phone" subtitle={`Enter the OTP sent to ${phone}`}
@@ -212,7 +225,7 @@ export default function Step2OTPScreen() {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </KeyboardWrapper>
   );
 }
 

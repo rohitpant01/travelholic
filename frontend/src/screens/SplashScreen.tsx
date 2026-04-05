@@ -277,9 +277,12 @@ export default function SplashScreen() {
       </View>
 
       {/* Brand */}
-      <Animated.View style={[styles.footer, { opacity: brandOpacity }]}>
-        <Text style={styles.appName}>TRAVELHOLIC</Text>
-        <Text style={styles.tagline}>Journey Together</Text>
+      <Animated.View style={[styles.footer, { opacity: brandOpacity, alignItems: 'center' }]}>
+        <Image style={{width: 80, height: 80, marginBottom: 12, borderRadius: 18}} source={require('../../assets/logo.png')} />
+        <Text style={styles.appName}>
+          EKAL<Text style={{ color: '#F7A731' }}>GO</Text>
+        </Text>
+        <Text style={styles.tagline}>From Solo Trips to Shared Memories.</Text>
       </Animated.View>
     </View>
   );
@@ -382,9 +385,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   tagline: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
-    letterSpacing: 2,
-    textTransform: 'uppercase',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 1,
+    fontStyle: 'italic',
   },
 });

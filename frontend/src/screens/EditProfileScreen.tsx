@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, Alert, ActivityIndicator, Image, Platform,
-  KeyboardAvoidingView
+  Platform, Alert, ActivityIndicator, Image, ScrollView
 } from 'react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import KeyboardWrapper from '../components/KeyboardWrapper';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootState } from '../store';
-import { userAPI } from '../api/services';
 import { updateUser } from '../store/slices/authSlice';
-import { COLORS, FONTS, RADIUS, SPACING, SHADOW } from '../utils/theme';
+import { useAppTheme, FONTS, RADIUS, SPACING, SHADOW } from '../utils/theme';
+import { authAPI, userAPI } from '../api/services';
+import CountryPickerModal from '../components/CountryPickerModal';
 import { Dimensions } from 'react-native';
 
 const { width: W } = Dimensions.get('window');
@@ -20,6 +23,8 @@ import { GOOGLE_MAPS_API_KEY } from '../api/client';
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const { user } = useSelector((state: RootState) => state.auth);
 
   const [loading, setLoading] = useState(false);
@@ -44,6 +49,46 @@ export default function EditProfileScreen() {
   const [travelDate, setTravelDate] = useState(user?.travelDate ? new Date(user.travelDate).toISOString().split('T')[0] : '');
   
   const [activeField, setActiveField] = useState<'city' | 'origin' | 'destination'>('city');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [countriesVisited, setCountriesVisited] = useState<string[]>(user?.countriesVisited || []);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+
+  const refreshProfile = async () => {
+    try {
+      const response = await userAPI.getProfile();
+      const freshUser = response.data.user;
+      if (freshUser) {
+        dispatch(updateUser(freshUser));
+        await AsyncStorage.setItem('user', JSON.stringify(freshUser));
+        
+        // Sync local states if they are still at initial empty values
+        if (!firstName) setFirstName(freshUser.firstName || '');
+        if (!lastName) setLastName(freshUser.lastName || '');
+        if (!bio) setBio(freshUser.bio || '');
+        if (!city && !country) {
+          setCity(freshUser.city || freshUser.location?.city || '');
+          setCountry(freshUser.country || freshUser.location?.country || '');
+        }
+        if (photos.length === 0) setPhotos(freshUser.photos || []);
+        if (!originCity) {
+          setOriginCity(freshUser.origin?.city || '');
+          setOriginCoords(freshUser.origin?.location?.coordinates || [0, 0]);
+        }
+        if (!destinationCity) {
+          setDestinationCity(freshUser.destination?.city || '');
+          setDestinationCoords(freshUser.destination?.location?.coordinates || [0, 0]);
+        }
+        if (!travelDate) setTravelDate(freshUser.travelDate ? new Date(freshUser.travelDate).toISOString().split('T')[0] : '');
+        if (countriesVisited.length === 0) setCountriesVisited(freshUser.countriesVisited || []);
+      }
+    } catch (error) {
+      console.warn('[EditProfileScreen] Refresh failed:', error);
+    }
+  };
+
+  useEffect(() => {
+    refreshProfile();
+  }, []);
   
   // Email management states
   const [email, setEmail] = useState(user?.email || '');
@@ -104,7 +149,8 @@ export default function EditProfileScreen() {
           city: destinationCity, 
           location: { type: 'Point', coordinates: destinationCoords } 
         },
-        travelDate: travelDate || undefined
+        travelDate: travelDate || undefined,
+        countriesVisited: countriesVisited
       });
       dispatch(updateUser(res.data.user));
       Alert.alert('Success', 'Profile updated successfully');
@@ -136,11 +182,12 @@ export default function EditProfileScreen() {
       if (data.status === 'OK') {
         setSuggestions(data.predictions);
         setShowSuggestions(true);
-      } else if (data.status === 'REQUEST_DENIED') {
-        console.warn('Google Places API Request Denied:', data.error_message);
-        setSuggestions([]);
-        setShowSuggestions(false);
       } else {
+        // 🔍 DEBUG LOG: Catch API key / Permission issues
+        if (data.status !== 'ZERO_RESULTS') {
+          console.warn(`[Google Autocomplete Error] Status: ${data.status}`);
+          console.warn(`[Google Autocomplete Error] Message: ${data.error_message || 'N/A'}`);
+        }
         setSuggestions([]);
         setShowSuggestions(false);
       }
@@ -151,7 +198,6 @@ export default function EditProfileScreen() {
 
   const selectSuggestion = async (item: any) => {
     try {
-      // Get Details for city/country breakdown and coordinates
       const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${item.place_id}&fields=address_components,geometry&key=${GOOGLE_MAPS_API_KEY}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -177,12 +223,16 @@ export default function EditProfileScreen() {
           setDestinationCity(cityVal);
           setDestinationCoords([lng, lat]);
         }
+      } else {
+        console.warn(`[Google Place Details Error] Status: ${data.status}`);
+        console.warn(`[Google Place Details Error] Message: ${data.error_message || 'N/A'}`);
       }
     } catch (e) {
       console.error('Error fetching place details:', e);
-      if (activeField === 'city') setCity(item.structured_formatting.main_text);
-      else if (activeField === 'origin') setOriginCity(item.structured_formatting.main_text);
-      else if (activeField === 'destination') setDestinationCity(item.structured_formatting.main_text);
+      const fallbackText = item.structured_formatting?.main_text || item.description?.split(',')[0] || '';
+      if (activeField === 'city') setCity(fallbackText);
+      else if (activeField === 'origin') setOriginCity(fallbackText);
+      else if (activeField === 'destination') setDestinationCity(fallbackText);
     } finally {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -280,24 +330,23 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    <KeyboardWrapper 
+      backgroundColor={theme.white}
+      contentContainerStyle={{ flexGrow: 1 }}
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={26} color={COLORS.text} />
+          <Ionicons name="chevron-back" size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
         <TouchableOpacity onPress={handleSave} disabled={loading}>
-          {loading ? <ActivityIndicator size="small" color={COLORS.teal} /> : (
+          {loading ? <ActivityIndicator size="small" color={theme.teal} /> : (
             <Text style={styles.saveBtnText}>Save</Text>
           )}
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={styles.content}>
         {/* Photo Management Section */}
         <Text style={styles.sectionTitle}>Photos</Text>
         <View style={styles.photoGrid}>
@@ -314,11 +363,11 @@ export default function EditProfileScreen() {
                     <View style={styles.photoActions}>
                       {!photo.isProfile && (
                         <TouchableOpacity style={styles.photoActionBtn} onPress={() => handleSetProfilePhoto(photo._id)}>
-                          <Ionicons name="star" size={14} color={COLORS.white} />
+                          <Ionicons name="star" size={14} color={theme.white} />
                         </TouchableOpacity>
                       )}
-                      <TouchableOpacity style={[styles.photoActionBtn, { backgroundColor: COLORS.error }]} onPress={() => handleDeletePhoto(photo._id)}>
-                        <Ionicons name="trash" size={14} color={COLORS.white} />
+                      <TouchableOpacity style={[styles.photoActionBtn, { backgroundColor: theme.error }]} onPress={() => handleDeletePhoto(photo._id)}>
+                        <Ionicons name="trash" size={14} color={theme.white} />
                       </TouchableOpacity>
                     </View>
                     {photo.isProfile && (
@@ -333,8 +382,8 @@ export default function EditProfileScreen() {
                     onPress={pickImage}
                     disabled={uploading}
                   >
-                    {uploading ? <ActivityIndicator size="small" color={COLORS.teal} /> : (
-                      <Ionicons name="add" size={24} color={COLORS.textLight} />
+                    {uploading ? <ActivityIndicator size="small" color={theme.teal} /> : (
+                      <Ionicons name="add" size={24} color={theme.textSecondary} />
                     )}
                   </TouchableOpacity>
                 )}
@@ -352,6 +401,7 @@ export default function EditProfileScreen() {
               value={firstName}
               onChangeText={setFirstName}
               placeholder="Enter first name"
+              placeholderTextColor={theme.textSecondary}
             />
           </View>
 
@@ -361,7 +411,7 @@ export default function EditProfileScreen() {
               <Text style={styles.label}>Email Address</Text>
               {user?.isEmailVerified ? (
                 <View style={styles.verifiedBadge}>
-                  <Ionicons name="checkmark-circle" size={14} color={COLORS.teal} />
+                  <Ionicons name="checkmark-circle" size={14} color={theme.teal} />
                   <Text style={styles.verifiedText}>Verified</Text>
                 </View>
               ) : (
@@ -385,6 +435,7 @@ export default function EditProfileScreen() {
                   value={email}
                   onChangeText={setEmail}
                   placeholder="New Email"
+                  placeholderTextColor={theme.textSecondary}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
@@ -394,6 +445,7 @@ export default function EditProfileScreen() {
                     value={password}
                     onChangeText={setPassword}
                     placeholder="Enter Current Password"
+                    placeholderTextColor={theme.textSecondary}
                     secureTextEntry
                   />
                 )}
@@ -406,7 +458,7 @@ export default function EditProfileScreen() {
                     style={styles.confirmSmallBtn}
                     disabled={emailLoading}
                   >
-                    {emailLoading ? <ActivityIndicator size="small" color={COLORS.white} /> : (
+                    {emailLoading ? <ActivityIndicator size="small" color={theme.white} /> : (
                       <Text style={styles.confirmSmallBtnText}>Update & Verify</Text>
                     )}
                   </TouchableOpacity>
@@ -422,6 +474,7 @@ export default function EditProfileScreen() {
               value={lastName}
               onChangeText={setLastName}
               placeholder="Enter last name"
+              placeholderTextColor={theme.textSecondary}
             />
           </View>
 
@@ -432,6 +485,7 @@ export default function EditProfileScreen() {
               value={bio}
               onChangeText={setBio}
               placeholder="Tell us about yourself..."
+              placeholderTextColor={theme.textSecondary}
               multiline
               maxLength={200}
             />
@@ -446,6 +500,7 @@ export default function EditProfileScreen() {
                 value={city}
                 onChangeText={(t) => fetchSuggestions(t, 'city')}
                 placeholder="City"
+                placeholderTextColor={theme.textSecondary}
                 onFocus={() => {
                   setActiveField('city');
                   if (city.length >= 3) setShowSuggestions(true);
@@ -476,11 +531,34 @@ export default function EditProfileScreen() {
                 value={country}
                 onChangeText={setCountry}
                 placeholder="Country"
+                placeholderTextColor={theme.textSecondary}
               />
             </View>
           </View>
 
-          {/* Travel Matching Section */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Countries Visited</Text>
+            <TouchableOpacity 
+              style={[styles.input, { minHeight: 48, justifyContent: 'center' }]}
+              onPress={() => setShowCountryPicker(true)}
+            >
+              {countriesVisited.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 4 }}>
+                  {countriesVisited.map(c => (
+                    <View key={c} style={{ backgroundColor: theme.teal + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                      <Text style={{ fontSize: 12, color: theme.teal, fontWeight: '600' }}>{c}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={{ color: theme.textSecondary }}>Select countries you've visited</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Travel Matching Section */}
+        <View style={styles.infoSection}>
           <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Travel Plan</Text>
           
           <View style={styles.inputGroup}>
@@ -490,6 +568,7 @@ export default function EditProfileScreen() {
               value={originCity}
               onChangeText={(t) => fetchSuggestions(t, 'origin')}
               placeholder="Where are you starting from?"
+              placeholderTextColor={theme.textSecondary}
               onFocus={() => {
                 setActiveField('origin');
                 if (originCity.length >= 3) setShowSuggestions(true);
@@ -521,6 +600,7 @@ export default function EditProfileScreen() {
               value={destinationCity}
               onChangeText={(t) => fetchSuggestions(t, 'destination')}
               placeholder="Where are you going?"
+              placeholderTextColor={theme.textSecondary}
               onFocus={() => {
                 setActiveField('destination');
                 if (destinationCity.length >= 3) setShowSuggestions(true);
@@ -546,41 +626,64 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Travel Date (YYYY-MM-DD)</Text>
-            <TextInput
+            <Text style={styles.label}>Travel Date</Text>
+            <TouchableOpacity 
               style={styles.input}
-              value={travelDate}
-              onChangeText={setTravelDate}
-              placeholder="e.g. 2024-12-25"
-            />
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={{ color: travelDate ? theme.text : theme.textSecondary }}>
+                {travelDate || 'Select travel date'}
+              </Text>
+            </TouchableOpacity>
+            {showDatePicker && (
+              <DateTimePicker
+                value={travelDate ? new Date(travelDate) : new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event: DateTimePickerEvent, date?: Date) => {
+                  setShowDatePicker(false);
+                  if (date) {
+                    setTravelDate(date.toISOString().split('T')[0]);
+                  }
+                }}
+              />
+            )}
           </View>
         </View>
 
+        <CountryPickerModal
+          visible={showCountryPicker}
+          onClose={() => setShowCountryPicker(false)}
+          selected={countriesVisited}
+          onDone={setCountriesVisited}
+        />
+
         <View style={{ height: 40 }} />
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </KeyboardWrapper>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.white },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.white },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    backgroundColor: theme.white,
+    borderBottomWidth: 1, borderBottomColor: theme.border,
   },
   backBtn: { width: 40 },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  saveBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.teal },
-  content: { flex: 1, padding: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text, marginBottom: 16 },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: theme.text },
+  saveBtnText: { fontSize: 16, fontWeight: '700', color: theme.teal },
+  content: { flex: 1, backgroundColor: theme.background, padding: 20 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: theme.text, marginBottom: 16 },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
   photoSlot: {
     width: (W - 60) / 3, aspectRatio: 3 / 4, borderRadius: RADIUS.md,
-    backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border,
     overflow: 'hidden', position: 'relative'
   },
-  photoSlotProfile: { borderColor: COLORS.teal, borderWidth: 2 },
+  photoSlotProfile: { borderColor: theme.teal, borderWidth: 2 },
   photo: { width: '100%', height: '100%' },
   addPhotoBtn: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   photoActions: {
@@ -592,30 +695,30 @@ const styles = StyleSheet.create({
   },
   profileTag: {
     position: 'absolute', top: 0, left: 0, right: 0,
-    backgroundColor: COLORS.teal, paddingVertical: 2, alignItems: 'center'
+    backgroundColor: theme.teal, paddingVertical: 2, alignItems: 'center'
   },
-  profileTagText: { color: COLORS.white, fontSize: 10, fontWeight: '700' },
+  profileTagText: { color: theme.white, fontSize: 10, fontWeight: '700' },
   infoSection: { gap: 16 },
   inputGroup: { gap: 8 },
-  label: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary },
+  label: { fontSize: 14, fontWeight: '700', color: theme.textSecondary },
   input: {
-    backgroundColor: COLORS.background, borderRadius: RADIUS.md,
+    backgroundColor: theme.card, borderRadius: RADIUS.md,
     paddingHorizontal: 12, paddingVertical: 12,
-    fontSize: 16, color: COLORS.text,
-    borderWidth: 1, borderColor: COLORS.border
+    fontSize: 16, color: theme.text,
+    borderWidth: 1, borderColor: theme.border
   },
   bioInput: { minHeight: 80, textAlignVertical: 'top' },
-  charCount: { textAlign: 'right', fontSize: 12, color: COLORS.textLight, marginTop: 4 },
+  charCount: { textAlign: 'right', fontSize: 12, color: theme.textSecondary, marginTop: 4 },
   row: { flexDirection: 'row', zIndex: 100 },
   suggestionsContainer: {
     position: 'absolute',
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.white,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.border,
     zIndex: 1000,
     marginTop: 4,
     ...SHADOW.md,
@@ -624,28 +727,28 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
+    borderBottomColor: theme.border,
   },
   suggestionText: {
     fontSize: 14,
-    color: COLORS.text,
+    color: theme.text,
   },
   // Email management styles
   emailContainer: {
-    backgroundColor: '#F8FAFC', padding: 16, borderRadius: RADIUS.md,
-    borderWidth: 1, borderColor: '#E2E8F0', marginVertical: 8
+    backgroundColor: theme.card, padding: 16, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: theme.border, marginVertical: 8
   },
   emailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  verifiedText: { color: COLORS.teal, fontSize: 12, fontWeight: '700' },
-  verifyNowText: { color: COLORS.error, fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
+  verifiedText: { color: theme.teal, fontSize: 12, fontWeight: '700' },
+  verifyNowText: { color: theme.error, fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
   emailDisplay: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  emailValue: { fontSize: 16, color: COLORS.text, fontWeight: '500' },
-  changeBtnText: { color: COLORS.teal, fontWeight: '700', fontSize: 14 },
+  emailValue: { fontSize: 16, color: theme.text, fontWeight: '500' },
+  changeBtnText: { color: theme.teal, fontWeight: '700', fontSize: 14 },
   changeEmailBox: { gap: 8 },
   changeEmailActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16, marginTop: 12 },
   cancelLink: { paddingHorizontal: 4 },
-  cancelText: { color: COLORS.textSecondary, fontSize: 14 },
-  confirmSmallBtn: { backgroundColor: COLORS.teal, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  confirmSmallBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 14 },
+  cancelText: { color: theme.textSecondary, fontSize: 14 },
+  confirmSmallBtn: { backgroundColor: theme.teal, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  confirmSmallBtnText: { color: theme.white, fontWeight: '700', fontSize: 14 },
 });

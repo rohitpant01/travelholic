@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, TextInput
+  View, Text, StyleSheet, TouchableOpacity,
+  Alert, ActivityIndicator, TextInput, Platform
 } from 'react-native';
+import KeyboardWrapper from '../../components/KeyboardWrapper';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import RegisterHeader from '../../components/RegisterHeader';
 import { userAPI } from '../../api/services';
 import { updateUser, logout } from '../../store/slices/authSlice';
-import { COLORS, FONTS, RADIUS, SPACING } from '../../utils/theme';
+import { useAppTheme, FONTS, RADIUS, SPACING } from '../../utils/theme';
 
 const INTERESTS = [
   { label: 'Mountains', emoji: '🏔️' },
@@ -42,6 +43,8 @@ const COMMON_LANGUAGES = [
 export default function Step6InterestsScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const [loading, setLoading] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
@@ -94,7 +97,10 @@ export default function Step6InterestsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+    <KeyboardWrapper 
+      backgroundColor={theme.background} 
+      contentContainerStyle={{ flexGrow: 1 }}
+    >
       <RegisterHeader step={7} totalSteps={8} title="Travel Interests"
         subtitle="What kind of traveler are you?" onBack={() => {
           if (navigation.canGoBack()) {
@@ -111,7 +117,7 @@ export default function Step6InterestsScreen() {
             ]);
           }
         }} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.content}>
 
         <Text style={styles.sectionTitle}>Travel Interests</Text>
         <Text style={styles.sectionHint}>Select all that apply</Text>
@@ -157,10 +163,10 @@ export default function Step6InterestsScreen() {
             value={customLanguage}
             onChangeText={setCustomLanguage}
             onSubmitEditing={addCustomLanguage}
-            placeholderTextColor={COLORS.textLight}
+            placeholderTextColor={theme.textLight}
           />
           <TouchableOpacity style={styles.addLangBtn} onPress={addCustomLanguage}>
-            <Ionicons name="add" size={22} color={COLORS.white} />
+            <Ionicons name="add" size={22} color={theme.textWhite} />
           </TouchableOpacity>
         </View>
 
@@ -179,64 +185,64 @@ export default function Step6InterestsScreen() {
           style={[styles.nextBtn, loading && { opacity: 0.7 }]}
           onPress={handleNext} disabled={loading}
         >
-          <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.nextBtnGrad}
+          <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.nextBtnGrad}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            {loading ? <ActivityIndicator color={COLORS.white} /> : (
+            {loading ? <ActivityIndicator color={theme.textWhite} /> : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.nextBtnText}>Almost Done!</Text>
-                <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+                <Ionicons name="arrow-forward" size={20} color={theme.textWhite} />
               </View>
             )}
           </LinearGradient>
         </TouchableOpacity>
-      </ScrollView>
-    </View>
+      </View>
+    </KeyboardWrapper>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   content: { padding: SPACING.lg, paddingBottom: 40 },
-  sectionTitle: { fontSize: FONTS.lg, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
-  sectionHint: { fontSize: FONTS.sm, color: COLORS.textLight, marginBottom: 14 },
+  sectionTitle: { fontSize: FONTS.lg, fontWeight: '700', color: theme.text, marginBottom: 4 },
+  sectionHint: { fontSize: FONTS.sm, color: theme.textLight, marginBottom: 14 },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   interestChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 10, borderRadius: RADIUS.full,
-    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.white,
+    borderWidth: 1.5, borderColor: theme.border, backgroundColor: theme.card,
   },
-  interestChipActive: { backgroundColor: COLORS.tealLight, borderColor: COLORS.teal },
+  interestChipActive: { backgroundColor: theme.tealLight, borderColor: theme.teal },
   interestEmoji: { fontSize: 16 },
-  interestLabel: { fontSize: FONTS.sm, color: COLORS.textSecondary, fontWeight: '500' },
-  interestLabelActive: { color: COLORS.teal, fontWeight: '700' },
+  interestLabel: { fontSize: FONTS.sm, color: theme.textSecondary, fontWeight: '500' },
+  interestLabelActive: { color: theme.teal, fontWeight: '700' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   langChip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full,
-    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.white,
+    borderWidth: 1.5, borderColor: theme.border, backgroundColor: theme.card,
   },
-  langChipActive: { backgroundColor: COLORS.teal, borderColor: COLORS.teal },
-  langLabel: { fontSize: FONTS.sm, color: COLORS.textSecondary },
-  langLabelActive: { color: COLORS.white, fontWeight: '700' },
+  langChipActive: { backgroundColor: theme.teal, borderColor: theme.teal },
+  langLabel: { fontSize: FONTS.sm, color: theme.textSecondary },
+  langLabelActive: { color: theme.textWhite, fontWeight: '700' },
   customLangRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   customLangInput: {
-    flex: 1, backgroundColor: COLORS.background, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.border,
-    paddingHorizontal: 14, paddingVertical: 10, fontSize: FONTS.base, color: COLORS.text,
+    flex: 1, backgroundColor: theme.card, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: theme.border,
+    paddingHorizontal: 14, paddingVertical: 10, fontSize: FONTS.base, color: theme.text,
   },
   addLangBtn: {
-    backgroundColor: COLORS.teal, borderRadius: RADIUS.md,
+    backgroundColor: theme.teal, borderRadius: RADIUS.md,
     width: 44, alignItems: 'center', justifyContent: 'center',
   },
   selectedLangs: {
     flexDirection: 'row', flexWrap: 'wrap', marginTop: 8,
-    backgroundColor: COLORS.tealLight, borderRadius: RADIUS.md, padding: 10,
+    backgroundColor: theme.tealLight, borderRadius: RADIUS.md, padding: 10,
   },
-  selectedLangsLabel: { fontSize: FONTS.sm, fontWeight: '700', color: COLORS.teal },
-  selectedLangsText: { fontSize: FONTS.sm, color: COLORS.teal },
+  selectedLangsLabel: { fontSize: FONTS.sm, fontWeight: '700', color: theme.teal },
+  selectedLangsText: { fontSize: FONTS.sm, color: theme.teal },
   counter: {
-    textAlign: 'center', fontSize: FONTS.sm, color: COLORS.textLight,
+    textAlign: 'center', fontSize: FONTS.sm, color: theme.textLight,
     marginVertical: 16,
   },
   nextBtn: { borderRadius: RADIUS.full, overflow: 'hidden' },
   nextBtnGrad: { paddingVertical: 16, alignItems: 'center' },
-  nextBtnText: { color: COLORS.white, fontSize: FONTS.lg, fontWeight: '700' },
+  nextBtnText: { color: theme.textWhite, fontSize: FONTS.lg, fontWeight: '700' },
 });

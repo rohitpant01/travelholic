@@ -1,7 +1,8 @@
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  Alert, ActivityIndicator, ScrollView, Platform, Animated, Easing
+  Alert, ActivityIndicator, Platform, Animated, Easing
 } from 'react-native';
+import KeyboardWrapper from '../../components/KeyboardWrapper';
 import React, { useState, useRef } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
@@ -123,7 +124,7 @@ export default function VerificationScreen() {
   const handleContinue = () => navigation.replace('MainTabs');
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.white }}>
+    <KeyboardWrapper backgroundColor={COLORS.white} contentContainerStyle={{ paddingBottom: 48 }}>
       <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.header}>
         <Text style={styles.headerEmoji}>🛡️</Text>
         <Text style={styles.headerTitle}>Photo Verification</Text>
@@ -237,7 +238,7 @@ export default function VerificationScreen() {
           </TouchableOpacity>
         )}
       </View>
-    </ScrollView>
+    </KeyboardWrapper>
   );
 }
 

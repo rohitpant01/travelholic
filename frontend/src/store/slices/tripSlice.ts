@@ -13,7 +13,7 @@ interface TripState {
     mode: string | null;
   };
   loading: boolean;
-  activeTab: 'explore' | 'myTrips';
+  activeTab: 'explore' | 'myTrips' | 'aiPlanner';
 }
 
 const initialState: TripState = {
@@ -67,7 +67,7 @@ const tripSlice = createSlice({
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
     },
-    setActiveTab: (state, action: PayloadAction<'explore' | 'myTrips'>) => {
+    setActiveTab: (state, action: PayloadAction<'explore' | 'myTrips' | 'aiPlanner'>) => {
       state.activeTab = action.payload;
     },
     removeTripFromList: (state, action: PayloadAction<string>) => {

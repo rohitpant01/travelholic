@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
+  Alert, ActivityIndicator, Platform
 } from 'react-native';
+import KeyboardWrapper from '../../components/KeyboardWrapper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,16 +12,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import RegisterHeader from '../../components/RegisterHeader';
 import { authAPI } from '../../api/services';
 import { setUser, setToken } from '../../store/slices/authSlice';
-import { COLORS, FONTS, RADIUS, SPACING } from '../../utils/theme';
+import { useAppTheme, FONTS, RADIUS, SPACING } from '../../utils/theme';
 import apiClient from '../../api/client';
 import GoogleSignInButton from '../../components/GoogleSignInButton';
+import CountryCodePicker from '../../components/CountryCodePicker';
+import { COUNTRIES, CountryData } from '../../data/countries';
 
 export default function Step1AccountScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const dispatch = useDispatch();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [countryCode, setCountryCode] = useState<CountryData>(COUNTRIES[0]); // Default India +91
 
   const googleProfile = route.params?.googleProfile;
 
@@ -43,13 +49,14 @@ export default function Step1AccountScreen() {
     }
     if (password.length < 6) return Alert.alert('Error', 'Password must be at least 6 characters');
     if (password !== confirmPassword) return Alert.alert('Error', 'Passwords do not match');
-    if (!phone.startsWith('+')) return Alert.alert('Error', 'Phone must include country code (e.g. +91...)');
+    // Auto-prepend country code
+    const fullPhone = phone.startsWith('+') ? phone : `${countryCode.dial}${phone}`;
 
     setLoading(true);
     try {
       console.log('[REG] Attempting registration for:', email);
       const res = await authAPI.register({ 
-        firstName, lastName, username, email, phone, password,
+        firstName, lastName, username, email, phone: fullPhone, password,
         googleId: googleProfile?.googleId,
         picture: googleProfile?.picture,
         authProvider: googleProfile ? 'google' : 'local'
@@ -78,14 +85,15 @@ export default function Step1AccountScreen() {
     { key: 'lastName', label: 'Last Name', icon: 'person-outline', placeholder: 'Doe' },
     { key: 'username', label: 'Username', icon: 'at-outline', placeholder: 'johntravels', lower: true },
     { key: 'email', label: 'Email Address', icon: 'mail-outline', placeholder: 'john@email.com', email: true },
-    { key: 'phone', label: 'Phone Number', icon: 'call-outline', placeholder: '+919876543210', phone: true },
   ];
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.white }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardWrapper 
+      backgroundColor={theme.background} 
+      contentContainerStyle={{ flexGrow: 1 }}
+    >
       <RegisterHeader step={1} totalSteps={8} title="Create Account" subtitle="Tell us about yourself" />
-      <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+      <View style={styles.form}>
 
         {fields.map(f => {
           const isEmailLocked = googleProfile && f.key === 'email';
@@ -93,39 +101,58 @@ export default function Step1AccountScreen() {
             <View key={f.key} style={styles.field}>
               <Text style={styles.label}>{f.label}</Text>
               <View style={[styles.inputWrapper, isEmailLocked && styles.inputDisabled]}>
-                <Ionicons name={f.icon as any} size={18} color={COLORS.textLight} style={styles.icon} />
+                <Ionicons name={f.icon as any} size={18} color={theme.textLight} style={styles.icon} />
                 <TextInput
-                  style={[styles.input, isEmailLocked && { color: COLORS.textLight }]}
+                  style={[styles.input, isEmailLocked && { color: theme.textLight }]}
                   placeholder={f.placeholder}
                   value={(form as any)[f.key]}
                   onChangeText={v => update(f.key, f.lower ? v.toLowerCase() : v)}
                   autoCapitalize={f.lower || f.email ? 'none' : 'words'}
                   keyboardType={f.email ? 'email-address' : f.phone ? 'phone-pad' : 'default'}
-                  placeholderTextColor={COLORS.textLight}
+                  placeholderTextColor={theme.textLight}
                   editable={!isEmailLocked}
                 />
                 {isEmailLocked && (
-                  <Ionicons name="lock-closed" size={14} color={COLORS.textLight} />
+                  <Ionicons name="lock-closed" size={14} color={theme.textLight} />
                 )}
               </View>
             </View>
           );
         })}
 
+        {/* Phone Number with Country Code Picker */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Phone Number</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <CountryCodePicker selected={countryCode} onSelect={setCountryCode} />
+            <View style={[styles.inputWrapper, { flex: 1 }]}>
+              <TextInput
+                style={styles.input}
+                placeholder="9876543210"
+                value={form.phone}
+                onChangeText={v => update('phone', v)}
+                keyboardType="phone-pad"
+                maxLength={15}
+                placeholderTextColor={theme.textLight}
+              />
+            </View>
+          </View>
+        </View>
+
         <View style={styles.field}>
           <Text style={styles.label}>Password</Text>
           <View style={styles.inputWrapper}>
-            <Ionicons name="lock-closed-outline" size={18} color={COLORS.textLight} style={styles.icon} />
+            <Ionicons name="lock-closed-outline" size={18} color={theme.textLight} style={styles.icon} />
             <TextInput
               style={styles.input}
               placeholder="Min. 6 characters"
               value={form.password}
               onChangeText={v => update('password', v)}
               secureTextEntry={!showPassword}
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={theme.textLight}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={COLORS.textLight} />
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={theme.textLight} />
             </TouchableOpacity>
           </View>
         </View>
@@ -133,17 +160,17 @@ export default function Step1AccountScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Confirm Password</Text>
           <View style={[styles.inputWrapper, form.confirmPassword && form.confirmPassword !== form.password && styles.inputError]}>
-            <Ionicons name="lock-closed-outline" size={18} color={COLORS.textLight} style={styles.icon} />
+            <Ionicons name="lock-closed-outline" size={18} color={theme.textLight} style={styles.icon} />
             <TextInput
               style={styles.input}
               placeholder="Repeat your password"
               value={form.confirmPassword}
               onChangeText={v => update('confirmPassword', v)}
               secureTextEntry={!showPassword}
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={theme.textLight}
             />
             {form.confirmPassword && form.confirmPassword === form.password && (
-              <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
+              <Ionicons name="checkmark-circle" size={18} color={theme.success} />
             )}
           </View>
         </View>
@@ -153,12 +180,12 @@ export default function Step1AccountScreen() {
           onPress={handleNext}
           disabled={loading}
         >
-          <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.nextBtnGrad}
+          <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.nextBtnGrad}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            {loading ? <ActivityIndicator color={COLORS.white} /> : (
+            {loading ? <ActivityIndicator color={theme.textWhite} /> : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.nextBtnText}>Continue</Text>
-                <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+                <Ionicons name="arrow-forward" size={20} color={theme.textWhite} />
               </View>
             )}
           </LinearGradient>
@@ -180,39 +207,39 @@ export default function Step1AccountScreen() {
             Already have an account? <Text style={styles.loginLinkBold}>Login</Text>
           </Text>
         </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </KeyboardWrapper>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   form: { padding: SPACING.lg, paddingBottom: 40 },
   field: { marginBottom: 16 },
   label: {
-    fontSize: FONTS.xs, fontWeight: '700', color: COLORS.textSecondary,
+    fontSize: FONTS.xs, fontWeight: '700', color: theme.textSecondary,
     marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5,
   },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.background, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.border,
+    backgroundColor: theme.card, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: theme.border,
     paddingHorizontal: 12, paddingVertical: 12,
   },
   inputDisabled: {
-    backgroundColor: '#F3F4F6',
-    borderColor: '#E5E7EB',
+    backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#F3F4F6',
+    borderColor: theme.border,
     opacity: 0.8,
   },
-  inputError: { borderColor: COLORS.error },
+  inputError: { borderColor: theme.error },
   icon: { marginRight: 8 },
-  input: { flex: 1, fontSize: FONTS.base, color: COLORS.text },
+  input: { flex: 1, fontSize: FONTS.base, color: theme.text },
   nextBtn: { borderRadius: RADIUS.full, overflow: 'hidden', marginTop: 24 },
   nextBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: RADIUS.full },
-  nextBtnText: { color: COLORS.white, fontSize: FONTS.lg, fontWeight: '700' },
+  nextBtnText: { color: theme.textWhite, fontSize: FONTS.lg, fontWeight: '700' },
   loginLink: { marginTop: 24, alignItems: 'center', paddingBottom: 20 },
-  loginLinkText: { fontSize: FONTS.sm, color: COLORS.textSecondary },
-  loginLinkBold: { color: COLORS.teal, fontWeight: '700' },
+  loginLinkText: { fontSize: FONTS.sm, color: theme.textSecondary },
+  loginLinkBold: { color: theme.teal, fontWeight: '700' },
   divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24, gap: 12 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { fontSize: FONTS.sm, color: COLORS.textLight },
+  dividerLine: { flex: 1, height: 1, backgroundColor: theme.border },
+  dividerText: { fontSize: FONTS.sm, color: theme.textLight },
 });

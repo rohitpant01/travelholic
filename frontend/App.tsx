@@ -1,3 +1,4 @@
+// Metro Refresh: 2026-04-03T17:53:55Z
 import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation, NavigationContainer } from '@react-navigation/native';
@@ -7,13 +8,17 @@ import { useDispatch, useSelector, Provider } from 'react-redux';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Platform, AppState } from 'react-native';
+import { 
+  View, Text, TouchableOpacity, ActivityIndicator, 
+  StyleSheet, Platform, AppState, KeyboardAvoidingView, 
+  TouchableWithoutFeedback, Keyboard 
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import store, { RootState, AppDispatch } from './src/store';
 import * as Location from 'expo-location';
 import { setUser, setToken, setLoading, updateUser } from './src/store/slices/authSlice';
-import { upsertMessage, upsertTripMessage, updateMatchOnlineStatus, setUnreadCounts, addMatch, setTotalUnread, setMatches } from './src/store/slices/chatSlice';
+import { upsertMessage, upsertTripMessage, updateMatchOnlineStatus, setUnreadCounts, addMatch, setTotalUnread, setMatches, removeMatch } from './src/store/slices/chatSlice';
 import { fetchNotifications, addNotification, setUnreadCount, markAllRead } from './src/store/slices/notificationSlice';
 import { userAPI, chatAPI, matchAPI, tripAPI } from './src/api/services';
 import { API_BASE_URL } from './src/api/client';
@@ -21,6 +26,8 @@ import { useSocket, SocketProvider } from './src/context/SocketContext';
 import { COLORS } from './src/utils/theme';
 import MessageToast from './src/components/MessageToast';
 import { usePushNotifications } from './src/hooks/usePushNotifications';
+import { ToastProvider } from './src/context/ToastContext';
+import { ActionToast } from './src/components/ActionToast';
 
 const SOCKET_URL = API_BASE_URL.replace('/api', '');
 
@@ -38,6 +45,8 @@ import Step6InterestsScreen from './src/screens/register/Step6InterestsScreen';
 import Step7PreferencesScreen from './src/screens/register/Step7PreferencesScreen';
 import VerificationScreen from './src/screens/register/VerificationScreen';
 import DiscoverScreen from './src/screens/DiscoverScreen';
+import PlaceDiscoveryScreen from './src/screens/PlaceDiscoveryScreen';
+import DayPlannerScreen from './src/screens/DayPlannerScreen';
 import MatchesScreen from './src/screens/MatchesScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import GroupDetailsScreen from './src/screens/GroupDetailsScreen';
@@ -52,6 +61,13 @@ import CreateTripScreen from './src/screens/CreateTripScreen';
 import TripDetailScreen from './src/screens/TripDetailScreen';
 import MyMatchesScreen from './src/screens/MyMatchesScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import AIItineraryScreen from './src/screens/AIItineraryScreen';
+import PlaceDetailsScreen from './src/screens/PlaceDetailsScreen';
+import AllDestinationsScreen from './src/screens/AllDestinationsScreen';
+import SavedDestinationsScreen from './src/screens/SavedDestinationsScreen';
+import TermsScreen from './src/screens/TermsScreen';
+import PrivacyScreen from './src/screens/PrivacyScreen';
+import CategoryDetailsScreen from './src/screens/CategoryDetailsScreen';
 
 import apiClient from './src/api/client';
 
@@ -82,6 +98,15 @@ export type RootStackParamList = {
   TripDetail: { tripId: string };
   Notifications: undefined;
   MyMatches: undefined;
+  AIItinerary: { trip: any };
+  PlaceDetails: { place: any };
+  AllDestinations: undefined;
+  SavedDestinations: undefined;
+  TermsScreen: undefined;
+  PrivacyScreen: undefined;
+  PlaceDiscovery: undefined;
+  DayPlanner: { query: string; moods?: string[] };
+  CategoryDetails: { title: string, places: any[], excludeIds?: string[] };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -121,6 +146,7 @@ function MainTabs() {
 
   return (
     <Tab.Navigator
+      initialRouteName="Travelers"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
@@ -136,18 +162,19 @@ function MainTabs() {
         tabBarLabelStyle: { fontSize: 11 },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: any;
-          if (route.name === 'Discover') iconName = focused ? 'compass' : 'compass-outline';
+          if (route.name === 'Explorer') iconName = focused ? 'compass' : 'compass-outline';
+          else if (route.name === 'Travelers') iconName = focused ? 'people' : 'people-outline';
           else if (route.name === 'Map') iconName = focused ? 'map' : 'map-outline';
           else if (route.name === 'Trips') return null; // Custom button
-          else if (route.name === 'Matches') iconName = focused ? 'heart' : 'heart-outline';
+          else if (route.name === 'Matches') iconName = focused ? 'chatbubble' : 'chatbubble-outline';
           else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
  
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
     >
-      <Tab.Screen name="Discover" component={DiscoverScreen} />
-      <Tab.Screen name="Map" component={MapScreen} />
+      <Tab.Screen name="Travelers" component={DiscoverScreen} />
+      <Tab.Screen name="Explorer" component={PlaceDiscoveryScreen} />
       <Tab.Screen
         name="Trips"
         component={TripsScreen}
@@ -441,12 +468,18 @@ function AppNavigator() {
       dispatch(markAllRead());
     };
 
+    const onMatchRemoved = (data: { matchId: string }) => {
+      console.log('[SOCKET] Match removed:', data.matchId);
+      dispatch(removeMatch(data.matchId));
+    };
+
     socket.on('receive_message', onReceiveMessage);
     socket.on('user_online', onUserOnline);
     socket.on('like_received', onLikeReceived);
     socket.on('new_match', onNewMatch);
     socket.on('new_notification', onNewNotification);
     socket.on('notifications_read_sync', onNotificationsReadSync);
+    socket.on('match_removed', onMatchRemoved);
 
     return () => {
       socket.off('receive_message', onReceiveMessage);
@@ -455,6 +488,7 @@ function AppNavigator() {
       socket.off('new_match', onNewMatch);
       socket.off('new_notification', onNewNotification);
       socket.off('notifications_read_sync', onNotificationsReadSync);
+      socket.off('match_removed', onMatchRemoved);
     };
   }, [isAuthenticated, user?._id, socket]);
 
@@ -490,8 +524,16 @@ function AppNavigator() {
   }
 
     const isNewUser = (user?.registrationStep || 0) < 9;
-    const needsEmailVerify = !user?.isEmailVerified;
-    const needsPhoneVerify = !user?.isPhoneVerified;
+    const isGoogleUser = user?.authProvider === 'google' || !!user?.googleId;
+    const needsEmailVerify = !user?.isEmailVerified && !isGoogleUser;
+
+    // 🔍 DEBUG LOGS (Watch terminal for these)
+    if (isAuthenticated) {
+      console.log(`[NAVIGATOR] Auth state: AUTHENTICATED. User: ${user?.email}`);
+      console.log(`[NAVIGATOR] isNewUser: ${isNewUser}, registrationStep: ${user?.registrationStep}`);
+      console.log(`[NAVIGATOR] isEmailVerified: ${user?.isEmailVerified}, isGoogleUser: ${isGoogleUser}`);
+      console.log(`[NAVIGATOR] isPhoneVerified: ${user?.isPhoneVerified}, needsEmailVerify: ${needsEmailVerify}`);
+    }
 
     return (
       <View style={{ flex: 1 }}>
@@ -504,18 +546,12 @@ function AppNavigator() {
               component={EmailVerificationScreen}
               initialParams={{ email: user?.email, userId: user?._id }}
             />
-          ) : (isNewUser && needsPhoneVerify) ? (
-            <Stack.Screen
-              name="Register_Step2"
-              component={Step2OTPScreen}
-              initialParams={{ phone: user?.phone, userId: user?._id }}
-            />
           ) : isNewUser ? (
             <Stack.Screen name="Onboarding">
               {() => (
                 <OnboardingStack
                   initialRoute={
-                    user?.registrationStep === 4 ? 'Register_Step3' :
+                    (user?.registrationStep === 3 || user?.registrationStep === 4) ? 'Register_Step3' :
                       user?.registrationStep === 5 ? 'Register_Step4' :
                         user?.registrationStep === 6 ? 'Register_Step5' :
                           user?.registrationStep === 7 ? 'Register_Step6' :
@@ -531,7 +567,12 @@ function AppNavigator() {
             <Stack.Screen 
               name="Chat" 
               component={ChatScreen}
-              options={{ animation: 'slide_from_right' }}
+              options={{ 
+                animation: 'slide_from_right',
+                headerShown: true,
+                headerTitle: '', // We set the title dynamically inside ChatScreen
+                headerShadowVisible: true,
+              }}
             />
             <Stack.Screen 
               name="GroupDetails" 
@@ -542,6 +583,7 @@ function AppNavigator() {
             <Stack.Screen name="UserDetail" component={UserDetailScreen} options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="CreateTrip" component={CreateTripScreen} options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="TripDetail" component={TripDetailScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="AIItinerary" component={AIItineraryScreen} options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="WhoLikedMe" component={WhoLikedMeScreen} options={{ animation: 'slide_from_right' }} />
@@ -549,6 +591,13 @@ function AppNavigator() {
             <Stack.Screen name="Verification" component={VerificationScreen} options={{ animation: 'slide_from_bottom' }} />
           </>
         )}
+        <Stack.Screen name="DayPlanner" component={DayPlannerScreen} options={{ animation: 'slide_from_bottom', headerShown: false }} />
+        <Stack.Screen name="CategoryDetails" component={CategoryDetailsScreen} options={{ animation: 'slide_from_right', headerShown: false }} />
+        <Stack.Screen name="PlaceDetails" component={PlaceDetailsScreen} options={{ animation: 'slide_from_right', headerShown: false }} />
+        <Stack.Screen name="AllDestinations" component={AllDestinationsScreen} options={{ animation: 'slide_from_right', headerShown: false }} />
+        <Stack.Screen name="SavedDestinations" component={SavedDestinationsScreen} options={{ animation: 'slide_from_right', headerShown: false }} />
+        <Stack.Screen name="TermsScreen" component={TermsScreen} options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="PrivacyScreen" component={PrivacyScreen} options={{ presentation: 'modal', headerShown: false }} />
       </Stack.Navigator>
 
       <MessageToast message={activeToast} onDismiss={() => setActiveToast(null)} />
@@ -562,10 +611,13 @@ export default function App() {
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <SocketProvider socketUrl={SOCKET_URL}>
-            <NavigationContainer>
-              <StatusBar style="dark" translucent={false} />
-              <AppNavigator />
-            </NavigationContainer>
+            <ToastProvider>
+              <NavigationContainer>
+                <StatusBar style="dark" translucent={false} />
+                <AppNavigator />
+                <ActionToast />
+              </NavigationContainer>
+            </ToastProvider>
           </SocketProvider>
         </GestureHandlerRootView>
       </SafeAreaProvider>

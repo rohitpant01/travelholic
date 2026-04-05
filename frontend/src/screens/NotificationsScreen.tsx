@@ -15,7 +15,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '../store';
 import { fetchNotifications, markNotificationsRead, markAllRead, markSingleRead } from '../store/slices/notificationSlice';
 import { useSocket } from '../context/SocketContext';
-import { COLORS } from '../utils/theme';
+import { useAppTheme } from '../utils/theme';
 import { formatDistanceToNow } from 'date-fns';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
@@ -23,6 +23,8 @@ import { RootStackParamList } from '../../App';
 const NotificationsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const dispatch = useDispatch<AppDispatch>();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const { notifications, loading, unreadCount } = useSelector((state: RootState) => state.notification);
   const [refreshing, setRefreshing] = useState(false);
   const { socket } = useSocket();
@@ -64,7 +66,7 @@ const NotificationsScreen = () => {
       case 'trending_trip':
         return { name: 'flame', color: '#ef4444' };
       default:
-        return { name: 'notifications', color: COLORS.teal };
+        return { name: 'notifications', color: theme.teal };
     }
   };
 
@@ -124,7 +126,7 @@ const NotificationsScreen = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>
         <View style={{ width: 40 }} />
@@ -132,7 +134,7 @@ const NotificationsScreen = () => {
 
       {loading && notifications.length === 0 ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={COLORS.teal} />
+          <ActivityIndicator size="large" color={theme.teal} />
         </View>
       ) : (
         <FlatList
@@ -141,11 +143,11 @@ const NotificationsScreen = () => {
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={loadNotifications} tintColor={COLORS.teal} />
+            <RefreshControl refreshing={refreshing} onRefresh={loadNotifications} tintColor={theme.teal} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="notifications-off-outline" size={64} color={COLORS.textLight} />
+              <Ionicons name="notifications-off-outline" size={64} color={theme.textSecondary} />
               <Text style={styles.emptyText}>No notifications yet</Text>
               <Text style={styles.emptySubText}>We'll notify you when someone likes you or joins your trip!</Text>
             </View>
@@ -156,10 +158,10 @@ const NotificationsScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -168,8 +170,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 60,
     paddingBottom: 15,
+    backgroundColor: theme.white,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: theme.border,
   },
   backButton: {
     padding: 8,
@@ -177,7 +180,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: theme.text,
   },
   listContent: {
     flexGrow: 1,
@@ -186,11 +189,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
+    backgroundColor: theme.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#f9fafb',
+    borderBottomColor: theme.border,
   },
   unreadItem: {
-    backgroundColor: COLORS.teal + '05',
+    backgroundColor: theme.mode === 'dark' ? 'rgba(0, 180, 255, 0.1)' : 'rgba(0, 180, 212, 0.05)',
   },
   iconContainer: {
     position: 'relative',
@@ -218,26 +222,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: theme.card,
   },
   textContainer: {
     flex: 1,
   },
   message: {
     fontSize: 14,
-    color: COLORS.text,
+    color: theme.text,
     lineHeight: 20,
     marginBottom: 4,
   },
   time: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
   },
   unreadIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.teal,
+    backgroundColor: theme.teal,
     marginLeft: 8,
   },
   centerContainer: {
@@ -255,12 +259,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.text,
+    color: theme.text,
     marginTop: 16,
   },
   emptySubText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,

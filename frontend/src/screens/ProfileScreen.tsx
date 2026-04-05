@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable,
   Image, Alert, Dimensions, Modal, TextInput, ActivityIndicator,
-  KeyboardAvoidingView, Platform
+  Platform, PanResponder, RefreshControl
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -12,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootState } from '../store';
 import { logout, setUser } from '../store/slices/authSlice';
 import { userAPI } from '../api/services';
-import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
+import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import { GOOGLE_MAPS_API_KEY } from '../api/client';
 
 const { width: W } = Dimensions.get('window');
@@ -20,10 +23,15 @@ const { width: W } = Dimensions.get('window');
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const { user } = useSelector((s: RootState) => s.auth);
+  const { mode } = useSelector((s: RootState) => s.theme);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [showAddTrip, setShowAddTrip] = useState(false);
   const [submittingTrip, setSubmittingTrip] = useState(false);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [tripForm, setTripForm] = useState({
     _id: '',
     origin: '',
@@ -36,6 +44,28 @@ export default function ProfileScreen() {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeField, setActiveField] = useState<'origin' | 'destination'>('origin');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refreshProfile = async () => {
+    try {
+      setRefreshing(true);
+      const response = await userAPI.getProfile();
+      if (response.data.user) {
+        dispatch(setUser(response.data.user));
+        await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+    } catch (error) {
+      console.warn('[ProfileScreen] Refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshProfile();
+    }, [])
+  );
 
   const fetchSuggestions = async (text: string, field: 'origin' | 'destination') => {
     setActiveField(field);
@@ -74,6 +104,11 @@ export default function ProfileScreen() {
   const handleAddTrip = async () => {
     if (!tripForm.origin || !tripForm.destination || !tripForm.startDate || !tripForm.endDate) {
       Alert.alert('Error', 'Please fill in all mandatory fields (Origin, Destination, Start Date, End Date)');
+      return;
+    }
+
+    if (new Date(tripForm.startDate) > new Date(tripForm.endDate)) {
+      Alert.alert('Invalid Dates', 'Start date cannot be after the end date.');
       return;
     }
 
@@ -174,13 +209,22 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <KeyboardAwareScrollView 
+      style={styles.container} 
+      contentContainerStyle={{ flexGrow: 1 }}
+      showsVerticalScrollIndicator={false}
+      enableOnAndroid={true}
+      extraScrollHeight={20}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refreshProfile} colors={[theme.teal]} tintColor={theme.teal} />
+      }
+    >
       {/* Hero photo section */}
       <View style={styles.heroContainer}>
         {profilePhoto ? (
           <Image source={{ uri: photos[activePhotoIndex]?.url || profilePhoto }} style={styles.heroPhoto} />
         ) : (
-          <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.heroPhoto}>
+          <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.heroPhoto}>
             <Text style={{ fontSize: 80 }}>✈️</Text>
           </LinearGradient>
         )}
@@ -211,7 +255,7 @@ export default function ProfileScreen() {
           style={styles.editPhotoBtn}
           onPress={() => navigation.navigate('EditProfile')}
         >
-          <Ionicons name="pencil" size={18} color={COLORS.white} />
+          <Ionicons name="pencil" size={18} color={theme.textWhite} />
         </TouchableOpacity>
 
         {/* Name + verified */}
@@ -221,7 +265,7 @@ export default function ProfileScreen() {
               {user?.firstName} {user?.lastName}
             </Text>
             {user?.isPhotoVerified && (
-              <Ionicons name="checkmark-circle" size={22} color={COLORS.teal} />
+              <Ionicons name="checkmark-circle" size={22} color={theme.teal} />
             )}
           </View>
           <Text style={styles.heroAge}>
@@ -252,7 +296,7 @@ export default function ProfileScreen() {
           <Text style={styles.statNumber}>{user?.likesReceived || 0}</Text>
           <View style={styles.statLabelRow}>
             <Text style={[styles.statLabel, styles.statLabelTeal]}>Likes</Text>
-            <Ionicons name="chevron-forward" size={11} color={COLORS.teal} />
+            <Ionicons name="chevron-forward" size={11} color={theme.teal} />
           </View>
         </TouchableOpacity>
 
@@ -267,14 +311,14 @@ export default function ProfileScreen() {
           <Text style={styles.statNumber}>{user?.matchesCount || 0}</Text>
           <View style={styles.statLabelRow}>
             <Text style={[styles.statLabel, styles.statLabelTeal]}>Matches</Text>
-            <Ionicons name="chevron-forward" size={11} color={COLORS.teal} />
+            <Ionicons name="chevron-forward" size={11} color={theme.teal} />
           </View>
         </TouchableOpacity>
 
         <View style={styles.statDivider} />
 
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>{user?.tripsCompleted || 0}</Text>
+          <Text style={styles.statNumber}>{user?.completedTrips?.length || 0}</Text>
           <Text style={styles.statLabel}>Trips</Text>
         </View>
 
@@ -295,18 +339,18 @@ export default function ProfileScreen() {
           activeOpacity={0.8}
         >
           <LinearGradient 
-            colors={['#FFF5F5', '#FFF0F0']} 
-            style={[styles.verifyBannerGrad, { borderColor: COLORS.error + '20', borderWidth: 1 }]}
+            colors={[mode === 'dark' ? '#2C1D1D' : '#FFF5F5', mode === 'dark' ? '#201515' : '#FFF0F0']} 
+            style={[styles.verifyBannerGrad, { borderColor: theme.error + '40', borderWidth: 1 }]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           >
-            <View style={[styles.verifyIconBG, { backgroundColor: '#FFEEED' }]}>
-              <Ionicons name="mail-unread-outline" size={24} color={COLORS.error} />
+            <View style={[styles.verifyIconBG, { backgroundColor: mode === 'dark' ? '#3D1C1C' : '#FFEEED' }]}>
+              <Ionicons name="mail-unread-outline" size={24} color={theme.error} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.verifyTitle, { color: COLORS.error }]}>Verify Your Email</Text>
+              <Text style={[styles.verifyTitle, { color: theme.error }]}>Verify Your Email</Text>
               <Text style={styles.verifySubtitle}>Complete verification in Edit Profile 📧</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.error} />
+            <Ionicons name="chevron-forward" size={20} color={theme.error} />
           </LinearGradient>
         </TouchableOpacity>
       )}
@@ -319,18 +363,18 @@ export default function ProfileScreen() {
           activeOpacity={0.8}
         >
           <LinearGradient 
-            colors={[COLORS.tealLight, '#F0FFFF']} 
+            colors={[theme.tealLight, mode === 'dark' ? '#1E293B' : '#F0FFFF']} 
             style={styles.verifyBannerGrad}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           >
             <View style={styles.verifyIconBG}>
-              <Ionicons name="shield-checkmark" size={24} color={COLORS.teal} />
+              <Ionicons name="shield-checkmark" size={24} color={theme.teal} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.verifyTitle}>Verify Your Identity</Text>
               <Text style={styles.verifySubtitle}>Get the blue badge & build trust ✨</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.teal} />
+            <Ionicons name="chevron-forward" size={20} color={theme.teal} />
           </LinearGradient>
         </TouchableOpacity>
       )}
@@ -392,19 +436,19 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Travel History</Text>
           {user?.lastVisitedPlace && (
             <View style={styles.travelRow}>
-              <Ionicons name="airplane" size={16} color={COLORS.teal} />
+              <Ionicons name="airplane" size={16} color={theme.teal} />
               <Text style={styles.travelText}>Last visited: <Text style={styles.travelValue}>{user.lastVisitedPlace}</Text></Text>
             </View>
           )}
           {user?.dreamDestination && (
             <View style={styles.travelRow}>
-              <Ionicons name="star" size={16} color={COLORS.gold} />
+              <Ionicons name="star" size={16} color={theme.gold} />
               <Text style={styles.travelText}>Dream destination: <Text style={styles.travelValue}>{user.dreamDestination}</Text></Text>
             </View>
           )}
           {user?.countriesVisited && user.countriesVisited.length > 0 && (
             <View style={styles.travelRow}>
-              <Ionicons name="earth" size={16} color={COLORS.orange} />
+              <Ionicons name="earth" size={16} color={theme.orange} />
               <Text style={styles.travelText}>
                 Visited: <Text style={styles.travelValue}>{user.countriesVisited.join(', ')}</Text>
               </Text>
@@ -413,31 +457,6 @@ export default function ProfileScreen() {
         </View>
       ) : null}
 
-      {/* Document Trip Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>My Travels</Text>
-          <TouchableOpacity 
-            style={styles.addTripBtn} 
-            onPress={() => setShowAddTrip(true)}
-          >
-            <Ionicons name="add-circle" size={18} color={COLORS.teal} />
-            <Text style={styles.addTripBtnText}>Document a Trip</Text>
-          </TouchableOpacity>
-        </View>
-        
-        {user?.tripsCompleted > 0 ? (
-          <View style={styles.travelRow}>
-            <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-            <Text style={styles.travelText}>
-              You have recorded <Text style={styles.travelValue}>{user.tripsCompleted}</Text> past trips.
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.emptyTravelText}>Showcase your travel experience by documenting where you've been!</Text>
-        )}
-      </View>
-
       {/* Add Trip Modal */}
       <Modal
         visible={showAddTrip}
@@ -445,22 +464,25 @@ export default function ProfileScreen() {
         transparent={true}
         onRequestClose={() => setShowAddTrip(false)}
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
+        <View style={styles.modalOverlay}>
+          <Pressable 
+            style={{ flex: 1 }} 
+            onPress={() => setShowAddTrip(false)} 
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Document a Trip</Text>
               <TouchableOpacity onPress={() => setShowAddTrip(false)}>
-                <Ionicons name="close-circle" size={28} color={COLORS.textSecondary} />
+                <Ionicons name="close-circle" size={28} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView 
-              contentContainerStyle={{ padding: 25 }}
-              keyboardShouldPersistTaps="handled" 
-              nestedScrollEnabled={true}
+            <KeyboardAwareScrollView 
+              contentContainerStyle={{ padding: 25, paddingBottom: 60 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+              enableOnAndroid={true}
+              extraScrollHeight={20}
             >
               <Text style={styles.modalSubtitle}>
                 {isEditingTrip ? 'Update your trip details' : 'Share where you have been!'}
@@ -527,21 +549,53 @@ export default function ProfileScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View style={{ width: '48%' }}>
                   <Text style={styles.inputLabel}>Start Date *</Text>
-                  <TextInput 
+                  <TouchableOpacity 
                     style={styles.tripInput}
-                    placeholder="YYYY-MM-DD"
-                    value={tripForm.startDate}
-                    onChangeText={(t) => setTripForm(f => ({ ...f, startDate: t }))}
-                  />
+                    onPress={() => setShowStartDatePicker(true)}
+                  >
+                    <Text style={{ color: tripForm.startDate ? theme.text : theme.textLight }}>
+                      {tripForm.startDate || 'Select Date'}
+                    </Text>
+                  </TouchableOpacity>
+                  {showStartDatePicker && (
+                    <DateTimePicker
+                      value={tripForm.startDate ? new Date(tripForm.startDate) : new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      maximumDate={new Date()}
+                      onChange={(event: DateTimePickerEvent, date?: Date) => {
+                        setShowStartDatePicker(false);
+                        if (date) {
+                          setTripForm(f => ({ ...f, startDate: date.toISOString().split('T')[0] }));
+                        }
+                      }}
+                    />
+                  )}
                 </View>
                 <View style={{ width: '48%' }}>
                   <Text style={styles.inputLabel}>End Date *</Text>
-                  <TextInput 
+                  <TouchableOpacity 
                     style={styles.tripInput}
-                    placeholder="YYYY-MM-DD"
-                    value={tripForm.endDate}
-                    onChangeText={(t) => setTripForm(f => ({ ...f, endDate: t }))}
-                  />
+                    onPress={() => setShowEndDatePicker(true)}
+                  >
+                    <Text style={{ color: tripForm.endDate ? theme.text : theme.textLight }}>
+                      {tripForm.endDate || 'Select Date'}
+                    </Text>
+                  </TouchableOpacity>
+                  {showEndDatePicker && (
+                    <DateTimePicker
+                      value={tripForm.endDate ? new Date(tripForm.endDate) : new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      maximumDate={new Date()}
+                      onChange={(event: DateTimePickerEvent, date?: Date) => {
+                        setShowEndDatePicker(false);
+                        if (date) {
+                          setTripForm(f => ({ ...f, endDate: date.toISOString().split('T')[0] }));
+                        }
+                      }}
+                    />
+                  )}
                 </View>
               </View>
 
@@ -566,10 +620,9 @@ export default function ProfileScreen() {
                   </Text>
                 )}
               </TouchableOpacity>
-              <View style={{ height: 40 }} />
-            </ScrollView>
+            </KeyboardAwareScrollView>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Profile Sections */}
@@ -583,7 +636,7 @@ export default function ProfileScreen() {
               setShowAddTrip(true);
             }}
           >
-            <Ionicons name="add" size={20} color={COLORS.white} />
+            <Ionicons name="add" size={20} color={theme.textWhite} />
             <Text style={styles.addTripMiniBtnText}>Add</Text>
           </TouchableOpacity>
         </View>
@@ -593,7 +646,7 @@ export default function ProfileScreen() {
             <View key={trip._id || index} style={styles.tripItem}>
               <View style={styles.tripItemContent}>
                 <View style={styles.tripIconContainer}>
-                  <Ionicons name="airplane" size={24} color={COLORS.teal} />
+                  <Ionicons name="airplane" size={24} color={theme.teal} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 15 }}>
                   <Text style={styles.tripCities}>{trip.origin.city} → {trip.destination.city}</Text>
@@ -608,7 +661,7 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.tripActions}>
                   <TouchableOpacity onPress={() => openEditTrip(trip)} style={styles.tripActionBtn}>
-                    <Ionicons name="create-outline" size={22} color={COLORS.textSecondary} />
+                    <Ionicons name="create-outline" size={22} color={theme.textSecondary} />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => handleDeleteTrip(trip._id)} style={styles.tripActionBtn}>
                     <Ionicons name="trash-outline" size={22} color="#FF5252" />
@@ -625,35 +678,36 @@ export default function ProfileScreen() {
         )}
       </View>
 
+
       {/* Action buttons */}
       <View style={styles.actionBtns}>
         <TouchableOpacity
           style={styles.editBtn}
           onPress={() => navigation.navigate('EditProfile')}
         >
-          <Ionicons name="pencil-outline" size={20} color={COLORS.teal} />
+          <Ionicons name="pencil-outline" size={20} color={theme.teal} />
           <Text style={styles.editBtnText}>Edit Profile</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.settingsBtn}
           onPress={() => navigation.navigate('Settings')}
         >
-          <Ionicons name="settings-outline" size={20} color={COLORS.textSecondary} />
+          <Ionicons name="settings-outline" size={20} color={theme.textSecondary} />
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Ionicons name="log-out-outline" size={18} color={COLORS.error} />
+        <Ionicons name="log-out-outline" size={18} color={theme.error} />
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.white },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   heroContainer: { height: 380, position: 'relative' },
   heroPhoto: { width: '100%', height: '100%', resizeMode: 'cover', alignItems: 'center', justifyContent: 'center' },
   heroOverlay: { ...StyleSheet.absoluteFillObject },
@@ -664,7 +718,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'center', gap: 4,
   },
   photoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)' },
-  photoDotActive: { backgroundColor: COLORS.white, width: 18 },
+  photoDotActive: { backgroundColor: theme.textWhite, width: 18 },
   editPhotoBtn: {
     position: 'absolute', top: 52, right: 16,
     backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 20,
@@ -672,24 +726,23 @@ const styles = StyleSheet.create({
   },
   heroInfo: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20 },
   heroNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroName: { fontSize: FONTS.xxl, fontWeight: '800', color: COLORS.white },
+  heroName: { fontSize: FONTS.xxl, fontWeight: '800', color: theme.textWhite },
   heroAge: { fontSize: FONTS.base, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
   heroLocation: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   heroLocationText: { fontSize: FONTS.sm, color: 'rgba(255,255,255,0.85)' },
 
   // ── Stats ──
   statsRow: {
-    flexDirection: 'row', backgroundColor: COLORS.white,
+    flexDirection: 'row', backgroundColor: theme.card,
     marginHorizontal: 20, marginTop: -24,
     borderRadius: 20, padding: 16, ...SHADOW.md, zIndex: 10,
   },
   stat: { flex: 1, alignItems: 'center' },
-  statNumber: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.teal },
-  statLabel: { fontSize: FONTS.xs, color: COLORS.textSecondary, marginTop: 2 },
-  // ✅ NEW: teal label + chevron for the tappable Likes stat
+  statNumber: { fontSize: FONTS.xl, fontWeight: '800', color: theme.teal },
+  statLabel: { fontSize: FONTS.xs, color: theme.textSecondary, marginTop: 2 },
   statLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 1, marginTop: 2 },
-  statLabelTeal: { color: COLORS.teal, fontWeight: '700' },
-  statDivider: { width: 1, backgroundColor: COLORS.border },
+  statLabelTeal: { color: theme.teal, fontWeight: '700' },
+  statDivider: { width: 1, backgroundColor: theme.border },
 
   verifyBanner: {
     marginHorizontal: 20,
@@ -697,7 +750,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.teal + '30',
+    borderColor: theme.teal + '30',
   },
   verifyBannerGrad: {
     flexDirection: 'row',
@@ -709,7 +762,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.white,
     alignItems: 'center',
     justifyContent: 'center',
     ...SHADOW.sm,
@@ -717,124 +770,96 @@ const styles = StyleSheet.create({
   verifyTitle: {
     fontSize: FONTS.base,
     fontWeight: '700',
-    color: COLORS.teal,
+    color: theme.teal,
   },
   verifySubtitle: {
     fontSize: FONTS.xs,
-    color: COLORS.textSecondary,
+    color: theme.textSecondary,
     marginTop: 2,
   },
 
   section: { paddingHorizontal: 20, paddingTop: 24 },
-  sectionTitle: { fontSize: FONTS.base, fontWeight: '800', color: COLORS.text, marginBottom: 12 },
-  bioText: { fontSize: FONTS.base, color: COLORS.textSecondary, lineHeight: 22 },
+  sectionTitle: { fontSize: FONTS.base, fontWeight: '800', color: theme.text, marginBottom: 12 },
+  bioText: { fontSize: FONTS.base, color: theme.textSecondary, lineHeight: 22 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   interestChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.full,
-    backgroundColor: COLORS.tealLight, borderWidth: 1, borderColor: COLORS.teal + '40',
+    backgroundColor: theme.tealLight, borderWidth: 1, borderColor: theme.teal + '40',
   },
   interestEmoji: { fontSize: 15 },
-  interestLabel: { fontSize: FONTS.sm, color: COLORS.teal, fontWeight: '600' },
+  interestLabel: { fontSize: FONTS.sm, color: theme.teal, fontWeight: '600' },
   langChip: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.full,
-    backgroundColor: COLORS.goldLight,
+    backgroundColor: theme.goldLight,
   },
-  langLabel: { fontSize: FONTS.sm, color: COLORS.text, fontWeight: '500' },
+  langLabel: { fontSize: FONTS.sm, color: theme.text, fontWeight: '500' },
   lookingChip: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.full,
-    backgroundColor: COLORS.orangeLight,
+    backgroundColor: theme.orangeLight,
   },
-  lookingLabel: { fontSize: FONTS.sm, color: COLORS.orange, fontWeight: '600' },
+  lookingLabel: { fontSize: FONTS.sm, color: theme.orange, fontWeight: '600' },
   travelRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
-  travelText: { flex: 1, fontSize: FONTS.base, color: COLORS.textSecondary },
-  travelValue: { color: COLORS.text, fontWeight: '600' },
+  travelText: { flex: 1, fontSize: FONTS.base, color: theme.textSecondary },
+  travelValue: { color: theme.text, fontWeight: '600' },
   actionBtns: {
     flexDirection: 'row', gap: 12,
     marginHorizontal: 20, marginTop: 28,
   },
   editBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    borderWidth: 2, borderColor: COLORS.teal, borderRadius: RADIUS.full, paddingVertical: 14,
+    borderWidth: 2, borderColor: theme.teal, borderRadius: RADIUS.full, paddingVertical: 14,
   },
-  editBtnText: { color: COLORS.teal, fontWeight: '700', fontSize: FONTS.base },
+  editBtnText: { color: theme.teal, fontWeight: '700', fontSize: FONTS.base },
   settingsBtn: {
     width: 52, height: 52, borderRadius: 26,
-    borderWidth: 2, borderColor: COLORS.border,
+    borderWidth: 2, borderColor: theme.border,
     alignItems: 'center', justifyContent: 'center',
   },
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     marginHorizontal: 20, marginTop: 16,
     paddingVertical: 14, borderRadius: RADIUS.full,
-    backgroundColor: '#FEF0EF',
+    backgroundColor: theme.error + '10',
   },
-  logoutText: { color: COLORS.error, fontWeight: '700', fontSize: FONTS.base },
+  logoutText: { color: theme.error, fontWeight: '700', fontSize: FONTS.base },
 
-  // New Styles
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  addTripBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.tealLight, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12 },
-  addTripBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.teal },
-  emptyTravelText: { fontSize: 13, color: COLORS.textSecondary, fontStyle: 'italic' },
+  emptyTravelText: { fontSize: 13, color: theme.textSecondary, fontStyle: 'italic' },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: COLORS.white, height: '80%', borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden' },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 25, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text },
-  modalSubtitle: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 15 },
-  modalSuggestionsContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginTop: 4,
-    ...SHADOW.md,
-  },
-  
-  historySection: { backgroundColor: COLORS.white, marginTop: 15, padding: 25 },
-  historyTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
-  
+  historySection: { backgroundColor: theme.background, marginTop: 15, padding: 25 },
+  historyTitle: { fontSize: 22, fontWeight: '800', color: theme.text },
   addTripMiniBtn: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: COLORS.teal, 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 10 
+    backgroundColor: theme.teal, 
+    paddingVertical: 8, 
+    paddingHorizontal: 16, 
+    borderRadius: RADIUS.full,
+    gap: 4
   },
-  addTripMiniBtnText: { color: COLORS.white, fontSize: 12, fontWeight: '700', marginLeft: 4 },
-
-  tripItem: { 
-    backgroundColor: '#F8FBFA', 
-    borderRadius: 20, 
-    padding: 15, 
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#E8F5F2'
-  },
-  tripItemContent: { flexDirection: 'row', alignItems: 'center' },
-  tripIconContainer: { width: 50, height: 50, borderRadius: 15, backgroundColor: '#E8F5F2', alignItems: 'center', justifyContent: 'center' },
-  tripCities: { fontSize: 16, fontWeight: '800', color: COLORS.text },
-  tripDates: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  tripDetailsText: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4, fontStyle: 'italic' },
-  tripActions: { flexDirection: 'row', alignItems: 'center' },
-  tripActionBtn: { padding: 8, marginLeft: 5 },
-
+  addTripMiniBtnText: { fontSize: 14, fontWeight: '800', color: theme.textWhite },
+  tripItem: { marginBottom: 15, borderRadius: 20, backgroundColor: theme.card, ...SHADOW.sm, overflow: 'hidden' },
+  tripItemContent: { flexDirection: 'row', alignItems: 'center', padding: 15 },
+  tripIconContainer: { width: 48, height: 48, borderRadius: 12, backgroundColor: theme.tealLight, alignItems: 'center', justifyContent: 'center' },
+  tripCities: { fontSize: 16, fontWeight: '700', color: theme.text },
+  tripDates: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  tripDetailsText: { fontSize: 13, color: theme.textSecondary, marginTop: 4, fontStyle: 'italic' },
+  tripActions: { flexDirection: 'row', gap: 10 },
+  tripActionBtn: { padding: 8 },
   emptyTripsContainer: { alignItems: 'center', paddingVertical: 40 },
-  emptyTripsText: { color: COLORS.textSecondary, marginTop: 10, fontSize: 14 },
+  emptyTripsText: { fontSize: 14, color: theme.textSecondary, marginTop: 15 },
 
-  inputLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 8, marginTop: 15 },
-  tripInput: { backgroundColor: '#F8FBFA', borderWidth: 1, borderColor: '#E8F5F2', borderRadius: 14, padding: 15, fontSize: 15, color: COLORS.text },
-  suggestionItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-  },
-  suggestionText: {
-    fontSize: 14,
-    color: COLORS.text,
-  },
-  submitTripBtn: { backgroundColor: COLORS.teal, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginTop: 30, ...SHADOW.md },
-  submitTripBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '800' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', minHeight: '60%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: theme.text },
+  modalSubtitle: { fontSize: 14, color: theme.textSecondary, marginBottom: 20, textAlign: 'center' },
+  inputLabel: { fontSize: 14, fontWeight: '700', color: theme.text, marginBottom: 8, marginTop: 12 },
+  tripInput: { backgroundColor: theme.background, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: theme.border, padding: 14, fontSize: 16, color: theme.text },
+  modalSuggestionsContainer: { backgroundColor: theme.card, borderRadius: RADIUS.md, ...SHADOW.md, marginTop: 4, borderWidth: 1, borderColor: theme.border },
+  suggestionItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
+  suggestionText: { color: theme.text, fontSize: 14 },
+  submitTripBtn: { backgroundColor: theme.teal, borderRadius: RADIUS.lg, padding: 16, alignItems: 'center', marginTop: 24, ...SHADOW.md },
+  submitTripBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
 });

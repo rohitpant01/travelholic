@@ -1,4 +1,7 @@
-export const COLORS = {
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
+
+export const LIGHT_COLORS = {
   // Primary palette
   teal: '#00B4B4',
   tealDark: '#007F7F',
@@ -41,6 +44,59 @@ export const COLORS = {
   // Overlay
   overlay: 'rgba(0,0,0,0.4)',
   overlayLight: 'rgba(0,0,0,0.15)',
+};
+
+export const DARK_COLORS = {
+  // Primary palette
+  teal: '#00D1D1', // Brighter teal for dark mode
+  tealDark: '#00A3A3',
+  tealLight: '#1C2C2C', // Darker background for light teal areas
+  orange: '#FF8A5C',
+  orangeLight: '#2C1D18',
+  gold: '#FFC845',
+  goldLight: '#2C261A',
+
+  // Neutral
+  white: '#121212', // Background color for 'white' components
+  background: '#0F172A', // Slate 900
+  card: '#1E293B', // Slate 800
+  border: '#334155', // Slate 700
+  borderLight: '#1E293B',
+
+  // Text
+  text: '#F8FAFC', // Slate 50
+  textSecondary: '#94A3B8', // Slate 400
+  textLight: '#64748B', // Slate 500
+  textWhite: '#FFFFFF',
+
+  // Status
+  success: '#4ADE80',
+  error: '#F87171',
+  warning: '#FBBC05',
+  info: '#60A5FA',
+
+  // Social swipe colors
+  like: '#00D1D1',
+  skip: '#F87171',
+  superLike: '#FBBC05',
+
+  // Gradient stops
+  gradientStart: '#00B4B4',
+  gradientEnd: '#0F172A',
+  gradientOrange: '#FF6B35',
+  gradientGold: '#F0A500',
+
+  // Overlay
+  overlay: 'rgba(0,0,0,0.7)',
+  overlayLight: 'rgba(0,0,0,0.4)',
+};
+
+export const COLORS = LIGHT_COLORS; // Legacy export
+
+export const useAppTheme = () => {
+  const mode = useSelector((state: RootState) => state.theme.mode);
+  const colors = mode === 'dark' ? DARK_COLORS : LIGHT_COLORS;
+  return { ...colors, mode };
 };
 
 export const FONTS = {

@@ -1,185 +1,727 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Animated, Dimensions, ImageBackground, StatusBar, Image
+  Dimensions, ImageBackground, StatusBar, Image, ScrollView,
+  SafeAreaView, Platform, ActivityIndicator, Alert, Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
+import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
+import * as ImagePicker from 'expo-image-picker';
+import Animated, { 
+  FadeInDown, 
+  FadeInRight, 
+  useAnimatedStyle, 
+  withSpring, 
+  useSharedValue,
+  FadeIn
+} from 'react-native-reanimated';
+import { fetchRandomTravelImages, getRichDestinations } from '../api/imageService';
+import { aiAPI, userAPI } from '../api/services';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 
 const { width, height } = Dimensions.get('window');
 
-export default function LandingScreen() {
-  const navigation = useNavigation<any>();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(60)).current;
+const LandingScreen = () => {
+  const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+  
+  // States
+  const [heroImage, setHeroImage] = useState('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000&auto=format&fit=crop');
+  const [destinations, setDestinations] = useState<any[]>([]);
+  const [quote, setQuote] = useState("Travel is the only thing you buy that makes you richer.");
+  const [quoteImage, setQuoteImage] = useState('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1000&auto=format&fit=crop');
+  const [loadingQuote, setLoadingQuote] = useState(false);
+  const [loadingDestinations, setLoadingDestinations] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [aboutModalVisible, setAboutModalVisible] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<any>(null);
+
+  // Animation Shared Values
+  const buttonScale = useSharedValue(1);
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
-    ]).start();
+    loadInitialData();
   }, []);
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient
-        colors={['#003333', '#00B4B4', '#FF6B35']}
-        style={StyleSheet.absoluteFillObject}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
+  const loadInitialData = async () => {
+    try {
+      // Fetch 4 unique destinations based on time of day (Morning/Afternoon/Night)
+      const richData = getRichDestinations();
+      const hour = new Date().getHours();
+      let startIndex = 0;
+      
+      if (hour < 12) {
+        startIndex = 0; // Morning (0-3)
+      } else if (hour < 18) {
+        startIndex = 4; // Afternoon (4-7)
+      } else {
+        startIndex = 8; // Night (8-11)
+      }
 
-      {/* Decorative elements */}
-      <View style={styles.blob1} />
-      <View style={styles.blob2} />
+      setDestinations(richData.slice(startIndex, startIndex + 4));
+      
+      const imgs = await fetchRandomTravelImages(1);
+      if (imgs.length > 0) setHeroImage(imgs[0].image);
+      
+      refreshQuote();
+    } catch (err) {
+      console.warn('Landing data load failed:', err);
+    } finally {
+      setLoadingDestinations(false);
+    }
+  };
 
-      {/* Travel destination cards preview */}
-      <View style={styles.cardsPreview}>
-        <View style={[styles.previewCard, styles.previewCard1]}>
-          <Text style={styles.previewEmoji}>🏔️</Text>
-          <Text style={styles.previewLabel}>Himalayas</Text>
-        </View>
-        <View style={[styles.previewCard, styles.previewCard2]}>
-          <Text style={styles.previewEmoji}>🏖️</Text>
-          <Text style={styles.previewLabel}>Bali</Text>
-        </View>
-        <View style={[styles.previewCard, styles.previewCard3]}>
-          <Text style={styles.previewEmoji}>🗼</Text>
-          <Text style={styles.previewLabel}>Paris</Text>
-        </View>
-      </View>
+  const refreshQuote = async () => {
+    setLoadingQuote(true);
+    try {
+      const res = await aiAPI.generateQuote();
+      if (res.data?.quote) setQuote(res.data.quote);
+      
+      const randomImg = await fetchRandomTravelImages(1);
+      if (randomImg.length > 0) setQuoteImage(randomImg[0].image);
+    } catch (err) {
+      console.warn('Quote refresh failed:', err);
+    } finally {
+      setLoadingQuote(false);
+    }
+  };
 
-      <Animated.View
-        style={[
-          styles.content,
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-        ]}
+  const pickHeroImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setHeroImage(result.assets[0].uri);
+    }
+  };
+
+
+
+  const btnAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: withSpring(buttonScale.value) }]
+  }));
+
+  const handleDestinationClick = (item: any) => {
+    Alert.alert(
+      '✨ ' + item.name,
+      'Login and explore the Explore tab to save this destination to your bucket list!',
+      [
+        { text: 'OK', style: 'default' },
+        { text: 'Login', onPress: () => (navigation.navigate as any)('Login') }
+      ]
+    );
+  };
+
+  const renderDestinationCard = (item: any, index: number) => (
+    <Animated.View 
+      key={index}
+      entering={FadeInRight.delay(index * 100)}
+      style={styles.destCardContainer}
+    >
+      <TouchableOpacity 
+        style={styles.destCard}
+        onPress={() => handleDestinationClick(item)}
+        activeOpacity={0.9}
       >
-        <View style={styles.logoRow}>
-          <Image 
-            source={require('../../assets/logo.png')} 
-            style={styles.logoImage} 
-            resizeMode="contain" 
-          />
-          <Text style={styles.logoText}>TravelHolic</Text>
-        </View>
-
-        <Text style={styles.tagline}>Find Your{'\n'}Travel Soulmate</Text>
-        <Text style={styles.subtitle}>
-          Connect with fellow travelers who share your adventure spirit
-        </Text>
-
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <Text style={styles.statNumber}>50K+</Text>
-            <Text style={styles.statLabel}>Travelers</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.stat}>
-            <Text style={styles.statNumber}>120+</Text>
-            <Text style={styles.statLabel}>Countries</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.stat}>
-            <Text style={styles.statNumber}>10K+</Text>
-            <Text style={styles.statLabel}>Matches</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => navigation.navigate('Register_Step1')}
-          activeOpacity={0.85}
+        <Image source={{ uri: item.image }} style={styles.destImage} />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.8)']}
+          style={styles.destGradient}
         >
+          <View style={styles.destInfoRow}>
+            <View>
+              <Text style={styles.destName}>{item.name}</Text>
+              <Text style={styles.destLoc}>{item.location}</Text>
+            </View>
+            <View style={styles.miniRating}>
+              <Ionicons name="star" size={14} color="#FFD700" />
+              <Text style={styles.miniRatingText}>{item.rating}</Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* HERO SECTION */}
+        <ImageBackground source={{ uri: heroImage }} style={styles.hero}>
           <LinearGradient
-            colors={[COLORS.orange, '#FF8C5A']}
-            style={styles.btnGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.1)', theme.background]}
+            style={styles.heroOverlay}
           >
-            <Text style={styles.primaryBtnText}>Create Account ✈️</Text>
+              <SafeAreaView style={styles.heroHeader}>
+               <View style={styles.headerRow}>
+                 <TouchableOpacity activeOpacity={0.8} onPress={() => setAboutModalVisible(true)}>
+                   <Animated.View entering={FadeIn.delay(200)} style={styles.logoTag}>
+                     <Image source={require('../../assets/logo.png')} style={{width: 22, height: 22, borderRadius: 6}} />
+                     <Text style={styles.logoTagText}>EkalGo</Text>
+                   </Animated.View>
+                 </TouchableOpacity>
+               </View>
+            </SafeAreaView>
+
+            <Animated.View entering={FadeInDown.duration(1000).springify()} style={styles.heroBottom}>
+              <Text style={styles.heroTitle}>Explore India</Text>
+              
+              <View style={styles.heroButtonsContainer}>
+                <GoogleSignInButton title="Continue with Google" />
+
+                <View style={[styles.dividerContainer, { marginVertical: 15 }]}>
+                  <View style={[styles.line, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
+                  <Text style={[styles.orText, { color: 'rgba(255,255,255,0.9)' }]}>OR</Text>
+                  <View style={[styles.line, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
+                </View>
+
+                <TouchableOpacity 
+                  activeOpacity={0.8}
+                  onPressIn={() => buttonScale.value = 0.95}
+                  onPressOut={() => buttonScale.value = 1}
+                  onPress={() => (navigation.navigate as any)('Login')}
+                >
+                  <Animated.View style={[styles.mainBtn, btnAnimatedStyle, { height: 56 }]}>
+                    <LinearGradient
+                      colors={['#00C9A7', '#00A8E8']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.gradientBtn}
+                    >
+                      <Text style={styles.mainBtnText}>Continue Your Journey</Text>
+                    </LinearGradient>
+                  </Animated.View>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  onPress={() => (navigation.navigate as any)('Register_Step1')}
+                  style={styles.loginLink}
+                >
+                  <Text style={styles.loginLinkText}>
+                    Join the Journey
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
           </LinearGradient>
-        </TouchableOpacity>
+        </ImageBackground>
 
-        <TouchableOpacity
-          style={styles.secondaryBtn}
-          onPress={() => navigation.navigate('Login')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.secondaryBtnText}>Sign In</Text>
-        </TouchableOpacity>
+        {/* DESTINATIONS SECTION */}
+        <View style={styles.destinationsContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Top Destinations</Text>
+          </View>
+          {loadingDestinations ? (
+            <ActivityIndicator size="small" color={COLORS.teal} style={{ marginVertical: 30 }} />
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.destList}
+            >
+              {destinations.slice(0, 4).map(renderDestinationCard)}
+            </ScrollView>
+          )}
+        </View>
 
-        <Text style={styles.terms}>
-          By continuing, you agree to our{' '}
-          <Text style={styles.termsLink}>Terms</Text> &{' '}
-          <Text style={styles.termsLink}>Privacy Policy</Text>
-        </Text>
-      </Animated.View>
+        {/* PREMIUM QUOTE SECTION */}
+        <Animated.View entering={FadeInDown.delay(800)} style={styles.quoteSection}>
+           <TouchableOpacity activeOpacity={0.9} onPress={refreshQuote}>
+             <ImageBackground 
+               source={{ uri: quoteImage }} 
+               style={styles.quoteCard}
+               imageStyle={{ borderRadius: RADIUS.xl }}
+             >
+                <View style={styles.quoteOverlay}>
+                  {loadingQuote ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <FontAwesome5 name="quote-left" size={20} color="rgba(255,255,255,0.6)" style={styles.quoteIcon} />
+                      <Text style={styles.quoteText}>{quote}</Text>
+                      <View style={styles.quoteFooter}>
+                         <View style={styles.glassTag}>
+                           <Text style={styles.glassTagText}>AI Inspired</Text>
+                         </View>
+                         <Text style={styles.tapTip}>✨ Tap to refresh</Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+             </ImageBackground>
+           </TouchableOpacity>
+        </Animated.View>
+
+        {/* ACTIONS / Terms */}
+        <View style={styles.actions}>
+          <Text style={styles.footerText}>
+            By continuing, you agree to our{" "}
+            <Text style={styles.link} onPress={() => (navigation.navigate as any)("TermsScreen")}>
+              Terms
+            </Text>{" "}
+            and{" "}
+            <Text style={styles.link} onPress={() => (navigation.navigate as any)("PrivacyScreen")}>
+              Privacy Policy
+            </Text>
+          </Text>
+        </View>
+      </ScrollView>
+
+
+      {/* About App Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={aboutModalVisible}
+        onRequestClose={() => setAboutModalVisible(false)}
+      >
+        <View style={styles.aboutModalOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setAboutModalVisible(false)} />
+          <View style={[styles.aboutModalContent, { backgroundColor: theme.mode === 'dark' ? 'rgba(30,30,30,0.95)' : 'rgba(255,255,255,0.95)' }]}>
+            <LinearGradient
+              colors={['rgba(0,201,167,0.15)', 'transparent']}
+              style={styles.aboutHeaderGradient}
+            />
+
+            <View style={styles.aboutHeaderHandle} />
+            
+            <ScrollView contentContainerStyle={styles.aboutScroll} showsVerticalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <Image source={require('../../assets/logo.png')} style={{ width: 45, height: 45, borderRadius: 12, marginRight: 15 }} />
+                <View>
+                  <Text style={[styles.aboutHeaderTitle, { color: theme.text }]}>
+                    EKAL<Text style={{ color: '#F7A731' }}>GO</Text>
+                  </Text>
+                  <Text style={styles.aboutHeaderSubtitle}>From Solo Trips to Shared Memories.</Text>
+                </View>
+              </View>
+              
+              <Text style={[styles.aboutDescription, { color: theme.text }]}>
+                Experience a revolutionary travel platform that connects you with global explorers, AI-curated itineraries, and breathtaking destinations instantly.
+              </Text>
+
+              <View style={styles.featuresList}>
+                <View style={[styles.featureItem, { backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+                  <View style={styles.featureIconBox}>
+                     <Ionicons name="compass" size={20} color={COLORS.teal} />
+                  </View>
+                  <Text style={[styles.featureText, { color: theme.text }]}>Discover Hidden Gems</Text>
+                </View>
+                <View style={[styles.featureItem, { backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+                  <View style={styles.featureIconBox}>
+                     <Ionicons name="chatbubbles" size={20} color={COLORS.teal} />
+                  </View>
+                  <Text style={[styles.featureText, { color: theme.text }]}>Connect with Travelers</Text>
+                </View>
+                <View style={[styles.featureItem, { backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+                  <View style={styles.featureIconBox}>
+                     <Ionicons name="map" size={20} color={COLORS.teal} />
+                  </View>
+                  <Text style={[styles.featureText, { color: theme.text }]}>AI-Powered Itineraries</Text>
+                </View>
+              </View>
+
+              <Text style={[styles.aboutSectionTitle, { color: theme.text }]}>Why Choose EkalGo?</Text>
+              <View style={styles.bulletPointsContainer}>
+                <View style={styles.bulletPointRow}><Text style={styles.bulletDot}>•</Text><Text style={[styles.bulletPointText, { color: theme.textLight }]}>Real-time location matching</Text></View>
+                <View style={styles.bulletPointRow}><Text style={styles.bulletDot}>•</Text><Text style={[styles.bulletPointText, { color: theme.textLight }]}>Instant messaging and media sharing</Text></View>
+                <View style={styles.bulletPointRow}><Text style={styles.bulletDot}>•</Text><Text style={[styles.bulletPointText, { color: theme.textLight }]}>Community-driven rich travel data</Text></View>
+              </View>
+
+              <View style={styles.aboutQuoteBox}>
+                <FontAwesome5 name="quote-left" size={14} color={COLORS.teal} style={{ marginBottom: 8 }} />
+                <Text style={[styles.aboutQuoteText, { color: theme.text }]}>
+                  "To travel is to discover that everyone is wrong about other countries."
+                </Text>
+              </View>
+
+              <View style={styles.aboutFooter}>
+                <Text style={styles.craftedText}>Crafted with passion by</Text>
+                <Text style={[styles.teamTitle, { color: theme.text }]}>Team EkalGo</Text>
+                <Text style={styles.taglineText}>Driven by curiosity, built for explorers</Text>
+              </View>
+
+              <TouchableOpacity 
+                activeOpacity={0.9}
+                onPress={() => setAboutModalVisible(false)}
+              >
+                <LinearGradient
+                   colors={['#00C9A7', '#00A8E8']}
+                   start={{ x: 0, y: 0 }}
+                   end={{ x: 1, y: 0 }}
+                   style={styles.aboutBtn}
+                >
+                   <Text style={styles.aboutBtnText}>Start Exploring</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'flex-end' },
-  blob1: {
-    position: 'absolute', width: 350, height: 350,
-    borderRadius: 175, backgroundColor: 'rgba(255,107,53,0.2)',
-    top: -100, right: -80,
+  container: {
+    flex: 1,
   },
-  blob2: {
-    position: 'absolute', width: 250, height: 250,
-    borderRadius: 125, backgroundColor: 'rgba(0,180,180,0.15)',
-    top: 150, left: -60,
+  scrollContent: {
+    paddingBottom: 40,
   },
-  cardsPreview: {
-    position: 'absolute', top: height * 0.1, width,
-    flexDirection: 'row', justifyContent: 'center', gap: 12,
+  hero: {
+    width: width,
+    height: height * 0.85,
   },
-  previewCard: {
-    width: 95, height: 130, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+  heroOverlay: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingBottom: 30,
   },
-  previewCard1: { transform: [{ rotate: '-8deg' }, { translateY: 10 }] },
-  previewCard2: { transform: [{ scale: 1.1 }] },
-  previewCard3: { transform: [{ rotate: '8deg' }, { translateY: 10 }] },
-  previewEmoji: { fontSize: 36 },
-  previewLabel: { color: 'white', fontSize: 11, fontWeight: '600', marginTop: 4 },
-  content: {
-    backgroundColor: 'rgba(255,255,255,0.97)',
-    borderTopLeftRadius: 36, borderTopRightRadius: 36,
-    padding: 32, paddingBottom: 48,
+  heroHeader: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: Platform.OS === 'android' ? 40 : 0,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cartBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: COLORS.teal,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  cartBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  logoTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  logoTagText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 6,
+    fontSize: 14,
+  },
+  iconBtn: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  heroBottom: { position: 'absolute', bottom: 30, left: 24, right: 24, zIndex: 10 },
+  heroButtonsContainer: { marginTop: 24, width: '100%' },
+  startBtn: {
+    flex: 1,
+    height: 56,
+    backgroundColor: COLORS.teal,
+    borderRadius: RADIUS.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    ...SHADOW.md,
+  },
+  startBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  loginBtnMini: {
+    paddingHorizontal: 24,
+    height: 56,
+    borderRadius: RADIUS.lg,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  loginBtnMiniText: { color: '#fff', fontWeight: '700' },
+  heroTitle: { fontSize: 44, fontWeight: '900', color: '#fff', letterSpacing: -1 },
+  heroSubtitle: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 16,
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  destinationsContainer: { paddingHorizontal: 24, marginTop: 32 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between',    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  seeAllText: {
+    fontSize: FONTS.sm,
+    fontWeight: '700',
+  },
+  sectionTitle: { fontSize: 24, fontWeight: '800' },
+  seeAll: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  destList: { paddingRight: 24 },
+  destCardContainer: { width: width * 0.75, marginRight: 16 },
+  destCard: {
+    height: 240,
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    ...SHADOW.lg,
+    backgroundColor: '#fff',
+  },
+  destImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  destGradient: { 
+    position: 'absolute', bottom: 0, left: 0, right: 0, 
+    height: 120, padding: 16, justifyContent: 'flex-end' 
+  },
+  destInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  destName: { fontSize: 20, fontWeight: '800', color: '#fff' },
+  destLoc: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  miniRating: { 
+    flexDirection: 'row', alignItems: 'center', gap: 4, 
+    backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, 
+    paddingVertical: 4, borderRadius: 8 
+  },
+  miniRatingText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  heartOverlay: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  quoteSection: {
+    marginHorizontal: SPACING.lg,
+    marginTop: 30,
+  },
+  quoteCard: {
+    width: '100%',
+    height: 160,
     ...SHADOW.lg,
   },
-  logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 8 },
-  logoImage: { width: 32, height: 32 },
-  logoText: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.teal },
-  tagline: {
-    fontSize: FONTS.xxxl, fontWeight: '800',
-    color: COLORS.text, lineHeight: 38, marginBottom: 12,
+  quoteOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 25,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  subtitle: { fontSize: FONTS.md, color: COLORS.textSecondary, marginBottom: 24, lineHeight: 22 },
-  statsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.tealLight, borderRadius: 16,
-    padding: 16, marginBottom: 28,
+  quoteIcon: {
+    position: 'absolute',
+    top: 15,
+    left: 15,
   },
-  stat: { flex: 1, alignItems: 'center' },
-  statNumber: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.teal },
-  statLabel: { fontSize: FONTS.xs, color: COLORS.textSecondary, marginTop: 2 },
-  statDivider: { width: 1, height: 30, backgroundColor: COLORS.border },
-  primaryBtn: { borderRadius: RADIUS.full, overflow: 'hidden', marginBottom: 14 },
-  btnGradient: { paddingVertical: 16, alignItems: 'center', borderRadius: RADIUS.full },
-  primaryBtnText: { color: COLORS.white, fontSize: FONTS.lg, fontWeight: '700', letterSpacing: 0.3 },
-  secondaryBtn: {
-    borderRadius: RADIUS.full, borderWidth: 2, borderColor: COLORS.teal,
-    paddingVertical: 14, alignItems: 'center', marginBottom: 20,
+  quoteText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    lineHeight: 22,
   },
-  secondaryBtnText: { color: COLORS.teal, fontSize: FONTS.lg, fontWeight: '600' },
-  terms: { textAlign: 'center', fontSize: FONTS.xs, color: COLORS.textLight },
-  termsLink: { color: COLORS.teal, fontWeight: '600' },
+  quoteFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    position: 'absolute',
+    bottom: 12,
+    paddingHorizontal: 15,
+  },
+  glassTag: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  glassTagText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  tapTip: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 11,
+  },
+  actions: {
+    paddingHorizontal: SPACING.lg,
+    marginTop: 40,
+  },
+  mainBtn: {
+    height: 60,
+    borderRadius: 30,
+    ...SHADOW.md,
+  },
+  gradientBtn: {
+    flex: 1,
+    borderRadius: 30,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mainBtnText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+    paddingHorizontal: 10,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+  },
+  orText: {
+    marginHorizontal: 15,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loginBtn: {
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  loginText: {
+    color: '#00A8E8',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  terms: {
+    textAlign: 'center',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  termsLink: {
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
+  },
+  loginLink: {
+    alignItems: 'center', marginTop: 15, backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignSelf: 'center',
+  },
+  loginLinkText: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalContent: {
+    padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
+    minHeight: 300,
+  },
+  modalHeaderImage: {
+    width: '100%', height: 200, position: 'absolute', top: 0, left: 0, right: 0,
+    borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, opacity: 0.6,
+  },
+  modalGradient: {
+    position: 'absolute', top: 0, left: 0, right: 0, height: 200,
+    borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
+  },
+  modalTitle: { fontSize: 24, fontWeight: '900', marginTop: 80, marginBottom: 8, textAlign: 'center' },
+  modalSubtitle: { fontSize: 14, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
+  modalActions: { width: '100%', marginTop: 16 },
+  modalBtn: {
+    width: '100%', height: 56, borderRadius: RADIUS.lg,
+    justifyContent: 'center', alignItems: 'center', ...SHADOW.md,
+  },
+  modalBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  aboutModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  aboutModalContent: {
+    borderTopLeftRadius: 35, borderTopRightRadius: 35,
+    minHeight: height * 0.75, maxHeight: height * 0.9,
+    paddingTop: 15, paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 20,
+  },
+  aboutHeaderHandle: { width: 40, height: 5, backgroundColor: 'rgba(150,150,150,0.3)', borderRadius: 3, alignSelf: 'center', marginBottom: 20 },
+  aboutHeaderGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 150, borderTopLeftRadius: 35, borderTopRightRadius: 35 },
+  aboutScroll: { paddingBottom: 20 },
+  aboutHeaderTitle: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
+  aboutHeaderSubtitle: { fontSize: 16, color: COLORS.teal, fontWeight: '700', marginTop: 4, marginBottom: 24 },
+  aboutDescription: { fontSize: 15, lineHeight: 24, opacity: 0.8, marginBottom: 30 },
+  featuresList: { gap: 12, marginBottom: 30 },
+  featureItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16 },
+  featureIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,201,167,0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  featureText: { fontSize: 16, fontWeight: '700' },
+  aboutSectionTitle: { fontSize: 18, fontWeight: '800', marginBottom: 15 },
+  bulletPointsContainer: { gap: 10, marginBottom: 30 },
+  bulletPointRow: { flexDirection: 'row', alignItems: 'flex-start', paddingRight: 20 },
+  bulletDot: { fontSize: 18, color: COLORS.teal, marginRight: 10, lineHeight: 22 },
+  bulletPointText: { fontSize: 15, lineHeight: 22 },
+  aboutQuoteBox: { backgroundColor: 'rgba(0,201,167,0.05)', padding: 20, borderRadius: 20, marginBottom: 30, borderWidth: 1, borderColor: 'rgba(0,201,167,0.1)' },
+  aboutQuoteText: { fontSize: 16, fontStyle: 'italic', fontWeight: '500', lineHeight: 24 },
+  aboutFooter: { alignItems: 'center', marginBottom: 35 },
+  craftedText: { fontSize: 12, color: 'gray', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
+  teamTitle: { fontSize: 22, fontWeight: '900', letterSpacing: 1, marginBottom: 6 },
+  taglineText: { fontSize: 14, color: COLORS.teal, fontStyle: 'italic', fontWeight: '600' },
+  aboutBtn: { width: '100%', height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', ...SHADOW.lg },
+  aboutBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  footerText: {
+    color: "#999",
+    textAlign: "center",
+    fontSize: 12,
+    marginBottom: 40,
+  },
+  link: {
+    color: "#00C6FF",
+    fontWeight: "600",
+  },
 });
+
+export default LandingScreen;

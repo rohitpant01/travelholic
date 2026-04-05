@@ -10,9 +10,9 @@ export const authAPI = {
   sendOTP: (phone: string, checkExists?: boolean) => apiClient.post('/auth/send-otp', { phone, checkExists }),
   verifyOTP: (phone: string, code: string, userId: string) =>
     apiClient.post('/auth/verify-otp', { phone, code, userId }),
-  forgotPassword: (phone: string) => apiClient.post('/auth/forgot-password', { phone }),
-  resetPassword: (phone: string, code: string, newPassword: string) =>
-    apiClient.post('/auth/reset-password', { phone, code, newPassword }),
+  forgotPassword: (email: string) => apiClient.post('/auth/forgot-password', { email }),
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    apiClient.post('/auth/reset-password', { email, code, newPassword }),
   sendEmailOTP: (email?: string, userId?: string) => apiClient.post('/auth/send-email-otp', { email, userId }),
   verifyEmailOTP: (email: string | undefined, code: string, userId?: string) =>
     apiClient.post('/auth/verify-email-otp', { email, code, userId }),
@@ -46,6 +46,9 @@ export const userAPI = {
     apiClient.put('/user/distance', { maxDiscoveryDistance }),
   followUser: (userId: string) => apiClient.post(`/user/follow/${userId}`),
   deactivateAccount: () => apiClient.delete('/user/account'),
+  blockUser: (targetUserId: string) => apiClient.post('/user/block', { targetUserId }),
+  reportUser: (data: { targetUserId: string; reason: string; details?: string; matchId?: string }) => 
+    apiClient.post('/user/report', data),
 
   // ✅ NEW: Who liked me — returns { likedBy: User[], totalCount: number }
   whoLikedMe: () => apiClient.get('/user/who-liked-me'),
@@ -57,6 +60,9 @@ export const userAPI = {
   updateCompletedTrip: (tripId: string, data: any) => apiClient.put(`/user/completed-trips/${tripId}`, data),
   deleteCompletedTrip: (tripId: string) => apiClient.delete(`/user/completed-trips/${tripId}`),
   getCompletedTrips: (userId: string) => apiClient.get(`/user/${userId}/completed-trips`),
+  saveDestination: (destination: any) => apiClient.post('/user/saved-destinations', destination),
+  deleteSavedDestination: (destinationId: string) => apiClient.delete(`/user/saved-destinations/${destinationId}`),
+  syncSavedDestinations: (localItems: any[]) => apiClient.post('/user/sync-saved-destinations', { localItems }),
 };
 
 // ============================================================
@@ -122,6 +128,7 @@ export const chatAPI = {
     apiClient.post(`/chat/message/${messageId}/react`, { emoji }),
   getUnreadCount: () => apiClient.get('/chat/unread-count'),
   readChat: (matchId: string) => apiClient.put(`/chat/${matchId}/read`),
+  clearChat: (matchId: string) => apiClient.delete(`/chat/${matchId}/messages`),
 };
 
 // ============================================================
@@ -184,6 +191,8 @@ export const tripAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
       transformRequest: (d) => d,
     }),
+  reportTrip: (tripId: string, data: { reason: string; details?: string }) =>
+    apiClient.post(`/trips/${tripId}/report`, data),
 };
 
 // ============================================================
@@ -194,4 +203,22 @@ export const notificationAPI = {
   markRead: (notificationIds?: string[]) => 
     apiClient.put('/notifications/read', { notificationIds }),
   clearNotifications: () => apiClient.delete('/notifications'),
+};
+
+// ============================================================
+// AI API
+// ============================================================
+export const aiAPI = {
+  generateItinerary: (data: { 
+    destination: string; 
+    days: number; 
+    budget?: string; 
+    interests?: string; 
+    travelType?: string; 
+    startLocation?: string; 
+    foodPreference?: string; 
+  }) => apiClient.post('/ai/generate', data),
+  getPlaceInsights: (data: { placeName: string; lat?: number; lng?: number; }) => apiClient.post('/ai/place-insights', data),
+  generateQuote: (destination?: string) => apiClient.post('/ai/quote', { destination }),
+  generateDestinations: () => apiClient.get('/ai/destinations'),
 };

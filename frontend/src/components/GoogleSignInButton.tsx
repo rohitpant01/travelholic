@@ -6,7 +6,8 @@ import { useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI } from '../api/services';
 import { setUser, setToken } from '../store/slices/authSlice';
-import { COLORS, FONTS, RADIUS } from '../utils/theme';
+import { setSavedDestinations } from '../store/slices/savedSlice';
+import { useAppTheme, FONTS, RADIUS } from '../utils/theme';
 import apiClient from '../api/client';
 
 // 🛠️ Configure Google Sign-In (Web Client ID is needed for idToken)
@@ -19,6 +20,8 @@ export default function GoogleSignInButton({ title = "Continue with Google" }: {
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
 
   const handlePress = async () => {
     setLoading(true);
@@ -81,6 +84,9 @@ export default function GoogleSignInButton({ title = "Continue with Google" }: {
 
       dispatch(setToken(token));
       dispatch(setUser(user));
+      if (user.savedDestinations) {
+        dispatch(setSavedDestinations(user.savedDestinations));
+      }
 
     } catch (error: any) {
       console.error('Google login error', error);
@@ -96,28 +102,28 @@ export default function GoogleSignInButton({ title = "Continue with Google" }: {
       activeOpacity={0.8}
     >
       {loading ? (
-        <ActivityIndicator color={COLORS.text} />
+        <ActivityIndicator color={theme.text} />
       ) : (
         <>
+          <Text style={styles.text}>{title}</Text>
           <RNImage
-            source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }}
+            source={{ uri: 'https://img.icons8.com/color/48/000000/google-logo.png' }}
             style={styles.logo}
           />
-          <Text style={styles.text}>{title}</Text>
         </>
       )}
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.mode === 'dark' ? '#131314' : theme.white,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: theme.mode === 'dark' ? '#444746' : '#E5E7EB',
     paddingVertical: 14,
     borderRadius: RADIUS.full,
     elevation: 1,
@@ -129,12 +135,12 @@ const styles = StyleSheet.create({
   logo: {
     width: 20,
     height: 20,
-    marginRight: 10,
+    marginLeft: 10,
   },
   text: {
     fontSize: FONTS.md,
     fontWeight: '600',
-    color: '#374151',
+    color: theme.mode === 'dark' ? '#E3E3E3' : '#374151',
   },
   disabled: {
     opacity: 0.7,

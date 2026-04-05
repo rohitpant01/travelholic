@@ -18,10 +18,10 @@ import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import { Socket } from 'socket.io-client';
 import { Linking } from 'react-native';
-import { chatAPI, tripAPI } from '../api/services';
+import { chatAPI, tripAPI, userAPI, matchAPI } from '../api/services';
 import { RootState } from '../store';
-import { setActiveChat, upsertMessage } from '../store/slices/chatSlice';
-import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
+import { setActiveChat, upsertMessage, removeMatch } from '../store/slices/chatSlice';
+import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import { API_BASE_URL } from '../api/client';
 
 // Derive socket URL from API base (remove /api path)
@@ -94,6 +94,8 @@ const MessageItem = React.memo(({
   setSelectedMsg, setReplyMsg, jumpToMessage, playVoice, 
   setPreviewImage, handleDelete, setInput, setEditingMessageId 
 }: MessageItemProps) => {
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const navigation = useNavigation<any>();
   const swipeableRef = useRef<any>(null);
   const isMe = (item.sender?._id || item.sender) === user?._id;
@@ -108,8 +110,8 @@ const MessageItem = React.memo(({
   if (item.type === 'system') {
     return (
       <View style={styles.systemMessageContainer}>
-        <View style={styles.systemMessagePill}>
-          <Text style={styles.systemMessageText}>{item.text}</Text>
+        <View style={[styles.systemMessagePill, { backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#f1f5f9' }]}>
+          <Text style={[styles.systemMessageText, { color: theme.textSecondary }]}>{item.text}</Text>
         </View>
       </View>
     );
@@ -117,7 +119,7 @@ const MessageItem = React.memo(({
 
   const renderSwipeActions = () => (
     <View style={styles.swipeAction}>
-      <Ionicons name="arrow-undo" size={24} color={COLORS.teal} />
+      <Ionicons name="arrow-undo" size={24} color={theme.teal} />
     </View>
   );
 
@@ -199,9 +201,9 @@ const MessageItem = React.memo(({
             <>
               {item.type === 'voice' ? (
                 <TouchableOpacity onPress={() => playVoice(item.voiceUrl!, item._id)} style={styles.voiceBubble}>
-                  <Ionicons name={playingVoiceId === item._id ? "pause" : "play"} size={24} color={isMe ? "#fff" : COLORS.teal} />
+                  <Ionicons name={playingVoiceId === item._id ? "pause" : "play"} size={24} color={isMe ? theme.textWhite : theme.teal} />
                   <View style={styles.voiceWaveform}>
-                    {[1,2,3,4,5,6].map(i => <View key={i} style={[styles.waveBar, { height: 4 + Math.random() * 12, backgroundColor: isMe ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.1)" }]} />)}
+                    {[1,2,3,4,5,6].map(i => <View key={i} style={[styles.waveBar, { height: 4 + Math.random() * 12, backgroundColor: isMe ? "rgba(255,255,255,0.6)" : theme.mode === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)" }]} />)}
                   </View>
                 </TouchableOpacity>
               ) : item.type === 'image' ? (
@@ -299,6 +301,8 @@ const formatLastSeen = (dateStr: string | null) => {
 };
 
 export default function ChatScreen() {
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { 
@@ -315,6 +319,11 @@ export default function ChatScreen() {
   const [activeUserName, setActiveUserName] = useState(userName);
   const [activeUserPhoto, setActiveUserPhoto] = useState(userPhoto);
 
+  useEffect(() => {
+    setActiveUserName(userName);
+    setActiveUserPhoto(userPhoto);
+  }, [userName, userPhoto]);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
@@ -322,6 +331,7 @@ export default function ChatScreen() {
   const [isOnline, setIsOnline] = useState(!!initialOnline);
   const [activityStatus, setActivityStatus] = useState<string | null>(initialActivity || 'Online');
   const [lastSeen, setLastSeen] = useState<string | null>(initialLastSeen || null);
+  const [isLocationLoading, setIsLocationLoading] = useState(false);
 
   // Viewability Config for Read Detection
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
@@ -366,6 +376,8 @@ export default function ChatScreen() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const [isOptionsModalVisible, setIsOptionsModalVisible] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
 
   const { socket: globalSocket } = useSocket();
   const socketRef = useRef<Socket | null>(null);
@@ -396,7 +408,7 @@ export default function ChatScreen() {
       }
 
       // 1. Download to local cache
-      const filename = url.split('/').pop()?.split('?')[0] || `travelholic_${Date.now()}.jpg`;
+      const filename = url.split('/').pop()?.split('?')[0] || `ekalgo_${Date.now()}.jpg`;
       const fileUri = cacheDirectory + (filename.includes('.') ? filename : `${filename}.jpg`);
       
       const downloadRes = await downloadAsync(url, fileUri);
@@ -417,7 +429,14 @@ export default function ChatScreen() {
   };
 
   const loadMessages = async () => {
+    if (!chatId || String(chatId) === 'undefined' || String(chatId) === 'null') {
+      console.log('[ChatScreen] No chatId provided. Skipping loadMessages.');
+      setLoading(false);
+      return;
+    }
+
     try {
+      console.log(`[ChatScreen] Loading messages for ${type}: ${chatId}`);
       const res = type === 'group' 
         ? await tripAPI.getTripMessages(chatId)
         : await chatAPI.getMessages(chatId);
@@ -432,7 +451,9 @@ export default function ChatScreen() {
       }
       // Backend returns [oldest ... newest]. We store [newest ... oldest] for inverted FlatList.
       setMessages(res.data.messages.reverse());
-    } catch (e) {}
+    } catch (e) {
+      console.error('[ChatScreen] loadMessages error:', e);
+    }
     finally { setLoading(false); }
   };
 
@@ -607,6 +628,49 @@ export default function ChatScreen() {
     };
   }, [chatId]); // chatId dependency to update active state safely
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <TouchableOpacity 
+          style={styles.headerTitleContainer}
+          onPress={() => {
+            if (type === 'individual') navigation.navigate('UserDetail', { userId });
+            else if (type === 'group') navigation.navigate('GroupDetails', { tripId: chatId });
+          }}
+        >
+          {activeUserPhoto ? (
+            <Image source={{ uri: activeUserPhoto }} style={styles.headerAvatar} />
+          ) : (
+            <View style={[styles.headerAvatar, { backgroundColor: theme.tealLight, alignItems: 'center', justifyContent: 'center' }]}>
+              <Ionicons name="person" size={20} color={theme.teal} />
+            </View>
+          )}
+          <View style={{ marginLeft: 10 }}>
+            <Text style={[styles.headerName, { color: theme.text }]} numberOfLines={1}>{activeUserName}</Text>
+            {type === 'individual' && (
+              <Text style={[styles.headerStatus, { color: isOnline ? theme.success : theme.textSecondary }]}>
+                {isOnline ? (activityStatus || 'Online') : formatLastSeen(lastSeen)}
+              </Text>
+            )}
+            {type === 'group' && (
+              <Text style={styles.headerStatus}>{membersCount} members</Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      ),
+      headerRight: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
+          <TouchableOpacity 
+            style={{ padding: 8 }} 
+            onPress={() => setIsOptionsModalVisible(true)}
+          >
+            <Ionicons name="ellipsis-vertical" size={22} color={theme.text} />
+          </TouchableOpacity>
+        </View>
+      )
+    });
+  }, [navigation, theme, activeUserName, activeUserPhoto, isOnline, activityStatus, lastSeen, membersCount]);
+
 
 
   // 7️⃣ Granular Read Receipt Trigger (Now handled by onViewableItemsChanged)
@@ -699,7 +763,7 @@ export default function ChatScreen() {
       const permission = await Audio.requestPermissionsAsync();
       if (permission.status !== 'granted') {
         isPressingVoice.current = false;
-        Alert.alert('Permission Required', 'TravelHolic needs microphone access to send voice messages.');
+        Alert.alert('Permission Required', 'EkalGo needs microphone access to send voice messages.');
         return;
       }
 
@@ -966,18 +1030,35 @@ export default function ChatScreen() {
   };
   
   const handleSendLocation = async () => {
+    if (isLocationLoading) return;
+    setIsLocationLoading(true);
+
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission denied', 'Location permission is required to share your location.');
+        setIsLocationLoading(false);
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      let location = null;
+      try {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      } catch (err) {
+        console.warn('❌ [ChatScreen] getCurrentPositionAsync failed, trying getLastKnownPositionAsync:', err.message);
+        location = await Location.getLastKnownPositionAsync();
+      }
+
+      if (!location) {
+        Alert.alert('Location Error', 'Current location is unavailable. Make sure that location services are enabled');
+        setIsLocationLoading(false);
+        return;
+      }
 
       const { latitude, longitude } = location.coords;
+      const tempId = `temp-loc-${Date.now()}`;
       
       socketRef.current?.emit('send_message', {
         chatId,
@@ -986,11 +1067,11 @@ export default function ChatScreen() {
         latitude,
         longitude,
         type: 'location',
-        replyTo: replyMsg?._id
+        replyTo: replyMsg?._id,
+        tempId
       });
 
       // Optimistic Update
-      const tempId = `temp-loc-${Date.now()}`;
       const optimisticMsg: any = {
         _id: tempId,
         chatId,
@@ -1014,6 +1095,8 @@ export default function ChatScreen() {
     } catch (error) {
       console.error('Error sending location:', error);
       Alert.alert('Error', 'Could not get your current location. Please check your settings.');
+    } finally {
+      setIsLocationLoading(false);
     }
   };
 
@@ -1039,40 +1122,285 @@ export default function ChatScreen() {
       setInput={setInput}
       setEditingMessageId={setEditingMessageId}
     />
-  ), [messages, playingVoiceId, user, highlightedMsgId, userName, userPhoto, setSelectedMsg, setReplyMsg, jumpToMessage, playVoice, setPreviewImage, handleDelete, setInput, setEditingMessageId]);
+  ), [messages, playingVoiceId, user, highlightedMsgId, activeUserName, activeUserPhoto, setSelectedMsg, setReplyMsg, jumpToMessage, playVoice, setPreviewImage, handleDelete, setInput, setEditingMessageId]);
+
+  // --- SAFETY & OPTIONS HANDLERS ---
+
+  const handleBlock = () => {
+    setIsOptionsModalVisible(false);
+    Alert.alert(
+      "Block User?",
+      `Are you sure you want to block ${activeUserName}? They will no longer be able to message you.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Block", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await userAPI.blockUser(userId);
+              navigation.goBack();
+            } catch (e) {
+              Alert.alert("Error", "Failed to block user.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleReport = () => {
+    setIsReporting(true);
+  };
+
+  const handleLeaveGroup = () => {
+    setIsOptionsModalVisible(false);
+    Alert.alert(
+      "Leave Group?",
+      "Are you sure you want to leave this group? You will no longer receive messages.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Leave", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              if (user?._id) {
+                await tripAPI.leaveTrip(chatId, user._id);
+                navigation.goBack();
+              }
+            } catch (e) {
+              Alert.alert("Error", "Failed to leave group.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const submitReport = async (reason: string) => {
+    try {
+      if (type === 'group') {
+        await tripAPI.reportTrip(chatId, { reason });
+      } else {
+        await userAPI.reportUser({ targetUserId: userId || chatId, reason, matchId: chatId });
+      }
+      
+      // 2. Local State Sync: Instantly remove from Matches list
+      dispatch(removeMatch(chatId));
+
+      setIsReporting(false);
+      setIsOptionsModalVisible(false);
+      
+      Alert.alert(
+        "Report Submitted ✅",
+        "Thank you for helping keep EkalGo safe. This chat has been removed and blocked for your safety.",
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    } catch (e) {
+      Alert.alert("Error", "Failed to submit report. Please try again.");
+    }
+  };
+
+  const handleClearChat = () => {
+    setIsOptionsModalVisible(false);
+    Alert.alert(
+      "Clear Chat?",
+      "This will permanently delete all messages in this conversation. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Clear", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await chatAPI.clearChat(chatId);
+              setMessages([]);
+            } catch (e) {
+              Alert.alert("Error", "Failed to clear chat.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleMute = async () => {
+    try {
+      if (type === 'group') await tripAPI.muteTrip(chatId);
+      else await matchAPI.muteMatch(chatId);
+      Alert.alert("Muted", "Notifications for this chat have been muted.");
+      setIsOptionsModalVisible(false);
+    } catch (e) {
+      Alert.alert("Error", "Failed to mute chat.");
+    }
+  };
+
+  const renderOptionsModal = () => (
+    <Modal
+      visible={isOptionsModalVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => {
+        setIsOptionsModalVisible(false);
+        setIsReporting(false);
+      }}
+    >
+      <Pressable 
+        style={styles.optionsModalOverlay} 
+        onPress={() => {
+          setIsOptionsModalVisible(false);
+          setIsReporting(false);
+        }}
+      >
+        <View style={styles.optionsModalContent}>
+          <View style={styles.optionsModalHandle} />
+          
+          {isReporting ? (
+            <View style={{ paddingBottom: 20 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                <TouchableOpacity onPress={() => setIsReporting(false)} style={{ padding: 5 }}>
+                  <Ionicons name="arrow-back" size={24} color={theme.text} />
+                </TouchableOpacity>
+                <Text style={[styles.optionsText, { marginLeft: 15 }]}>Report {type === 'group' ? 'Group' : 'User'}</Text>
+              </View>
+              
+              <Text style={{ fontSize: 14, color: theme.textSecondary, marginBottom: 15 }}>
+                Select a reason for reporting this {type === 'group' ? 'group' : 'user'}:
+              </Text>
+
+               {(() => {
+                 const reasons = type === 'group' 
+                   ? ['Spam / Promotion Group', 'Scam / Fraud Activity', 'Inappropriate Group Content', 'Toxic / Abusive Conversations', 'Misleading Travel Information', 'Safety Risk']
+                   : ['Fake Profile', 'Harassment', 'Spam', 'Inappropriate Behavior', 'Safety Concern'];
+                 
+                 return reasons.map(reason => (
+                   <TouchableOpacity 
+                     key={reason} 
+                     style={styles.optionsItem} 
+                     onPress={() => submitReport(reason)}
+                   >
+                     <Text style={styles.optionsText}>{reason}</Text>
+                     <Ionicons name="chevron-forward" size={20} color={theme.border} style={{ marginLeft: 'auto' }} />
+                   </TouchableOpacity>
+                 ));
+               })()}
+            </View>
+          ) : (
+            <>
+              {type === 'group' ? (
+                <>
+                  <TouchableOpacity 
+                    style={styles.optionsItem}
+                    onPress={() => {
+                      setIsOptionsModalVisible(false);
+                      navigation.navigate('GroupDetails', { tripId: chatId });
+                    }}
+                  >
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="people-outline" size={20} color={theme.text} />
+                    </View>
+                    <Text style={styles.optionsText}>View Members</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity style={styles.optionsItem} onPress={handleMute}>
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="notifications-off-outline" size={20} color={theme.text} />
+                    </View>
+                    <Text style={styles.optionsText}>Mute Notifications</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.optionsItem} onPress={handleClearChat}>
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="trash-outline" size={20} color={theme.text} />
+                    </View>
+                    <Text style={styles.optionsText}>Clear Chat</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.optionsItem} onPress={handleReport}>
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="warning-outline" size={20} color={theme.error} />
+                    </View>
+                    <Text style={[styles.optionsText, styles.optionsTextDestructive]}>Report Group</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={[styles.optionsItem, { borderBottomWidth: 0 }]} onPress={handleLeaveGroup}>
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="log-out-outline" size={20} color={theme.error} />
+                    </View>
+                    <Text style={[styles.optionsText, styles.optionsTextDestructive]}>Leave Group</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    style={styles.optionsItem}
+                    onPress={() => {
+                      setIsOptionsModalVisible(false);
+                      navigation.navigate('UserDetail', { userId });
+                    }}
+                  >
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="person-outline" size={20} color={theme.text} />
+                    </View>
+                    <Text style={styles.optionsText}>View Profile</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.optionsItem} onPress={handleMute}>
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="notifications-off-outline" size={20} color={theme.text} />
+                    </View>
+                    <Text style={styles.optionsText}>Mute Notifications</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.optionsItem} onPress={handleClearChat}>
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="trash-outline" size={20} color={theme.text} />
+                    </View>
+                    <Text style={styles.optionsText}>Clear Chat</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.optionsItem}
+                    onPress={() => {
+                      setIsOptionsModalVisible(false);
+                      Alert.alert("Travel Safe ✨", "1. Share your live location with family.\n2. Meet in public places.\n3. Verify your companion's profile photo.\n4. Trust your instincts!", [{ text: "Got it!" }]);
+                    }}
+                  >
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="shield-checkmark-outline" size={20} color={theme.teal} />
+                    </View>
+                    <Text style={[styles.optionsText, { color: theme.teal }]}>Safety Tips</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.optionsItem} onPress={handleReport}>
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="warning-outline" size={20} color={theme.error} />
+                    </View>
+                    <Text style={[styles.optionsText, styles.optionsTextDestructive]}>Report User</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={[styles.optionsItem, { borderBottomWidth: 0 }]} onPress={handleBlock}>
+                    <View style={styles.optionsIconContainer}>
+                      <Ionicons name="ban-outline" size={20} color={theme.error} />
+                    </View>
+                    <Text style={[styles.optionsText, styles.optionsTextDestructive]}>Block User</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </>
+          )}
+        </View>
+      </Pressable>
+    </Modal>
+  );
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="chevron-back" size={26} color={COLORS.text} /></TouchableOpacity>
-        <TouchableOpacity style={styles.headerInfo} onPress={() => type === 'individual' ? navigation.navigate('UserDetail', { userId }) : navigation.navigate('GroupDetails', { tripId: chatId, groupName: activeUserName, groupIcon: activeUserPhoto })}>
-          {type === 'individual' ? (
-            <Image source={activeUserPhoto ? { uri: activeUserPhoto } : require('../../assets/placeholder.png')} style={styles.headerAvatar} />
-          ) : (
-            activeUserPhoto ? (
-              <Image source={{ uri: activeUserPhoto }} style={styles.headerAvatar} />
-            ) : (
-              <View style={[styles.headerAvatar, { backgroundColor: COLORS.tealLight, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ fontSize: 20 }}>💬</Text>
-              </View>
-            )
-          )}
-          <View>
-            <Text style={styles.headerName}>{activeUserName}</Text>
-            <Text style={[styles.headerStatus, isOnline && styles.headerStatusOnline]}>
-              {Object.keys(typingUsers).length > 0
-                ? `${Object.values(typingUsers).join(', ')} typing...` 
-                : (type === 'group'
-                  ? 'Group Chat'
-                  : (isOnline 
-                    ? `🟢 ${activityStatus}` 
-                    : formatLastSeen(lastSeen) || 'Offline'))
-              }
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={'padding'} 
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 100}
+    >
 
       <FlatList 
         ref={flatListRef} 
@@ -1129,9 +1457,9 @@ export default function ChatScreen() {
             onPress={() => jumpToMessage(replyMsg._id)}
           >
             <Text style={styles.replyPreviewSender}>Replying to {(replyMsg.sender?._id || replyMsg.sender) === user?._id ? 'yourself' : userName}</Text>
-            <Text numberOfLines={1}>{replyMsg.text || (replyMsg.type === 'image' ? 'Photo' : replyMsg.type === 'voice' ? 'Voice' : replyMsg.type === 'location' ? 'Location' : '')}</Text>
+            <Text style={{ color: theme.textSecondary }} numberOfLines={1}>{replyMsg.text || (replyMsg.type === 'image' ? 'Photo' : replyMsg.type === 'voice' ? 'Voice' : replyMsg.type === 'location' ? 'Location' : '')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setReplyMsg(null)}><Ionicons name="close-circle" size={24} color={COLORS.textLight} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => setReplyMsg(null)}><Ionicons name="close-circle" size={24} color={theme.textSecondary} /></TouchableOpacity>
         </View>
       )}
 
@@ -1152,14 +1480,23 @@ export default function ChatScreen() {
           ) : (
             <>
               <TouchableOpacity style={styles.attachBtn} onPress={handleSendImage}>
-                <Ionicons name="image-outline" size={26} color={COLORS.textSecondary} />
+                <Ionicons name="image-outline" size={26} color={theme.textSecondary} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.attachBtn} onPress={handleSendLocation}>
-                <Ionicons name="location-outline" size={26} color={COLORS.textSecondary} />
+              <TouchableOpacity 
+                style={[styles.attachBtn, isLocationLoading && { opacity: 0.5 }]} 
+                onPress={handleSendLocation}
+                disabled={isLocationLoading}
+              >
+                {isLocationLoading ? (
+                  <ActivityIndicator size="small" color={theme.textSecondary} />
+                ) : (
+                  <Ionicons name="location-outline" size={26} color={theme.textSecondary} />
+                )}
               </TouchableOpacity>
               <TextInput 
                 style={styles.input} 
                 placeholder="Type message..." 
+                placeholderTextColor={theme.textSecondary}
                 value={input} 
                 onChangeText={handleTyping} 
                 multiline 
@@ -1170,14 +1507,14 @@ export default function ChatScreen() {
 
         {input.trim() && !isRecording ? (
           <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-            <Ionicons name="send" size={20} color="#fff" />
+            <Ionicons name="send" size={20} color={theme.textWhite} />
           </TouchableOpacity>
         ) : (
           <View 
             style={[styles.voiceBtn, isRecording && (isCancelled ? styles.voiceBtnCancelled : styles.voiceBtnActive)]} 
             {...panResponder.panHandlers}
           >
-            <Ionicons name={isRecording ? (isCancelled ? "trash" : "mic-off") : "mic"} size={24} color={isRecording ? "#fff" : COLORS.teal} />
+            <Ionicons name={isRecording ? (isCancelled ? "trash" : "mic-off") : "mic"} size={24} color={isRecording ? theme.textWhite : theme.teal} />
           </View>
         )}
       </View>
@@ -1193,17 +1530,17 @@ export default function ChatScreen() {
             </View>
             <View style={styles.actionList}>
               <TouchableOpacity style={styles.actionItem} onPress={() => { setReplyMsg(selectedMsg); setSelectedMsg(null); }}>
-                <Ionicons name="arrow-undo" size={20} color={COLORS.text} /><Text style={styles.actionText}>Reply</Text>
+                <Ionicons name="arrow-undo" size={20} color={theme.text} /><Text style={styles.actionText}>Reply</Text>
               </TouchableOpacity>
               {selectedMsg?.sender?._id === user?._id && !selectedMsg.isDeleted && (
                 <>
                   {selectedMsg.type === 'text' && (
                     <TouchableOpacity style={styles.actionItem} onPress={() => { setInput(selectedMsg.text || ''); setEditingMessageId(selectedMsg._id); setSelectedMsg(null); }}>
-                      <Ionicons name="create-outline" size={20} color={COLORS.text} /><Text style={styles.actionText}>Edit</Text>
+                      <Ionicons name="create-outline" size={20} color={theme.text} /><Text style={styles.actionText}>Edit</Text>
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity style={styles.actionItem} onPress={() => handleDelete(selectedMsg._id)}>
-                    <Ionicons name="trash-outline" size={20} color={COLORS.error} /><Text style={[styles.actionText, { color: COLORS.error }]}>Delete</Text>
+                    <Ionicons name="trash-outline" size={20} color={theme.error} /><Text style={[styles.actionText, { color: theme.error }]}>Delete</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -1211,92 +1548,99 @@ export default function ChatScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {renderOptionsModal()}
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', paddingTop: 52, paddingBottom: 12, paddingHorizontal: 16,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 12, ...SHADOW.sm
+    backgroundColor: theme.white, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 12, ...SHADOW.sm
   },
   headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerAvatar: { width: 40, height: 40, borderRadius: 20 },
-  headerName: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
-  headerStatus: { fontSize: 12, color: '#64748B' },
-  headerStatusOnline: { color: COLORS.success },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerAvatar: { width: 36, height: 36, borderRadius: 18 },
+  headerName: { fontSize: 16, fontWeight: '700', color: theme.text },
+  headerStatus: { fontSize: 11, color: theme.textSecondary, marginTop: 1 },
+  headerStatusOnline: { color: theme.success },
   messagesList: { paddingHorizontal: 16, paddingVertical: 12 },
   messageRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 12, width: '100%' },
   messageRowMe: { flexDirection: 'row-reverse' },
-  highlightedRow: { backgroundColor: 'rgba(0, 150, 255, 0.1)', marginHorizontal: -16, paddingHorizontal: 16 },
+  highlightedRow: { backgroundColor: theme.mode === 'dark' ? 'rgba(0, 180, 255, 0.15)' : 'rgba(0, 150, 255, 0.1)', marginHorizontal: -16, paddingHorizontal: 16 },
   messageAvatarSlot: { width: 28 },
   messageAvatar: { width: 28, height: 28, borderRadius: 14 },
   bubble: { maxWidth: '75%', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, ...SHADOW.sm },
-  bubbleMe: { alignSelf: 'flex-end', backgroundColor: COLORS.teal, borderBottomRightRadius: 4 },
-  bubbleThem: { alignSelf: 'flex-start', backgroundColor: '#fff', borderBottomLeftRadius: 4 },
-  bubbleHighlighted: { backgroundColor: 'rgba(0, 150, 255, 0.05)' },
-  groupSenderName: { fontSize: 12, fontWeight: '800', color: COLORS.tealDark, marginBottom: 2 },
-  bubbleText: { fontSize: 15, color: '#334155', lineHeight: 22, flexShrink: 1 },
-  bubbleTextMe: { color: '#fff' },
+  bubbleMe: { alignSelf: 'flex-end', backgroundColor: theme.teal, borderBottomRightRadius: 4 },
+  bubbleThem: { alignSelf: 'flex-start', backgroundColor: theme.card, borderBottomLeftRadius: 4 },
+  bubbleHighlighted: { backgroundColor: theme.mode === 'dark' ? 'rgba(0, 180, 255, 0.1)' : 'rgba(0, 150, 255, 0.05)' },
+  groupSenderName: { fontSize: 12, fontWeight: '800', color: theme.teal, marginBottom: 2 },
+  bubbleText: { fontSize: 15, color: theme.text, lineHeight: 22, flexShrink: 1 },
+  bubbleTextMe: { color: theme.textWhite },
   bubbleImage: { width: 220, height: 220, borderRadius: 12 },
   locationBubble: { width: 220, overflow: 'hidden' },
   mapPreview: { width: 220, height: 120, borderRadius: 8 },
   locationInfo: { padding: 8 },
-  locationTitle: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
-  locationTitleMe: { color: '#fff' },
-  locationSubtitle: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  locationTitle: { fontSize: 13, fontWeight: '700', color: theme.text },
+  locationTitleMe: { color: theme.textWhite },
+  locationSubtitle: { fontSize: 11, color: theme.textSecondary, marginTop: 2 },
   locationSubtitleMe: { color: 'rgba(255,255,255,0.8)' },
-  bubbleDeleted: { backgroundColor: '#F1F5F9', borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1' },
-  deletedText: { fontStyle: 'italic', color: '#94A3B8', fontSize: 13 },
+  bubbleDeleted: { backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F1F5F9', borderStyle: 'dashed', borderWidth: 1, borderColor: theme.border },
+  deletedText: { fontStyle: 'italic', color: theme.textSecondary, fontSize: 13 },
   voiceBubble: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 160 },
   voiceWaveform: { flexDirection: 'row', alignItems: 'center', gap: 2, height: 24, flex: 1 },
   waveBar: { width: 3, borderRadius: 2 },
   bubbleMeta: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 },
   bubbleMetaMe: { justifyContent: 'flex-end' },
-  bubbleTime: { fontSize: 10, color: '#94A3B8' },
+  bubbleTime: { fontSize: 10, color: theme.textSecondary },
   bubbleTimeMe: { color: 'rgba(255,255,255,0.7)' },
-  editedTag: { fontSize: 10, color: '#94A3B8', fontStyle: 'italic', marginRight: 4 },
+  editedTag: { fontSize: 10, color: theme.textSecondary, fontStyle: 'italic', marginRight: 4 },
   editedTagMe: { color: 'rgba(255,255,255,0.7)' },
   systemMessageContainer: { alignItems: 'center', marginVertical: 12 },
-  systemMessagePill: { backgroundColor: '#f1f5f9', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 },
-  systemMessageText: { fontSize: 12, color: '#64748b', fontWeight: '500', textAlign: 'center' },
+  systemMessagePill: { backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#f1f5f9', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 },
+  systemMessageText: { fontSize: 12, color: theme.textSecondary, fontWeight: '500', textAlign: 'center' },
   tickContainer: { marginLeft: 2 },
   swipeAction: { width: 50, justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
-  reactionContainer: { position: 'absolute', bottom: -12, right: 10, flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 4, paddingVertical: 2, borderWidth: 1, borderColor: '#E2E8F0', ...SHADOW.sm },
+  reactionContainer: { position: 'absolute', bottom: -12, right: 10, flexDirection: 'row', backgroundColor: theme.card, borderRadius: 12, paddingHorizontal: 4, paddingVertical: 2, borderWidth: 1, borderColor: theme.border, ...SHADOW.sm },
   reactionEmoji: { fontSize: 12, marginHorizontal: 1 },
   replyContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', padding: 6, marginBottom: 6, borderRadius: 4, backgroundColor: 'rgba(0,0,0,0.03)', overflow: 'hidden', minWidth: 120 },
   replyContainerMe: { backgroundColor: 'rgba(255,255,255,0.1)' },
   replyContainerThem: { backgroundColor: 'rgba(0,0,0,0.03)' },
-  replyBorder: { width: 3, backgroundColor: COLORS.teal, borderRadius: 2, marginRight: 8 },
-  replyBorderMe: { backgroundColor: '#fff' },
+  replyBorder: { width: 3, backgroundColor: theme.teal, borderRadius: 2, marginRight: 8 },
+  replyBorderMe: { backgroundColor: theme.textWhite },
   replyContent: { flex: 1, paddingHorizontal: 4 },
-  replySender: { fontWeight: '700', fontSize: 12, color: COLORS.teal },
+  replySender: { fontWeight: '700', fontSize: 12, color: theme.teal },
   replySenderMe: { color: 'rgba(255,255,255,0.9)' },
-  replySenderThem: { color: COLORS.teal },
-  replyText: { fontSize: 12, color: '#64748B', flexShrink: 1, flexWrap: 'wrap' },
+  replySenderThem: { color: theme.teal },
+  replyText: { fontSize: 12, color: theme.textSecondary, flexShrink: 1, flexWrap: 'wrap' },
   replyTextMe: { color: 'rgba(255,255,255,0.7)' },
-  replyTextThem: { color: '#64748B' },
+  replyTextThem: { color: theme.textSecondary },
   attachBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  inputArea: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: 32, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E2E8F0', gap: 10 },
+  inputArea: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: Platform.OS === 'ios' ? 25 : 16, backgroundColor: theme.white, borderTopWidth: 1, borderTopColor: theme.border, gap: 10 },
   inputMainContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  input: { flex: 1, backgroundColor: '#F1F5F9', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#1E293B', maxHeight: 100 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.teal, alignItems: 'center', justifyContent: 'center' },
-  voiceBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  voiceBtnActive: { backgroundColor: COLORS.error },
-  voiceBtnCancelled: { backgroundColor: '#64748B' },
-  recordingArea: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF1F2', borderRadius: 24, paddingHorizontal: 16, height: 44, gap: 10 },
-  recordingAreaCancelled: { backgroundColor: '#F1F5F9' },
-  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.error },
-  recordingDotCancelled: { backgroundColor: '#64748B' },
-  recordingText: { color: COLORS.error, fontWeight: '700' },
-  recordingHint: { fontSize: 12, color: '#64748B', marginLeft: 'auto' },
-  editBar: { backgroundColor: '#F0F9FF', paddingVertical: 8, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#BAE6FD' },
-  editText: { color: '#0369A1', fontWeight: '600' },
-  editCancel: { color: COLORS.error, fontWeight: '600' },
-  replyPreviewWrapper: { padding: 12, backgroundColor: '#F8FAFC', borderTopWidth: 1, borderTopColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center' },
+  input: { flex: 1, backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F1F5F9', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: theme.text, maxHeight: 100 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.teal, alignItems: 'center', justifyContent: 'center' },
+  voiceBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  voiceBtnActive: { backgroundColor: theme.error },
+  voiceBtnCancelled: { backgroundColor: theme.textSecondary },
+  recordingArea: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: theme.mode === 'dark' ? '#442222' : '#FFF1F2', borderRadius: 24, paddingHorizontal: 16, height: 44, gap: 10 },
+  recordingAreaCancelled: { backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F1F5F9' },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.error },
+  recordingDotCancelled: { backgroundColor: theme.textSecondary },
+  recordingText: { color: theme.error, fontWeight: '700' },
+  recordingHint: { fontSize: 12, color: theme.textSecondary, marginLeft: 'auto' },
+  editBar: { backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F0F9FF', paddingVertical: 8, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.border },
+  editText: { color: theme.teal, fontWeight: '600' },
+  editCancel: { color: theme.error, fontWeight: '600' },
+  replyPreviewWrapper: { padding: 12, backgroundColor: theme.background, borderTopWidth: 1, borderTopColor: theme.border, flexDirection: 'row', alignItems: 'center' },
   replyPreviewContent: { flex: 1 },
-  replyPreviewSender: { fontWeight: '700', color: COLORS.teal, fontSize: 12 },
+  replyPreviewSender: { fontWeight: '700', color: theme.teal, fontSize: 12 },
   emptyChat: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 100 },
   emptyChatEmoji: { fontSize: 48, marginBottom: 10 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
@@ -1318,10 +1662,77 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
-  modalContent: { width: '80%', backgroundColor: '#fff', borderRadius: 20, padding: 20, ...SHADOW.lg },
-  reactionPicker: { flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  modalContent: { width: '80%', backgroundColor: theme.card, borderRadius: 20, padding: 20, ...SHADOW.lg },
+  reactionPicker: { flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: theme.border },
   pickerEmoji: { fontSize: 32 },
   actionList: { marginTop: 10 },
   actionItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
-  actionText: { fontSize: 16, color: '#1E293B', fontWeight: '500' },
+  actionText: { fontSize: 16, color: theme.text, fontWeight: '500' },
+  
+  // Options Modal (Bottom Sheet Style)
+  optionsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  optionsModalContent: {
+    backgroundColor: theme.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    ...SHADOW.lg,
+  },
+  optionsModalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: theme.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  optionsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+    gap: 15,
+  },
+  optionsIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.text,
+  },
+  optionsTextDestructive: {
+    color: theme.error,
+  },
+  safetyTipCard: {
+    backgroundColor: theme.tealLight,
+    padding: 16,
+    borderRadius: 16,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: theme.teal,
+    gap: 8,
+  },
+  safetyTipTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: theme.teal,
+  },
+  safetyTipText: {
+    fontSize: 14,
+    color: theme.text,
+    lineHeight: 20,
+  },
 });

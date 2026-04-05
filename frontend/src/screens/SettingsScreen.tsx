@@ -10,13 +10,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { RootState } from '../store';
 import { userAPI } from '../api/services';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, FONTS, RADIUS, SPACING } from '../utils/theme';
+import { COLORS, FONTS, RADIUS, SPACING, useAppTheme } from '../utils/theme';
 import { logout, updateUser } from '../store/slices/authSlice';
+import { clearSaved } from '../store/slices/savedSlice';
+import { toggleTheme } from '../store/slices/themeSlice';
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
+  
   const { user } = useSelector((s: RootState) => s.auth);
+  const { mode } = useSelector((s: RootState) => s.theme);
   const [distance, setDistance] = useState(user?.maxDiscoveryDistance || 50);
   const [saving, setSaving] = useState(false);
 
@@ -48,7 +54,10 @@ export default function SettingsScreen() {
             try {
               await AsyncStorage.removeItem('token');
               await AsyncStorage.removeItem('user');
+              await AsyncStorage.removeItem('@explore_destinations');
+              await AsyncStorage.removeItem('@last_fetch_time');
               dispatch(logout());
+              dispatch(clearSaved());
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'Landing' }],
@@ -65,27 +74,32 @@ export default function SettingsScreen() {
   const settingsItems = [
     {
       icon: 'person-outline', label: 'Edit Profile',
-      onPress: () => navigation.navigate('EditProfile'), color: COLORS.teal,
+      onPress: () => navigation.navigate('EditProfile'), color: theme.teal,
+    },
+    {
+      icon: mode === 'light' ? 'moon-outline' : 'sunny-outline', 
+      label: mode === 'light' ? 'Dark Mode' : 'Light Mode',
+      onPress: () => dispatch(toggleTheme()), color: theme.gold,
     },
     {
       icon: 'notifications-outline', label: 'Notifications',
-      onPress: () => Alert.alert('Coming soon'), color: COLORS.orange,
+      onPress: () => Alert.alert('Coming soon'), color: theme.orange,
     },
     {
       icon: 'shield-checkmark-outline', label: 'Privacy & Safety',
-      onPress: () => Alert.alert('Coming soon'), color: COLORS.gold,
+      onPress: () => Alert.alert('Coming soon'), color: theme.gold,
     },
     {
       icon: 'help-circle-outline', label: 'Help & Support',
-      onPress: () => Alert.alert('Coming soon'), color: COLORS.info,
+      onPress: () => Alert.alert('Coming soon'), color: theme.info,
     },
     {
-      icon: 'information-circle-outline', label: 'About TravelHolic',
-      onPress: () => Alert.alert('TravelHolic v1.0.0', 'Find your travel soulmate ✈️'), color: COLORS.textSecondary,
+      icon: 'information-circle-outline', label: 'About EkalGo',
+      onPress: () => Alert.alert('EkalGo v1.0.0', 'From Solo Trips to Shared Memories. ✈️'), color: theme.textSecondary,
     },
     {
       icon: 'log-out-outline', label: 'Logout',
-      onPress: handleLogout, color: COLORS.error,
+      onPress: handleLogout, color: theme.error,
     },
   ];
 
@@ -93,7 +107,7 @@ export default function SettingsScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={26} color={COLORS.text} />
+          <Ionicons name="chevron-back" size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
         <View style={{ width: 34 }} />
@@ -103,7 +117,7 @@ export default function SettingsScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardIconWrapper}>
-            <Ionicons name="location" size={20} color={COLORS.white} />
+            <Ionicons name="location" size={20} color={theme.textWhite} />
           </View>
           <View style={styles.cardHeaderText}>
             <Text style={styles.cardTitle}>Discovery Distance</Text>
@@ -118,12 +132,6 @@ export default function SettingsScreen() {
           <Text style={styles.distanceUnit}>km</Text>
         </View>
 
-        {/* ================================================================
-          GOOGLE MAPS API KEY used for geocoding in location screens.
-          The distance filter here is purely backend-side using MongoDB
-          $geoNear with maxDistance set to (distance * 1000) meters.
-          No additional Google Maps key needed for this slider.
-         ================================================================ */}
         <Slider
           style={styles.slider}
           minimumValue={10}
@@ -131,9 +139,9 @@ export default function SettingsScreen() {
           step={5}
           value={distance}
           onValueChange={v => setDistance(Math.round(v))}
-          minimumTrackTintColor={COLORS.teal}
-          maximumTrackTintColor={COLORS.border}
-          thumbTintColor={COLORS.teal}
+          minimumTrackTintColor={theme.teal}
+          maximumTrackTintColor={theme.border}
+          thumbTintColor={theme.teal}
         />
 
         <View style={styles.sliderLabels}>
@@ -160,9 +168,9 @@ export default function SettingsScreen() {
           style={[styles.saveBtn, saving && { opacity: 0.7 }]}
           onPress={handleSaveDistance} disabled={saving}
         >
-          <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.saveBtnGrad}
+          <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.saveBtnGrad}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            {saving ? <ActivityIndicator color={COLORS.white} size="small" /> : (
+            {saving ? <ActivityIndicator color={theme.textWhite} size="small" /> : (
               <Text style={styles.saveBtnText}>Save Distance</Text>
             )}
           </LinearGradient>
@@ -184,76 +192,76 @@ export default function SettingsScreen() {
               <Ionicons name={item.icon as any} size={20} color={item.color} />
             </View>
             <Text style={styles.settingsLabel}>{item.label}</Text>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+            <Ionicons name="chevron-forward" size={18} color={theme.textLight} />
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.versionText}>TravelHolic v1.0.0 · Made with ✈️ & ❤️</Text>
+      <Text style={styles.versionText}>EkalGo v1.0.0 · Made with ✈️ & ❤️</Text>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingTop: 56, paddingBottom: 16, paddingHorizontal: SPACING.lg,
-    backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    backgroundColor: theme.white, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.text },
+  headerTitle: { fontSize: FONTS.xl, fontWeight: '800', color: theme.text },
   card: {
-    backgroundColor: COLORS.white, borderRadius: 20, margin: 16,
+    backgroundColor: theme.card, borderRadius: 20, margin: 16,
     padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   cardIconWrapper: {
     width: 40, height: 40, borderRadius: 12,
-    backgroundColor: COLORS.teal, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.teal, alignItems: 'center', justifyContent: 'center',
   },
   cardHeaderText: { flex: 1 },
-  cardTitle: { fontSize: FONTS.base, fontWeight: '700', color: COLORS.text },
-  cardSubtitle: { fontSize: FONTS.sm, color: COLORS.textSecondary, marginTop: 2 },
+  cardTitle: { fontSize: FONTS.base, fontWeight: '700', color: theme.text },
+  cardSubtitle: { fontSize: FONTS.sm, color: theme.textSecondary, marginTop: 2 },
   distanceDisplay: {
     flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center',
     marginBottom: 4, gap: 4,
   },
-  distanceNumber: { fontSize: 52, fontWeight: '900', color: COLORS.teal },
-  distanceUnit: { fontSize: FONTS.xl, color: COLORS.textSecondary, fontWeight: '600' },
+  distanceNumber: { fontSize: 52, fontWeight: '900', color: theme.teal },
+  distanceUnit: { fontSize: FONTS.xl, color: theme.textSecondary, fontWeight: '600' },
   slider: { width: '100%', height: 40 },
   sliderLabels: {
     flexDirection: 'row', justifyContent: 'space-between',
     paddingHorizontal: 4, marginBottom: 16,
   },
-  sliderLabelText: { fontSize: FONTS.xs, color: COLORS.textLight },
+  sliderLabelText: { fontSize: FONTS.xs, color: theme.textLight },
   presets: { flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
   preset: {
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: RADIUS.full,
-    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.white,
+    borderWidth: 1.5, borderColor: theme.border, backgroundColor: theme.white,
   },
-  presetActive: { backgroundColor: COLORS.tealLight, borderColor: COLORS.teal },
-  presetText: { fontSize: FONTS.sm, color: COLORS.textSecondary },
-  presetTextActive: { color: COLORS.teal, fontWeight: '700' },
+  presetActive: { backgroundColor: theme.tealLight, borderColor: theme.teal },
+  presetText: { fontSize: FONTS.sm, color: theme.textSecondary },
+  presetTextActive: { color: theme.teal, fontWeight: '700' },
   saveBtn: { borderRadius: RADIUS.full, overflow: 'hidden' },
   saveBtnGrad: { paddingVertical: 14, alignItems: 'center' },
-  saveBtnText: { color: COLORS.white, fontWeight: '700', fontSize: FONTS.base },
+  saveBtnText: { color: theme.textWhite, fontWeight: '700', fontSize: FONTS.base },
   settingsList: {
-    backgroundColor: COLORS.white, borderRadius: 20,
+    backgroundColor: theme.card, borderRadius: 20,
     marginHorizontal: 16, marginBottom: 16, overflow: 'hidden',
   },
   settingsItem: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     paddingHorizontal: 20, paddingVertical: 16,
   },
-  settingsItemBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  settingsItemBorder: { borderBottomWidth: 1, borderBottomColor: theme.border },
   settingsIcon: {
     width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
   },
-  settingsLabel: { flex: 1, fontSize: FONTS.base, color: COLORS.text, fontWeight: '500' },
+  settingsLabel: { flex: 1, fontSize: FONTS.base, color: theme.text, fontWeight: '500' },
   versionText: {
-    textAlign: 'center', fontSize: FONTS.xs, color: COLORS.textLight,
+    textAlign: 'center', fontSize: FONTS.xs, color: theme.textLight,
     marginBottom: 32, marginTop: 8,
   },
 });

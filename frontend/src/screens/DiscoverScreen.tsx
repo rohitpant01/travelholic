@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder,
-  Dimensions, Image, ActivityIndicator, Alert, Modal
+  View, Text, StyleSheet, TouchableOpacity, Animated as RNAnimated,
+  Dimensions, ActivityIndicator, Alert, Modal, Platform
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store';
@@ -11,237 +11,41 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { discoverAPI } from '../api/services';
-import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
+import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
+import ShimmerPlaceholder from 'react-native-shimmer-placeholder';
+
+// New Components
+import DiscoveryHeader from '../components/DiscoveryHeader';
+import TravelersMapView from '../components/TravelersMapView';
+import TravelerPreviewSheet from '../components/TravelerPreviewSheet';
+import TravelerDiscoveryCard, { Profile } from '../components/TravelerDiscoveryCard';
 
 const { width: W, height: H } = Dimensions.get('window');
-const CARD_WIDTH = W - 32;
-const SWIPE_THRESHOLD = W * 0.3;
-
-interface Profile {
-  _id: string;
-  firstName: string;
-  lastName?: string;
-  age?: number;
-  gender?: string;
-  bio?: string;
-  photos?: any[];
-  interests?: string[];
-  location?: { city?: string; country?: string };
-  isPhotoVerified?: boolean;
-  isOnline?: boolean;
-  lastSeen?: string;
-  distanceKm?: number;
-  lookingFor?: string[];
-  origin?: { city?: string };
-  destination?: { city?: string };
-  travelDate?: string;
-  city?: string;
-}
-
-function TravelerCard({ profile, onLike, onSkip, onSuperLike, isTop }: {
-  profile: Profile;
-  onLike: () => void;
-  onSkip: () => void;
-  onSuperLike: () => void;
-  isTop: boolean;
-}) {
-  const pan = useRef(new Animated.ValueXY()).current;
-  const [photoIndex, setPhotoIndex] = useState(0);
-  const profilePhoto = profile.photos?.find(p => p.isProfile)?.url || profile.photos?.[0]?.url;
-
-  const rotate = pan.x.interpolate({
-    inputRange: [-W / 2, 0, W / 2],
-    outputRange: ['-15deg', '0deg', '15deg'],
-    extrapolate: 'clamp',
-  });
-
-  const likeOpacity = pan.x.interpolate({
-    inputRange: [0, W * 0.2],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  const skipOpacity = pan.x.interpolate({
-    inputRange: [-W * 0.2, 0],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-  const superlikeOpacity = pan.y.interpolate({
-    inputRange: [-H * 0.2, 0],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => isTop,
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dx > SWIPE_THRESHOLD) {
-          Animated.timing(pan, {
-            toValue: { x: W * 1.5, y: gesture.dy },
-            duration: 250, useNativeDriver: false,
-          }).start(onLike);
-        } else if (gesture.dx < -SWIPE_THRESHOLD) {
-          Animated.timing(pan, {
-            toValue: { x: -W * 1.5, y: gesture.dy },
-            duration: 250, useNativeDriver: false,
-          }).start(onSkip);
-        } else if (gesture.dy < -SWIPE_THRESHOLD * 0.8) {
-          Animated.timing(pan, {
-            toValue: { x: gesture.dx, y: -H },
-            duration: 250, useNativeDriver: false,
-          }).start(onSuperLike);
-        } else {
-          Animated.spring(pan, {
-            toValue: { x: 0, y: 0 }, friction: 5, useNativeDriver: false,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  const photos = profile.photos || [];
-  return (
-    <Animated.View
-      style={[
-        styles.card,
-        isTop && {
-          transform: [{ translateX: pan.x }, { translateY: pan.y }, { rotate }],
-        },
-      ]}
-      {...(isTop ? panResponder.panHandlers : {})}
-    >
-      <View style={styles.photoContainer}>
-        {profilePhoto ? (
-          <Image source={{ uri: photos[photoIndex]?.url || profilePhoto }} style={styles.photo} />
-        ) : (
-          <View style={[styles.photo, styles.noPhoto]}>
-            <Text style={{ fontSize: 64 }}>✈️</Text>
-          </View>
-        )}
-
-        {/* Swipe indicators */}
-        {photos.length > 1 && (
-          <View style={styles.dotRow}>
-            {photos.map((_, idx) => (
-              <View key={idx} style={[styles.photoDot, idx === photoIndex && styles.photoDotActive]} />
-            ))}
-          </View>
-        )}
-
-        {/* Tap areas */}
-        {photos.length > 1 && (
-          <View style={StyleSheet.absoluteFill}>
-            <TouchableOpacity 
-              style={styles.prevPhotoZone} 
-              onPress={() => setPhotoIndex(i => Math.max(0, i - 1))} 
-              activeOpacity={1} 
-            />
-            <TouchableOpacity 
-              style={styles.nextPhotoZone} 
-              onPress={() => setPhotoIndex(i => Math.min(photos.length - 1, i + 1))} 
-              activeOpacity={1} 
-            />
-          </View>
-        )}
-
-        {/* Verified badge */}
-        {profile.isPhotoVerified && (
-          <View style={styles.verifiedBadge}>
-            <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-            <Text style={styles.verifiedText}>Verified</Text>
-          </View>
-        )}
-
-        {/* Like/Skip/SuperLike indicators */}
-        {isTop && (
-          <>
-            <Animated.View style={[styles.swipeLabel, styles.likeLabelPos, { opacity: likeOpacity }]}>
-              <Text style={styles.likeLabel}>LIKE 💚</Text>
-            </Animated.View>
-            <Animated.View style={[styles.swipeLabel, styles.skipLabelPos, { opacity: skipOpacity }]}>
-              <Text style={styles.skipLabel}>SKIP ✕</Text>
-            </Animated.View>
-            <Animated.View style={[styles.swipeLabel, styles.superLikeLabelPos, { opacity: superlikeOpacity }]}>
-              <Text style={styles.superLikeLabel}>SUPER ⭐</Text>
-            </Animated.View>
-          </>
-        )}
-
-        {/* Gradient overlay */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.75)']}
-          style={styles.photoOverlay}
-        />
-
-        {/* Profile info overlay */}
-        <View style={styles.cardInfo}>
-          <View style={styles.nameRow}>
-            <Text style={styles.cardName}>{profile.firstName}</Text>
-            {profile.isOnline && <View style={styles.onlineDot} />}
-            {profile.age && <Text style={styles.cardAge}>{profile.age}</Text>}
-          </View>
-
-          <View style={styles.locationRow}>
-            <Ionicons name="location" size={14} color="rgba(255,255,255,0.85)" />
-            <Text style={styles.cardLocation}>
-              {profile.location?.city || profile.city || 'Unknown'}{profile.distanceKm ? ` · ${profile.distanceKm} km` : ''}
-            </Text>
-          </View>
-
-          {/* Travel Info */}
-          {(profile.destination?.city || profile.origin?.city) && (
-            <View style={styles.travelInfo}>
-              {profile.destination?.city && (
-                <View style={styles.travelRow}>
-                  <Ionicons name="airplane-outline" size={14} color={COLORS.white} />
-                  <Text style={styles.travelText}>To {profile.destination.city}</Text>
-                </View>
-              )}
-              {profile.origin?.city && (
-                <View style={styles.travelRow}>
-                  <Ionicons name="log-out-outline" size={14} color={COLORS.white} />
-                  <Text style={styles.travelText}>From {profile.origin.city}</Text>
-                </View>
-              )}
-              {profile.travelDate && (
-                <View style={styles.travelRow}>
-                  <Ionicons name="calendar-outline" size={14} color={COLORS.white} />
-                  <Text style={styles.travelText}>
-                    {new Date(profile.travelDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {profile.interests && profile.interests.length > 0 && (
-            <View style={styles.interestRow}>
-              {profile.interests.slice(0, 3).map((interest, idx) => (
-                <View key={`${interest}-${idx}`} style={styles.interestBadge}>
-                  <Text style={styles.interestBadgeText}>{interest}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </View>
-    </Animated.View>
-  );
-}
 
 export default function DiscoverScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch<AppDispatch>();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
+
   const { user } = useSelector((state: RootState) => state.auth);
   const { unreadCount } = useSelector((state: RootState) => state.notification);
+
+  // Discovery State
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  // Map Interaction State
+  const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
+  const [focusUserId, setFocusUserId] = useState<string | undefined>(undefined);
+
+  // UI State
   const [matchPopup, setMatchPopup] = useState<{ name: string; photo?: string } | null>(null);
   const [showVerifyPopup, setShowVerifyPopup] = useState(false);
 
   useEffect(() => {
-    // Show popup for already registered users who are NOT verified
     if (user && !user.isEmailVerified && (user.registrationStep || 0) >= 9) {
       setShowVerifyPopup(true);
     }
@@ -253,23 +57,22 @@ export default function DiscoverScreen() {
       let lat: number | undefined;
       let lng: number | undefined;
       let { status } = await Location.requestForegroundPermissionsAsync();
-      
+
       if (status === 'granted') {
-        // Optimization: Get last known position for near-instant load
         const lastLoc = await Location.getLastKnownPositionAsync();
         if (lastLoc) {
           lat = lastLoc.coords.latitude;
           lng = lastLoc.coords.longitude;
         } else {
-          // Fallback to current if no last known exists
           const currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           lat = currentLoc.coords.latitude;
           lng = currentLoc.coords.longitude;
         }
+        if (lat && lng) setUserLocation({ latitude: lat, longitude: lng });
       }
-      
+
       const res = await discoverAPI.getProfiles(lat, lng);
-      setProfiles(res.data.profiles);
+      setProfiles(res.data.profiles || []);
     } catch (e) {
       console.error('[FETCH PROFILES ERROR]', e);
       Alert.alert('Error', 'Could not load profiles');
@@ -278,7 +81,7 @@ export default function DiscoverScreen() {
     }
   };
 
-  useEffect(() => { 
+  useEffect(() => {
     fetchProfiles();
     dispatch(fetchNotifications());
   }, []);
@@ -295,144 +98,160 @@ export default function DiscoverScreen() {
         setMatchPopup({ name: res.data.matchedUser.firstName, photo: res.data.matchedUser.profilePhoto });
         setTimeout(() => setMatchPopup(null), 3500);
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleSkip = async () => {
     const top = profiles[0];
     if (!top) return;
     removeTop();
-    try { await discoverAPI.skip(top._id); } catch (e) {}
+    try { await discoverAPI.skip(top._id); } catch (e) { }
   };
 
   const handleSuperLike = async () => {
     const top = profiles[0];
     if (!top) return;
     removeTop();
-    try { await discoverAPI.superLike(top._id); } catch (e) {}
+    try { await discoverAPI.superLike(top._id); } catch (e) { }
   };
+
+  const handleMarkerPress = useCallback((user: Profile) => {
+    setSelectedUser(user);
+    setFocusUserId(user._id);
+  }, []);
+
+  const removeUserFromStack = useCallback((userId: string) => {
+    setProfiles(prev => prev.filter(p => p._id !== userId));
+  }, []);
+
+  const handleViewOnMap = (userId: string) => {
+    setViewMode('map');
+    setFocusUserId(userId);
+  };
+
+  const renderShimmer = () => (
+    <View style={styles.shimmerContainer}>
+      <ShimmerPlaceholder style={styles.shimmerCard} />
+      <View style={styles.shimmerActions}>
+        <ShimmerPlaceholder style={styles.shimmerBtn} />
+        <ShimmerPlaceholder style={styles.shimmerBtnSmall} />
+        <ShimmerPlaceholder style={styles.shimmerBtn} />
+      </View>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.logoRow}>
-          <Text style={styles.logoEmoji}>✈️</Text>
-          <Text style={styles.logoText}>Discover</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('Notifications')}
-            style={styles.notificationBtn}
-          >
-            <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
-            {unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-            <Ionicons name="options-outline" size={26} color={COLORS.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <DiscoveryHeader
+        viewMode={viewMode}
+        onToggle={setViewMode}
+        onFilterPress={() => { }} // TODO: Connect filter
+        unreadCount={unreadCount}
+        onSavedPress={() => navigation.navigate('SavedDestinations')}
+        onNotificationsPress={() => navigation.navigate('Notifications')}
+      />
 
-      {/* Cards area */}
-      <View style={styles.cardsArea}>
+      <View style={styles.contentArea}>
         {loading ? (
-          <ActivityIndicator size="large" color={COLORS.teal} />
+          renderShimmer()
         ) : profiles.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🌍</Text>
-            <Text style={styles.emptyTitle}>No more travelers nearby</Text>
-            <Text style={styles.emptySubtitle}>Try increasing your discovery distance in settings</Text>
-            <TouchableOpacity style={styles.refreshBtn} onPress={fetchProfiles}>
-              <Text style={styles.refreshBtnText}>Refresh</Text>
+            <Text style={styles.emptyTitle}>Discover Travelers</Text>
+            <Text style={styles.emptySubtitle}>No travelers nearby right now, but your journey is waiting.</Text>
+            <TouchableOpacity style={styles.exploreBtn} onPress={() => navigation.navigate('AllDestinations')}>
+              <Text style={styles.exploreBtnText}>Explore Destinations</Text>
             </TouchableOpacity>
           </View>
+        ) : viewMode === 'list' ? (
+          <View style={styles.listContainer}>
+            <View style={styles.cardsStack}>
+              {profiles.slice(0, 3).reverse().map((profile, index) => {
+                const isTop = index === Math.min(profiles.length, 3) - 1;
+                return (
+                  <TravelerDiscoveryCard
+                    key={profile._id}
+                    profile={profile}
+                    isTop={isTop}
+                    onLike={handleLike}
+                    onSkip={handleSkip}
+                    onSuperLike={handleSuperLike}
+                    onPressProfile={(p) => navigation.navigate('UserDetail', {
+                      userId: p._id,
+                      profile: p,
+                      onActionPerformed: () => removeUserFromStack(p._id)
+                    })}
+                  />
+                );
+              })}
+            </View>
+
+            {/* Floating Actions overlay for List mode only */}
+            <View style={styles.actions}>
+              <TouchableOpacity style={[styles.actionBtn, styles.skipBtn]} onPress={handleSkip}>
+                <Ionicons name="close" size={32} color={theme.error} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, styles.superLikeBtn]} onPress={handleSuperLike}>
+                <Ionicons name="star" size={28} color={theme.gold} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, styles.likeBtn]} onPress={handleLike}>
+                <Ionicons name="heart" size={32} color={theme.teal} />
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
-          profiles.slice(0, 3).reverse().map((profile, index) => {
-            const isTop = index === profiles.slice(0, 3).length - 1;
-            return (
-              <TravelerCard
-                key={profile._id}
-                profile={profile}
-                isTop={isTop}
-                onLike={handleLike}
-                onSkip={handleSkip}
-                onSuperLike={handleSuperLike}
-              />
-            );
-          })
+          <View style={styles.mapContainer}>
+            <TravelersMapView
+              profiles={profiles}
+              userLocation={userLocation}
+              onMarkerPress={handleMarkerPress}
+              selectedUserId={focusUserId}
+            />
+          </View>
         )}
       </View>
 
-      {/* Action buttons */}
-      {profiles.length > 0 && !loading && (
-        <View style={styles.actions}>
-          <TouchableOpacity style={[styles.actionBtn, styles.skipBtn]} onPress={handleSkip}>
-            <Ionicons name="close" size={32} color={COLORS.error} />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, styles.superLikeBtn]} onPress={handleSuperLike}>
-            <Ionicons name="star" size={28} color={COLORS.gold} />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, styles.likeBtn]} onPress={handleLike}>
-            <Ionicons name="heart" size={32} color={COLORS.teal} />
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Map Preview Sheet */}
+      <TravelerPreviewSheet
+        user={selectedUser}
+        onClose={() => { setSelectedUser(null); setFocusUserId(undefined); }}
+        onViewProfile={(p) => {
+          setSelectedUser(null);
+          navigation.navigate('UserDetail', {
+            userId: p._id,
+            profile: p,
+            onActionPerformed: () => removeUserFromStack(p._id)
+          });
+        }}
+      />
 
       {/* Match popup */}
       {matchPopup && (
         <View style={styles.matchOverlay}>
-          <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.matchCard}>
+          <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.matchCard}>
             <Text style={styles.matchEmoji}>🎉</Text>
             <Text style={styles.matchTitle}>It's a Match!</Text>
             <Text style={styles.matchSubtitle}>You and {matchPopup.name} liked each other!</Text>
-            <TouchableOpacity
-              style={styles.matchChatBtn}
-              onPress={() => { setMatchPopup(null); navigation.navigate('Matches'); }}
-            >
+            <TouchableOpacity style={styles.matchChatBtn} onPress={() => { setMatchPopup(null); navigation.navigate('Matches'); }}>
               <Text style={styles.matchChatBtnText}>Start Chatting →</Text>
             </TouchableOpacity>
           </LinearGradient>
         </View>
       )}
 
-      {/* Email Verification Pop-up for Existing Users */}
-      <Modal
-        visible={showVerifyPopup}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowVerifyPopup(false)}
-      >
+      {/* Email Verification Pop-up */}
+      <Modal visible={showVerifyPopup} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.verifyPopupCard}>
             <View style={styles.verifyIconCircle}>
-              <Ionicons name="mail-unread" size={32} color={COLORS.teal} />
+              <Ionicons name="mail-unread" size={32} color={theme.teal} />
             </View>
             <Text style={styles.verifyTitle}>Verify Your Email</Text>
-            <Text style={styles.verifyDesc}>
-              Please verify your email address to keep your account secure and unlock all features.
-            </Text>
-            
-            <TouchableOpacity 
-              style={styles.verifyBtn} 
-              onPress={() => {
-                setShowVerifyPopup(false);
-                navigation.navigate('EditProfile');
-              }}
-            >
+            <Text style={styles.verifyDesc}>Please verify your email to unlock all features.</Text>
+            <TouchableOpacity style={styles.verifyBtn} onPress={() => { setShowVerifyPopup(false); navigation.navigate('EditProfile'); }}>
               <Text style={styles.verifyBtnText}>Verify Now</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.laterBtn} 
-              onPress={() => setShowVerifyPopup(false)}
-            >
+            <TouchableOpacity style={styles.laterBtn} onPress={() => setShowVerifyPopup(false)}>
               <Text style={styles.laterBtnText}>Maybe Later</Text>
             </TouchableOpacity>
           </View>
@@ -442,150 +261,60 @@ export default function DiscoverScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg, paddingTop: 56, paddingBottom: 12,
-    backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  notificationBtn: { position: 'relative', padding: 4 },
-  badge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: COLORS.orange,
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
-    justifyContent: 'center',
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  contentArea: { flex: 1 },
+  listContainer: { flex: 1 },
+  mapContainer: { flex: 1 },
+  cardsStack: {
+    flex: 1,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.white,
-    paddingHorizontal: 2,
+    justifyContent: 'flex-start',
+    paddingTop: 30, // Start cards from the top area
   },
-  badgeText: {
-    color: COLORS.white,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoEmoji: { fontSize: 24 },
-  logoText: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.text },
-  cardsArea: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingTop: 16, paddingHorizontal: 16,
-  },
-  card: {
-    position: 'absolute', width: CARD_WIDTH, height: H * 0.58,
-    borderRadius: 24, overflow: 'hidden',
-    ...SHADOW.lg,
-  },
-  photoContainer: { flex: 1 },
-  photo: { width: '100%', height: '100%', resizeMode: 'cover' },
-  noPhoto: { backgroundColor: COLORS.tealLight, alignItems: 'center', justifyContent: 'center' },
-  photoOverlay: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: '55%',
-  },
-  prevPhotoZone: { position: 'absolute', left: 0, top: 0, width: '33%', height: '80%' },
-  nextPhotoZone: { position: 'absolute', right: 0, top: 0, width: '67%', height: '80%' },
-  dotRow: {
-    position: 'absolute', top: 10, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'center', gap: 4,
-  },
-  photoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)' },
-  photoDotActive: { backgroundColor: COLORS.white, width: 18 },
-  swipeLabel: { position: 'absolute', padding: 8, borderWidth: 3, borderRadius: 8 },
-  likeLabelPos: { top: 40, left: 20, borderColor: COLORS.teal, transform: [{ rotate: '-15deg' }] },
-  skipLabelPos: { top: 40, right: 20, borderColor: COLORS.error, transform: [{ rotate: '15deg' }] },
-  superLikeLabelPos: { top: 40, alignSelf: 'center', left: '30%', borderColor: COLORS.gold },
-  likeLabel: { fontSize: FONTS.xl, fontWeight: '900', color: COLORS.teal },
-  skipLabel: { fontSize: FONTS.xl, fontWeight: '900', color: COLORS.error },
-  superLikeLabel: { fontSize: FONTS.xl, fontWeight: '900', color: COLORS.gold },
-  verifiedBadge: {
-    position: 'absolute', top: 12, right: 12,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: COLORS.teal, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
-  },
-  verifiedText: { color: COLORS.white, fontSize: FONTS.xs, fontWeight: '700' },
-  cardInfo: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16 },
-  nameRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
-  cardName: { fontSize: FONTS.xxl, fontWeight: '800', color: COLORS.white },
-  cardAge: { fontSize: FONTS.xl, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
-  cardLocation: { fontSize: FONTS.sm, color: 'rgba(255,255,255,0.85)' },
-  interestRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  interestBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: RADIUS.full,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
-  interestBadgeText: { color: COLORS.white, fontSize: FONTS.xs, fontWeight: '600' },
-  travelInfo: { marginBottom: 10, gap: 4 },
-  travelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  travelText: { color: COLORS.white, fontSize: FONTS.sm, fontWeight: '600' },
+
   actions: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    paddingVertical: 16, paddingHorizontal: 40, gap: 20,
-    backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.border,
+    paddingVertical: 24, paddingHorizontal: 40, gap: 20,
+    backgroundColor: 'transparent',
+    position: 'absolute', bottom: 0, left: 0, right: 0,
   },
   actionBtn: {
-    width: 60, height: 60, borderRadius: 30, alignItems: 'center',
-    justifyContent: 'center', backgroundColor: COLORS.white, ...SHADOW.md,
+    width: 66, height: 66, borderRadius: 33, alignItems: 'center',
+    justifyContent: 'center', backgroundColor: theme.card, ...SHADOW.lg,
   },
-  skipBtn: { borderWidth: 2, borderColor: COLORS.error },
-  likeBtn: { borderWidth: 2, borderColor: COLORS.teal },
-  superLikeBtn: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: COLORS.gold },
-  emptyState: { alignItems: 'center', gap: 12 },
-  emptyEmoji: { fontSize: 64 },
-  emptyTitle: { fontSize: FONTS.xl, fontWeight: '700', color: COLORS.text },
-  emptySubtitle: { fontSize: FONTS.sm, color: COLORS.textSecondary, textAlign: 'center' },
-  refreshBtn: {
-    backgroundColor: COLORS.teal, borderRadius: RADIUS.full,
-    paddingHorizontal: 28, paddingVertical: 12,
-  },
-  refreshBtnText: { color: COLORS.white, fontWeight: '700' },
-  matchOverlay: {
-    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)',
-    alignItems: 'center', justifyContent: 'center', zIndex: 100,
-  },
-  matchCard: {
-    width: W - 60, borderRadius: 28, padding: 32, alignItems: 'center', gap: 12,
-  },
-  matchEmoji: { fontSize: 60 },
-  matchTitle: { fontSize: FONTS.xxxl, fontWeight: '900', color: COLORS.white },
-  matchSubtitle: { fontSize: FONTS.base, color: 'rgba(255,255,255,0.85)', textAlign: 'center' },
-  matchChatBtn: {
-    backgroundColor: COLORS.white, borderRadius: RADIUS.full,
-    paddingHorizontal: 28, paddingVertical: 12, marginTop: 8,
-  },
-  matchChatBtnText: { color: COLORS.teal, fontWeight: '800', fontSize: FONTS.base },
-  onlineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.success, borderWidth: 1.5, borderColor: COLORS.white, marginLeft: 4 },
+  skipBtn: { borderWidth: 1, borderColor: theme.error + '40' },
+  likeBtn: { borderWidth: 1, borderColor: theme.teal + '40' },
+  superLikeBtn: { width: 54, height: 54, borderRadius: 27, borderWidth: 1, borderColor: theme.gold + '40' },
 
-  // Verification Popup Styles
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center', alignItems: 'center', padding: 20
-  },
-  verifyPopupCard: {
-    backgroundColor: COLORS.white, borderRadius: 24, padding: 24,
-    width: '100%', alignItems: 'center', ...SHADOW.lg
-  },
-  verifyIconCircle: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: 'rgba(20, 184, 166, 0.1)',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 16
-  },
-  verifyTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, marginBottom: 8 },
-  verifyDesc: { 
-    fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', 
-    lineHeight: 20, marginBottom: 24 
-  },
-  verifyBtn: {
-    backgroundColor: COLORS.teal, width: '100%', paddingVertical: 14,
-    borderRadius: 14, alignItems: 'center', marginBottom: 12
-  },
-  verifyBtnText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyEmoji: { fontSize: 64, marginBottom: 12 },
+  emptyTitle: { fontSize: FONTS.xl, fontWeight: '800', color: theme.text, marginBottom: 8 },
+  emptySubtitle: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  exploreBtn: { backgroundColor: theme.teal, borderRadius: RADIUS.full, paddingHorizontal: 28, paddingVertical: 14, ...SHADOW.md },
+  exploreBtnText: { color: theme.textWhite, fontWeight: '800', fontSize: 15 },
+
+  shimmerContainer: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', padding: 16, paddingTop: 30 },
+  shimmerCard: { width: W - 32, height: H * 0.6, borderRadius: 24, marginBottom: 40 },
+  shimmerActions: { flexDirection: 'row', gap: 20, alignItems: 'center' },
+  shimmerBtn: { width: 66, height: 66, borderRadius: 33 },
+  shimmerBtnSmall: { width: 54, height: 54, borderRadius: 27 },
+
+  matchOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.8)', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  matchCard: { width: W - 60, borderRadius: 28, padding: 32, alignItems: 'center', gap: 12 },
+  matchEmoji: { fontSize: 60 },
+  matchTitle: { fontSize: FONTS.xxxl, fontWeight: '900', color: theme.textWhite },
+  matchSubtitle: { fontSize: 16, color: 'rgba(255,255,255,0.8)', textAlign: 'center' },
+  matchChatBtn: { backgroundColor: theme.white, borderRadius: RADIUS.full, paddingHorizontal: 28, paddingVertical: 12, marginTop: 8 },
+  matchChatBtnText: { color: theme.teal, fontWeight: '800', fontSize: 16 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  verifyPopupCard: { backgroundColor: theme.card, borderRadius: 24, padding: 24, width: '100%', alignItems: 'center', ...SHADOW.lg },
+  verifyIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: theme.tealLight, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  verifyTitle: { fontSize: 20, fontWeight: '800', color: theme.text, marginBottom: 8 },
+  verifyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  verifyBtn: { backgroundColor: theme.teal, width: '100%', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginBottom: 12 },
+  verifyBtnText: { color: theme.textWhite, fontSize: 16, fontWeight: '700' },
   laterBtn: { paddingVertical: 8 },
-  laterBtnText: { color: COLORS.textLight, fontSize: 14, fontWeight: '600' },
+  laterBtnText: { color: theme.textLight, fontSize: 14, fontWeight: '600' },
 });

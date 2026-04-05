@@ -3,6 +3,8 @@ import authReducer from './slices/authSlice';
 import chatReducer from './slices/chatSlice';
 import tripReducer from './slices/tripSlice';
 import notificationReducer from './slices/notificationSlice';
+import themeReducer from './slices/themeSlice';
+import savedReducer from './slices/savedSlice';
 
 const store = configureStore({
   reducer: {
@@ -10,6 +12,8 @@ const store = configureStore({
     chat: chatReducer,
     trip: tripReducer,
     notification: notificationReducer,
+    theme: themeReducer,
+    saved: savedReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Alert, TextInput, Modal, Image, ActivityIndicator, RefreshControl,
+  View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView,
+  Alert, TextInput, Modal, Image, ActivityIndicator, RefreshControl, Platform
 } from 'react-native';
+import KeyboardWrapper from '../components/KeyboardWrapper';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
+import { useAppTheme, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
 import { tripAPI } from '../api/services';
 import { RootState } from '../store';
 
@@ -20,6 +21,8 @@ export default function TripDetailScreen() {
   const nav = useNavigation<any>();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const { user } = useSelector((s: RootState) => s.auth);
   const { tripId } = route.params;
 
@@ -135,7 +138,7 @@ export default function TripDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={COLORS.teal} />
+        <ActivityIndicator size="large" color={theme.teal} />
       </View>
     );
   }
@@ -143,7 +146,7 @@ export default function TripDetailScreen() {
   if (!trip) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: COLORS.textSecondary }}>Trip not found</Text>
+        <Text style={{ color: theme.textSecondary }}>Trip not found</Text>
       </View>
     );
   }
@@ -161,7 +164,7 @@ export default function TripDetailScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
-      <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.header}>
+      <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.header}>
         <TouchableOpacity onPress={() => nav.goBack()} style={{ padding: 4 }}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
@@ -234,8 +237,8 @@ export default function TripDetailScreen() {
                 {getProfilePhoto(m.user) ? (
                   <Image source={{ uri: getProfilePhoto(m.user) }} style={styles.avatarImg} />
                 ) : (
-                  <View style={[styles.avatarImg, { backgroundColor: COLORS.tealLight, alignItems: 'center', justifyContent: 'center' }]}>
-                    <Ionicons name="person" size={20} color={COLORS.teal} />
+                  <View style={[styles.avatarImg, { backgroundColor: theme.tealLight, alignItems: 'center', justifyContent: 'center' }]}>
+                    <Ionicons name="person" size={20} color={theme.teal} />
                   </View>
                 )}
               </View>
@@ -248,7 +251,7 @@ export default function TripDetailScreen() {
               </View>
               {isAdmin && m.role !== 'admin' && (
                 <TouchableOpacity onPress={() => handleRemoveMember(m.user?._id, m.user?.firstName)}>
-                  <Ionicons name="close-circle" size={22} color={COLORS.error} />
+                  <Ionicons name="close-circle" size={22} color={theme.error} />
                 </TouchableOpacity>
               )}
             </View>
@@ -266,8 +269,8 @@ export default function TripDetailScreen() {
                     {getProfilePhoto(req.user) ? (
                       <Image source={{ uri: getProfilePhoto(req.user) }} style={styles.avatarImg} />
                     ) : (
-                      <View style={[styles.avatarImg, { backgroundColor: COLORS.tealLight, alignItems: 'center', justifyContent: 'center' }]}>
-                        <Ionicons name="person" size={20} color={COLORS.teal} />
+                      <View style={[styles.avatarImg, { backgroundColor: theme.tealLight, alignItems: 'center', justifyContent: 'center' }]}>
+                        <Ionicons name="person" size={20} color={theme.teal} />
                       </View>
                     )}
                   </View>
@@ -280,14 +283,14 @@ export default function TripDetailScreen() {
                 </View>
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: COLORS.success }]}
+                    style={[styles.actionBtn, { backgroundColor: theme.success }]}
                     onPress={() => handleMemberAction(req.user?._id, 'accept')}
                   >
                     <Ionicons name="checkmark" size={18} color="#fff" />
                     <Text style={styles.actionBtnText}>Accept</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: COLORS.error }]}
+                    style={[styles.actionBtn, { backgroundColor: theme.error }]}
                     onPress={() => handleMemberAction(req.user?._id, 'reject')}
                   >
                     <Ionicons name="close" size={18} color="#fff" />
@@ -304,7 +307,7 @@ export default function TripDetailScreen() {
           {/* Join button */}
           {!userStatus && (
             <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowJoinModal(true)}>
-              <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.primaryBtnGrad}>
+              <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.primaryBtnGrad}>
                 <Ionicons name="hand-right" size={20} color="#fff" />
                 <Text style={styles.primaryBtnText}>Join This Trip</Text>
               </LinearGradient>
@@ -317,6 +320,19 @@ export default function TripDetailScreen() {
                 ⏳ Your join request is pending...
               </Text>
             </View>
+          )}
+
+          {/* Magic Itinerary button */}
+          {(isMember || isAdmin) && (
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => nav.navigate('AIItinerary', { trip })}
+            >
+              <LinearGradient colors={['#FF6B35', '#FF8A5C']} style={styles.primaryBtnGrad}>
+                <Ionicons name="sparkles" size={20} color="#fff" />
+                <Text style={styles.primaryBtnText}>Magic AI Itinerary ✨</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           )}
 
           {/* Group Chat button */}
@@ -347,12 +363,15 @@ export default function TripDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Join Modal */}
       <Modal visible={showJoinModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
+          <Pressable 
+            style={{ flex: 1 }} 
+            onPress={() => setShowJoinModal(false)}
+          />
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>🙋 Join Trip</Text>
-            <Text style={{ color: COLORS.textSecondary, marginBottom: 12 }}>
+            <Text style={{ color: theme.textSecondary, marginBottom: 12 }}>
               Send a message to the trip creator (optional)
             </Text>
             <TextInput
@@ -362,17 +381,17 @@ export default function TripDetailScreen() {
               onChangeText={setJoinMessage}
               multiline
               maxLength={300}
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={theme.textSecondary}
             />
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
               <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: COLORS.border, flex: 1 }]}
+                style={[styles.modalBtn, { backgroundColor: theme.border, flex: 1 }]}
                 onPress={() => setShowJoinModal(false)}
               >
-                <Text style={[styles.modalBtnText, { color: COLORS.text }]}>Cancel</Text>
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: COLORS.teal, flex: 1 }]}
+                style={[styles.modalBtn, { backgroundColor: theme.teal, flex: 1 }]}
                 onPress={handleJoin}
                 disabled={joining}
               >
@@ -386,8 +405,8 @@ export default function TripDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
@@ -395,54 +414,54 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: FONTS.lg, fontWeight: '800', color: '#fff', flex: 1, marginHorizontal: 12 },
 
   infoCard: {
-    margin: SPACING.md, backgroundColor: COLORS.white,
+    margin: SPACING.md, backgroundColor: theme.card,
     borderRadius: RADIUS.lg, padding: SPACING.md, ...SHADOW.md,
   },
   routeRow: { flexDirection: 'row', alignItems: 'center' },
   modeEmoji: { fontSize: 40 },
-  routeText: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.text },
-  dateText: { fontSize: FONTS.md, color: COLORS.textSecondary, marginTop: 2 },
+  routeText: { fontSize: FONTS.xl, fontWeight: '800', color: theme.text },
+  dateText: { fontSize: FONTS.md, color: theme.textSecondary, marginTop: 2 },
 
   infoGrid: {
     flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, gap: 8,
   },
   infoItem: {
-    width: '47%', backgroundColor: COLORS.background, borderRadius: RADIUS.md,
+    width: '47%', backgroundColor: theme.background, borderRadius: RADIUS.md,
     padding: 10,
   },
-  infoLabel: { fontSize: FONTS.xs, color: COLORS.textLight, fontWeight: '600' },
-  infoValue: { fontSize: FONTS.md, fontWeight: '700', color: COLORS.text, marginTop: 2 },
+  infoLabel: { fontSize: FONTS.xs, color: theme.textSecondary, fontWeight: '600' },
+  infoValue: { fontSize: FONTS.md, fontWeight: '700', color: theme.text, marginTop: 2 },
 
   descBox: {
-    backgroundColor: COLORS.background, borderRadius: RADIUS.md,
+    backgroundColor: theme.background, borderRadius: RADIUS.md,
     padding: 12, marginTop: 12,
   },
-  descText: { fontSize: FONTS.md, color: COLORS.textSecondary, lineHeight: 20 },
+  descText: { fontSize: FONTS.md, color: theme.textSecondary, lineHeight: 20 },
 
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   tagChip: {
-    backgroundColor: COLORS.tealLight, paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: theme.tealLight, paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: RADIUS.full,
   },
-  tagText: { fontSize: FONTS.xs, color: COLORS.tealDark, fontWeight: '600' },
+  tagText: { fontSize: FONTS.xs, color: theme.tealDark, fontWeight: '600' },
 
   section: { marginHorizontal: SPACING.md, marginTop: 8 },
-  sectionTitle: { fontSize: FONTS.lg, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
+  sectionTitle: { fontSize: FONTS.lg, fontWeight: '700', color: theme.text, marginBottom: 12 },
 
   memberRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card,
     borderRadius: RADIUS.md, padding: 12, marginBottom: 8, ...SHADOW.sm,
   },
   avatar: {},
   avatarImg: { width: 40, height: 40, borderRadius: 20 },
-  memberName: { fontSize: FONTS.md, fontWeight: '600', color: COLORS.text },
-  memberMeta: { fontSize: FONTS.sm, color: COLORS.textLight },
+  memberName: { fontSize: FONTS.md, fontWeight: '600', color: theme.text },
+  memberMeta: { fontSize: FONTS.sm, color: theme.textSecondary },
 
   requestCard: {
-    backgroundColor: COLORS.white, borderRadius: RADIUS.md,
+    backgroundColor: theme.card, borderRadius: RADIUS.md,
     padding: 12, marginBottom: 8, ...SHADOW.sm,
   },
-  requestMsg: { fontSize: FONTS.sm, color: COLORS.textSecondary, fontStyle: 'italic', marginTop: 2 },
+  requestMsg: { fontSize: FONTS.sm, color: theme.textSecondary, fontStyle: 'italic', marginTop: 2 },
 
   actionBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -465,23 +484,28 @@ const styles = StyleSheet.create({
 
   dangerBtn: {
     paddingVertical: 14, alignItems: 'center', borderRadius: RADIUS.lg,
-    borderWidth: 1.5, borderColor: COLORS.error,
+    borderWidth: 1.5, borderColor: theme.error,
   },
-  dangerBtnText: { color: COLORS.error, fontWeight: '700', fontSize: FONTS.md },
+  dangerBtnText: { color: theme.error, fontWeight: '700', fontSize: FONTS.md },
 
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContentContainer: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 20,
+    backgroundColor: theme.card, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, paddingBottom: 40,
   },
-  modalTitle: { fontSize: FONTS.xl, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
+  modalTitle: { fontSize: FONTS.xl, fontWeight: '800', color: theme.text, marginBottom: 4 },
   modalInput: {
-    backgroundColor: COLORS.background, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.border,
+    backgroundColor: theme.background, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: theme.border,
     paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: FONTS.md, color: COLORS.text,
+    fontSize: FONTS.md, color: theme.text,
   },
   modalBtn: {
     paddingVertical: 14, borderRadius: RADIUS.lg, alignItems: 'center',

@@ -9,9 +9,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RegisterHeader from '../../components/RegisterHeader';
+import KeyboardWrapper from '../../components/KeyboardWrapper';
 import { userAPI } from '../../api/services';
 import { updateUser, logout } from '../../store/slices/authSlice';
-import { COLORS, FONTS, RADIUS, SPACING } from '../../utils/theme';
+import { useAppTheme, FONTS, RADIUS, SPACING } from '../../utils/theme';
 
 const GENDERS = ['Male', 'Female', 'Non-binary', 'Other', 'Prefer not to say'];
 const PRONOUNS = ['He/Him', 'She/Her', 'They/Them', 'Any'];
@@ -19,6 +20,8 @@ const PRONOUNS = ['He/Him', 'She/Her', 'They/Them', 'Any'];
 export default function Step3PersonalScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const [loading, setLoading] = useState(false);
   const [dob, setDob] = useState('');
   const [gender, setGender] = useState('');
@@ -65,8 +68,10 @@ export default function Step3PersonalScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COLORS.white }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardWrapper 
+      backgroundColor={theme.background} 
+      contentContainerStyle={{ flexGrow: 1 }}
+    >
       <RegisterHeader step={4} totalSteps={8} title="Tell us about yourself" subtitle="Add your personal details" onBack={() => {
           if (navigation.canGoBack()) {
             navigation.goBack();
@@ -82,11 +87,11 @@ export default function Step3PersonalScreen() {
             ]);
           }
         }} />
-      <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+      <View style={styles.form}>
 
         <Text style={styles.label}>Date of Birth</Text>
         <View style={styles.inputWrapper}>
-          <Ionicons name="calendar-outline" size={18} color={COLORS.textLight} style={styles.icon} />
+          <Ionicons name="calendar-outline" size={18} color={theme.textLight} style={styles.icon} />
           <TextInput
             style={styles.input}
             placeholder="DD/MM/YYYY"
@@ -94,7 +99,7 @@ export default function Step3PersonalScreen() {
             onChangeText={formatDob}
             keyboardType="numeric"
             maxLength={10}
-            placeholderTextColor={COLORS.textLight}
+            placeholderTextColor={theme.textLight}
           />
         </View>
 
@@ -125,13 +130,13 @@ export default function Step3PersonalScreen() {
         <Text style={styles.label}>Bio</Text>
         <TextInput
           style={styles.bioInput}
-          placeholder="Tell travelers a bit about yourself... your travel style, favourite trips, what you're looking for in a travel buddy ✈️"
+          placeholder="Tell travelers a bit about yourself..."
           value={bio}
           onChangeText={v => v.length <= 200 && setBio(v)}
           multiline
           numberOfLines={4}
           textAlignVertical="top"
-          placeholderTextColor={COLORS.textLight}
+          placeholderTextColor={theme.textLight}
         />
         <Text style={styles.charCount}>{bio.length}/200</Text>
 
@@ -139,52 +144,52 @@ export default function Step3PersonalScreen() {
           style={[styles.nextBtn, loading && { opacity: 0.7 }]}
           onPress={handleNext} disabled={loading}
         >
-          <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.nextBtnGrad}
+          <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.nextBtnGrad}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            {loading ? <ActivityIndicator color={COLORS.white} /> : (
+            {loading ? <ActivityIndicator color={theme.textWhite} /> : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.nextBtnText}>Continue</Text>
-                <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+                <Ionicons name="arrow-forward" size={20} color={theme.textWhite} />
               </View>
             )}
           </LinearGradient>
         </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </KeyboardWrapper>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   form: { padding: SPACING.lg, paddingBottom: 40 },
   label: {
-    fontSize: FONTS.xs, fontWeight: '700', color: COLORS.textSecondary,
+    fontSize: FONTS.xs, fontWeight: '700', color: theme.textSecondary,
     marginBottom: 8, marginTop: 16, textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  optional: { fontWeight: '400', textTransform: 'none', fontSize: FONTS.xs, color: COLORS.textLight },
+  optional: { fontWeight: '400', textTransform: 'none', fontSize: FONTS.xs, color: theme.textLight },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.background, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.border,
+    backgroundColor: theme.card, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: theme.border,
     paddingHorizontal: 12, paddingVertical: 12,
   },
   icon: { marginRight: 8 },
-  input: { flex: 1, fontSize: FONTS.base, color: COLORS.text },
+  input: { flex: 1, fontSize: FONTS.base, color: theme.text },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.full,
-    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.white,
+    borderWidth: 1.5, borderColor: theme.border, backgroundColor: theme.card,
   },
-  chipActive: { backgroundColor: COLORS.teal, borderColor: COLORS.teal },
-  chipText: { fontSize: FONTS.sm, color: COLORS.textSecondary, fontWeight: '500' },
-  chipTextActive: { color: COLORS.white, fontWeight: '700' },
+  chipActive: { backgroundColor: theme.teal, borderColor: theme.teal },
+  chipText: { fontSize: FONTS.sm, color: theme.textSecondary, fontWeight: '500' },
+  chipTextActive: { color: theme.textWhite, fontWeight: '700' },
   bioInput: {
-    backgroundColor: COLORS.background, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.border,
-    padding: 14, fontSize: FONTS.base, color: COLORS.text,
+    backgroundColor: theme.card, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: theme.border,
+    padding: 14, fontSize: FONTS.base, color: theme.text,
     minHeight: 110, lineHeight: 22,
   },
-  charCount: { fontSize: FONTS.xs, color: COLORS.textLight, textAlign: 'right', marginTop: 4 },
+  charCount: { fontSize: FONTS.xs, color: theme.textLight, textAlign: 'right', marginTop: 4 },
   nextBtn: { borderRadius: RADIUS.full, overflow: 'hidden', marginTop: 28 },
   nextBtnGrad: { paddingVertical: 16, alignItems: 'center' },
-  nextBtnText: { color: COLORS.white, fontSize: FONTS.lg, fontWeight: '700' },
+  nextBtnText: { color: theme.textWhite, fontSize: FONTS.lg, fontWeight: '700' },
 });

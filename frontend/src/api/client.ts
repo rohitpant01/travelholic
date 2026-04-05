@@ -12,9 +12,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //   Local (Expo simulator): 'http://localhost:5000/api'
 //   Production (Render):    'https://travelholic-api.onrender.com/api'
 // ================================================================
-export const API_BASE_URL = 'http://10.147.61.2:5001/api';
+export const API_BASE_URL = 'http://10.62.246.2:5001/api';
 // Use 'http://localhost:5000/api' for iOS Simulator
-// Use 'http://10.147.61.2:5001/api' for physical device (your PC IP)
+// Use 'http://10.62.246.2:5001/api' for physical device (your PC IP)
 // ⚠️ IMPORTANT: For the APK to work, your PC and Phone MUST be on the same WiFi!
 
 // ================================================================
@@ -26,7 +26,7 @@ export const API_BASE_URL = 'http://10.147.61.2:5001/api';
 // ================================================================
 //   "ios" > "config" > "googleMapsApiKey"
 // ================================================================
-export const GOOGLE_MAPS_API_KEY = 'AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY';
+export const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 export const GOOGLE_WEB_CLIENT_ID = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
 export const GOOGLE_ANDROID_CLIENT_ID = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com';
 export const GOOGLE_IOS_CLIENT_ID = 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com';
@@ -69,7 +69,6 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor: handle 401s globally
 apiClient.interceptors.response.use(
   (response) => {
     console.log(`[API RESPONSE] ${response.status} from ${response.config.url}`);
@@ -77,19 +76,27 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     console.warn(`[API ERROR] ${error.message} on ${error.config?.url}`);
-    if (error.config) {
-      console.log('Error Config:', {
-        url: error.config.url,
-        method: error.config.method,
-        headers: error.config.headers,
-        data: error.config.data ? 'Present' : 'Missing',
+    
+    // Fallback System for Place Discovery (Zero-Empty Screen)
+    if (error.response?.status === 404 && error.config?.url?.includes('/places/search')) {
+      console.log('[INTERCEPTOR] 404 caught. Returning curated fallback places.');
+      return Promise.resolve({
+        data: {
+          success: true,
+          isFallback: true,
+          locationName: 'Trending Worldwide',
+          results: {
+            romantic: [{ id: 'fb1', name: 'Curated Romantic View', address: 'Trending Spots', rating: 4.8, distanceText: 'Worldwide', types: ['tourist_attraction'], whyThisPlace: 'Trending spot for couples ✨', location: { lat: 0, lng: 0 } }],
+            nature: [{ id: 'fb2', name: 'Curated Natural Escape', address: 'Trending Outdoors', rating: 4.7, distanceText: 'Worldwide', types: ['park'], whyThisPlace: 'Reconnect with nature 🌿', location: { lat: 0, lng: 0 } }],
+            restaurants: [{ id: 'fb3', name: 'Curated Dining Experience', address: 'Trending Culinary', rating: 4.9, distanceText: 'Worldwide', types: ['restaurant'], whyThisPlace: 'Top culinary experience 🍽️', location: { lat: 0, lng: 0 } }],
+            cafes: [],
+            hotels: [],
+            hidden_gems: []
+          }
+        }
       });
     }
-    if (error.response) {
-      console.error('Error Response:', error.response.status, error.response.data);
-    } else if (error.request) {
-      console.error('Error Request: No response received');
-    }
+
     if (error.response?.status === 401) {
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('user');

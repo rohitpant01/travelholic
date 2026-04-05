@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "TravelHolic",
+    "name": "EkalGo",
     "slug": "travelholic",
     "version": "1.0.0",
-    "scheme": "travelholic",
+    "scheme": "ekalgo",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
@@ -23,10 +23,10 @@
         "googleMapsApiKey": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY"
       },
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "TravelHolic uses your location to show nearby travelers.",
-        "NSLocationAlwaysUsageDescription": "TravelHolic uses your location to show nearby travelers.",
-        "NSCameraUsageDescription": "TravelHolic uses the camera for photo verification selfies.",
-        "NSPhotoLibraryUsageDescription": "TravelHolic uses your photo library for profile and travel photos."
+        "NSLocationWhenInUseUsageDescription": "EkalGo uses your location to show nearby travelers.",
+        "NSLocationAlwaysUsageDescription": "EkalGo uses your location to show nearby travelers.",
+        "NSCameraUsageDescription": "EkalGo uses the camera for photo verification selfies.",
+        "NSPhotoLibraryUsageDescription": "EkalGo uses your photo library for profile and travel photos."
       }
     },
     "android": {
@@ -43,6 +43,8 @@
         }
       },
       "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.CAMERA",
@@ -58,21 +60,21 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow TravelHolic to use your location to find nearby travelers."
+          "locationAlwaysAndWhenInUsePermission": "Allow EkalGo to use your location to find nearby travelers."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow TravelHolic to access your photos.",
-          "cameraPermission": "Allow TravelHolic to use your camera for verification."
+          "photosPermission": "Allow EkalGo to access your photos.",
+          "cameraPermission": "Allow EkalGo to use your camera for verification."
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow TravelHolic to save photos to your library.",
-          "savePhotosPermission": "Allow TravelHolic to save photos to your library."
+          "photosPermission": "Allow EkalGo to save photos to your library.",
+          "savePhotosPermission": "Allow EkalGo to save photos to your library."
         }
       ],
       "expo-font",

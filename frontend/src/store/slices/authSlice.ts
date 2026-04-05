@@ -8,7 +8,9 @@ interface User {
   email: string;
   phone: string;
   age?: number;
+  dob?: string;
   gender?: string;
+  pronouns?: string;
   bio?: string;
   city?: string;
   country?: string;
@@ -21,6 +23,15 @@ interface User {
   languages?: string[];
   lookingFor?: string[];
   location?: any;
+  origin?: {
+    city: string;
+    location: { type: 'Point'; coordinates: number[] };
+  };
+  destination?: {
+    city: string;
+    location: { type: 'Point'; coordinates: number[] };
+  };
+  travelDate?: string;
   isPhoneVerified: boolean;
   isEmailVerified: boolean;
   isPhotoVerified: boolean;
@@ -32,6 +43,8 @@ interface User {
   completedTrips?: any[];
   maxDiscoveryDistance?: number;
   authProvider?: string;
+  googleId?: string;
+  savedDestinations?: any[];
 }
 
 interface AuthState {

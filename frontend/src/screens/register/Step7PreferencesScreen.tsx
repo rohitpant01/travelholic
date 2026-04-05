@@ -10,9 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RegisterHeader from '../../components/RegisterHeader';
+import KeyboardWrapper from '../../components/KeyboardWrapper';
 import { userAPI } from '../../api/services';
 import { updateUser, logout } from '../../store/slices/authSlice';
-import { COLORS, FONTS, RADIUS, SPACING } from '../../utils/theme';
+import { useAppTheme, FONTS, RADIUS, SPACING } from '../../utils/theme';
 
 const LOOKING_FOR = [
   { label: 'Travel Buddy', emoji: '👫', desc: 'Someone to explore with' },
@@ -28,6 +29,8 @@ const DURATIONS = ['Weekend', '1-2 weeks', '1 month', 'Long-term', 'Any'];
 export default function Step7PreferencesScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const [loading, setLoading] = useState(false);
   const [lookingFor, setLookingFor] = useState<string[]>([]);
   const [preferredGender, setPreferredGender] = useState('Any');
@@ -66,7 +69,10 @@ export default function Step7PreferencesScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+    <KeyboardWrapper 
+      backgroundColor={theme.background} 
+      contentContainerStyle={{ flexGrow: 1 }}
+    >
       <RegisterHeader step={8} totalSteps={8} title="Travel Preferences"
         subtitle="Find your perfect travel match" onBack={() => {
           if (navigation.canGoBack()) {
@@ -83,7 +89,7 @@ export default function Step7PreferencesScreen() {
             ]);
           }
         }} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.content}>
 
         <Text style={styles.sectionTitle}>I'm Looking For</Text>
         <View style={styles.lookingGrid}>
@@ -100,7 +106,7 @@ export default function Step7PreferencesScreen() {
                 <Text style={[styles.lookingDesc, selected && styles.lookingDescActive]}>{desc}</Text>
                 {selected && (
                   <View style={styles.checkBadge}>
-                    <Ionicons name="checkmark" size={12} color={COLORS.white} />
+                    <Ionicons name="checkmark" size={12} color={theme.textWhite} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -130,9 +136,9 @@ export default function Step7PreferencesScreen() {
             minimumValue={18} maximumValue={ageRange[1] - 1} step={1}
             value={ageRange[0]}
             onValueChange={v => setAgeRange([Math.round(v), ageRange[1]])}
-            minimumTrackTintColor={COLORS.teal}
-            maximumTrackTintColor={COLORS.border}
-            thumbTintColor={COLORS.teal}
+            minimumTrackTintColor={theme.teal}
+            maximumTrackTintColor={theme.border}
+            thumbTintColor={theme.teal}
           />
           <Text style={styles.sliderLabel}>Max Age: {ageRange[1]}</Text>
           <Slider
@@ -140,9 +146,9 @@ export default function Step7PreferencesScreen() {
             minimumValue={ageRange[0] + 1} maximumValue={75} step={1}
             value={ageRange[1]}
             onValueChange={v => setAgeRange([ageRange[0], Math.round(v)])}
-            minimumTrackTintColor={COLORS.teal}
-            maximumTrackTintColor={COLORS.border}
-            thumbTintColor={COLORS.teal}
+            minimumTrackTintColor={theme.teal}
+            maximumTrackTintColor={theme.border}
+            thumbTintColor={theme.teal}
           />
         </View>
 
@@ -174,53 +180,53 @@ export default function Step7PreferencesScreen() {
           style={[styles.finishBtn, loading && { opacity: 0.7 }]}
           onPress={handleFinish} disabled={loading}
         >
-          <LinearGradient colors={[COLORS.orange, '#FF8C5A']} style={styles.finishBtnGrad}
+          <LinearGradient colors={[theme.orange, '#FF8C5A']} style={styles.finishBtnGrad}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            {loading ? <ActivityIndicator color={COLORS.white} /> : (
+            {loading ? <ActivityIndicator color={theme.textWhite} /> : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.finishBtnText}>Complete Profile 🎉</Text>
               </View>
             )}
           </LinearGradient>
         </TouchableOpacity>
-      </ScrollView>
-    </View>
+      </View>
+    </KeyboardWrapper>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   content: { padding: SPACING.lg, paddingBottom: 48 },
-  sectionTitle: { fontSize: FONTS.base, fontWeight: '700', color: COLORS.text, marginBottom: 12 },
+  sectionTitle: { fontSize: FONTS.base, fontWeight: '700', color: theme.text, marginBottom: 12 },
   lookingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   lookingCard: {
     width: '47%', padding: 14, borderRadius: RADIUS.lg,
-    borderWidth: 2, borderColor: COLORS.border,
-    backgroundColor: COLORS.white, alignItems: 'center',
+    borderWidth: 2, borderColor: theme.border,
+    backgroundColor: theme.card, alignItems: 'center',
     position: 'relative',
   },
-  lookingCardActive: { borderColor: COLORS.teal, backgroundColor: COLORS.tealLight },
+  lookingCardActive: { borderColor: theme.teal, backgroundColor: theme.tealLight },
   lookingEmoji: { fontSize: 28, marginBottom: 6 },
-  lookingLabel: { fontSize: FONTS.sm, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
-  lookingLabelActive: { color: COLORS.teal },
-  lookingDesc: { fontSize: FONTS.xs, color: COLORS.textLight, textAlign: 'center', marginTop: 2 },
-  lookingDescActive: { color: COLORS.teal },
+  lookingLabel: { fontSize: FONTS.sm, fontWeight: '700', color: theme.text, textAlign: 'center' },
+  lookingLabelActive: { color: theme.teal },
+  lookingDesc: { fontSize: FONTS.xs, color: theme.textLight, textAlign: 'center', marginTop: 2 },
+  lookingDescActive: { color: theme.teal },
   checkBadge: {
     position: 'absolute', top: 8, right: 8,
     width: 18, height: 18, borderRadius: 9,
-    backgroundColor: COLORS.teal, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.teal, alignItems: 'center', justifyContent: 'center',
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.full,
-    borderWidth: 1.5, borderColor: COLORS.border,
+    borderWidth: 1.5, borderColor: theme.border, backgroundColor: theme.card,
   },
-  chipActive: { backgroundColor: COLORS.teal, borderColor: COLORS.teal },
-  chipText: { fontSize: FONTS.sm, color: COLORS.textSecondary },
-  chipTextActive: { color: COLORS.white, fontWeight: '700' },
+  chipActive: { backgroundColor: theme.teal, borderColor: theme.teal },
+  chipText: { fontSize: FONTS.sm, color: theme.textSecondary },
+  chipTextActive: { color: theme.textWhite, fontWeight: '700' },
   sliderContainer: { gap: 4 },
-  sliderLabel: { fontSize: FONTS.sm, color: COLORS.textSecondary },
+  sliderLabel: { fontSize: FONTS.sm, color: theme.textSecondary },
   slider: { width: '100%', height: 40 },
   finishBtn: { borderRadius: RADIUS.full, overflow: 'hidden', marginTop: 32 },
   finishBtnGrad: { paddingVertical: 18, alignItems: 'center' },
-  finishBtnText: { color: COLORS.white, fontSize: FONTS.lg, fontWeight: '800', letterSpacing: 0.3 },
+  finishBtnText: { color: theme.textWhite, fontSize: FONTS.lg, fontWeight: '800', letterSpacing: 0.3 },
 });

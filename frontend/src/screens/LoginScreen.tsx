@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput,
-  KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, Alert, ActivityIndicator, Image } from 'react-native';
+import KeyboardWrapper from '../components/KeyboardWrapper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { authAPI } from '../api/services';
+import { authAPI, userAPI } from '../api/services';
 import { setUser, setToken } from '../store/slices/authSlice';
+import { setSavedDestinations } from '../store/slices/savedSlice';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
 import apiClient from '../api/client';
 import GoogleSignInButton from '../components/GoogleSignInButton';
+import { getLocalBucketList, clearLocalBucketList } from '../utils/bucketListUtils';
 
 
 export default function LoginScreen() {
@@ -39,11 +39,27 @@ export default function LoginScreen() {
     try {
       const res = await authAPI.login({ emailOrPhone: finalIdentifier, password });
       const { token, user } = res.data;
+      
       await AsyncStorage.setItem('token', token);
       await AsyncStorage.setItem('user', JSON.stringify(user));
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      // Sync local bucket list
+      const localItems = await getLocalBucketList();
+      if (localItems.length > 0) {
+        try {
+          await userAPI.syncSavedDestinations(localItems);
+          await clearLocalBucketList();
+        } catch (syncError) {
+          console.warn('Bucket list sync failed:', syncError);
+        }
+      }
+
       dispatch(setToken(token));
       dispatch(setUser(user));
+      if (user.savedDestinations) {
+        dispatch(setSavedDestinations(user.savedDestinations));
+      }
     } catch (error: any) {
       Alert.alert('Login Failed', error.response?.data?.error || 'Something went wrong');
     } finally {
@@ -53,9 +69,9 @@ export default function LoginScreen() {
 
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <KeyboardWrapper 
+      backgroundColor={COLORS.white}
+      contentContainerStyle={{ flexGrow: 1 }}
     >
       <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => {
@@ -67,11 +83,16 @@ export default function LoginScreen() {
         }}>
           <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Welcome Back ✈️</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+          <Image source={require('../../assets/logo.png')} style={{ width: 40, height: 40, borderRadius: 10, marginRight: 12 }} />
+          <Text style={styles.headerTitle}>
+            EKAL<Text style={{ color: '#F7A731' }}>GO</Text>
+          </Text>
+        </View>
         <Text style={styles.headerSubtitle}>Sign in to continue your journey</Text>
       </LinearGradient>
 
-      <ScrollView style={styles.form} keyboardShouldPersistTaps="handled">
+      <View style={styles.form}>
         <Text style={styles.label}>Email or Mobile Number</Text>
         <View style={styles.inputWrapper}>
           <Ionicons name="mail-outline" size={20} color={COLORS.textLight} style={styles.icon} />
@@ -132,7 +153,7 @@ export default function LoginScreen() {
 
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>New to TravelHolic?</Text>
+          <Text style={styles.dividerText}>New to EkalGo?</Text>
           <View style={styles.dividerLine} />
         </View>
 
@@ -153,8 +174,8 @@ export default function LoginScreen() {
           <GoogleSignInButton title="Sign in with Google" />
         </View>
 
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </KeyboardWrapper>
   );
 }
 

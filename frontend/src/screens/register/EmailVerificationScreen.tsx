@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   Alert, ActivityIndicator, Keyboard, Image
 } from 'react-native';
+import KeyboardWrapper from '../../components/KeyboardWrapper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,12 +12,14 @@ import RegisterHeader from '../../components/RegisterHeader';
 import { authAPI } from '../../api/services';
 import { updateUser, logout } from '../../store/slices/authSlice';
 import { RootState } from '../../store';
-import { COLORS, FONTS, RADIUS, SPACING } from '../../utils/theme';
+import { useAppTheme, FONTS, RADIUS, SPACING } from '../../utils/theme';
 
 export default function EmailVerificationScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const dispatch = useDispatch();
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   
   const { email, userId } = route.params || {};
   
@@ -49,12 +52,12 @@ export default function EmailVerificationScreen() {
       console.log(`[EMAIL VERIFY] Attempting verification for ${email}, code: ${code}`);
       const res = await authAPI.verifyEmailOTP(email, code, userId);
       
-      console.log('[EMAIL VERIFY] Success! Auto-advancing to Phone Verification.');
+      console.log('[EMAIL VERIFY] Success! Advancing to onboarding.');
       
-      // Update local state to reflect email verification
-      dispatch(updateUser({ isEmailVerified: true, registrationStep: 3 }));
+      // Update local state — phone OTP is disabled, go straight to step 4
+      dispatch(updateUser({ isEmailVerified: true, isPhoneVerified: true, registrationStep: 4 }));
       
-      console.log('[EMAIL VERIFY] Success! Root Navigator will handle redirection back to Phone verification.');
+      console.log('[EMAIL VERIFY] Success! Root Navigator will handle redirection to Personal Details.');
     } catch (error: any) {
       console.error('[EMAIL VERIFY] Error:', error.response?.data || error.message);
       Alert.alert('Verification Failed', error.response?.data?.error || 'Invalid code');
@@ -76,7 +79,7 @@ export default function EmailVerificationScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <RegisterHeader
         step={2} totalSteps={8}
         title="Verify Email" subtitle="Enter the code sent to your email"
@@ -93,7 +96,7 @@ export default function EmailVerificationScreen() {
         }}
       />
       
-      <View style={styles.content}>
+      <KeyboardWrapper backgroundColor={theme.background} contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <Text style={styles.emoji}>📧</Text>
           <Text style={styles.title}>Check your Inbox</Text>
@@ -114,7 +117,8 @@ export default function EmailVerificationScreen() {
               keyboardType="numeric"
               maxLength={1}
               textAlign="center"
-              selectionColor={COLORS.teal}
+              selectionColor={theme.teal}
+              placeholderTextColor={theme.textLight}
             />
           ))}
         </View>
@@ -124,9 +128,9 @@ export default function EmailVerificationScreen() {
           onPress={handleVerify}
           disabled={loading}
         >
-          <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.verifyBtnGrad}
+          <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.verifyBtnGrad}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            {loading ? <ActivityIndicator color={COLORS.white} /> : (
+            {loading ? <ActivityIndicator color={theme.textWhite} /> : (
               <Text style={styles.verifyBtnText}>Verify Email ✓</Text>
             )}
           </LinearGradient>
@@ -142,39 +146,39 @@ export default function EmailVerificationScreen() {
         </View>
         
         <Text style={styles.tip}>Tip: Please check your Spam or Promotions folder if you don't see it in your primary inbox.</Text>
-      </View>
+      </KeyboardWrapper>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   content: { flex: 1, padding: SPACING.lg },
   card: {
-    backgroundColor: '#F0F9FF', borderRadius: 20,
+    backgroundColor: theme.mode === 'dark' ? 'rgba(0, 128, 128, 0.1)' : '#F0F9FF', borderRadius: 20,
     padding: 24, alignItems: 'center', marginBottom: 32,
-    borderWidth: 1, borderColor: '#BAE6FD',
+    borderWidth: 1, borderColor: theme.mode === 'dark' ? theme.teal + '40' : '#BAE6FD',
   },
   emoji: { fontSize: 40, marginBottom: 12 },
-  title: { fontSize: FONTS.lg, fontWeight: '700', color: '#0369A1', marginBottom: 8 },
-  text: { fontSize: FONTS.md, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
-  emailText: { fontWeight: '700', color: COLORS.text },
+  title: { fontSize: FONTS.lg, fontWeight: '700', color: theme.mode === 'dark' ? theme.teal : '#0369A1', marginBottom: 8 },
+  text: { fontSize: FONTS.md, color: theme.textSecondary, textAlign: 'center', lineHeight: 22 },
+  emailText: { fontWeight: '700', color: theme.text },
   otpRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 32 },
   otpInput: {
     width: 48, height: 56, borderRadius: 12,
-    borderWidth: 2, borderColor: COLORS.border,
-    fontSize: FONTS.xl, fontWeight: '700', color: COLORS.text,
-    backgroundColor: COLORS.background,
+    borderWidth: 2, borderColor: theme.border,
+    fontSize: FONTS.xl, fontWeight: '700', color: theme.text,
+    backgroundColor: theme.card,
   },
-  otpInputFilled: { borderColor: COLORS.teal, backgroundColor: COLORS.tealLight },
+  otpInputFilled: { borderColor: theme.teal, backgroundColor: theme.tealLight },
   verifyBtn: { borderRadius: RADIUS.full, overflow: 'hidden', marginBottom: 20 },
   verifyBtnGrad: { paddingVertical: 16, alignItems: 'center' },
-  verifyBtnText: { color: COLORS.white, fontSize: FONTS.lg, fontWeight: '700' },
+  verifyBtnText: { color: theme.textWhite, fontSize: FONTS.lg, fontWeight: '700' },
   resendRow: { alignItems: 'center', gap: 6 },
-  resendLabel: { fontSize: FONTS.sm, color: COLORS.textSecondary },
-  resendBtn: { fontSize: FONTS.sm, fontWeight: '700', color: COLORS.teal },
-  resendDisabled: { color: COLORS.textLight },
+  resendLabel: { fontSize: FONTS.sm, color: theme.textSecondary },
+  resendBtn: { fontSize: FONTS.sm, fontWeight: '700', color: theme.teal },
+  resendDisabled: { color: theme.textLight },
   tip: {
-    marginTop: 40, textAlign: 'center', fontSize: 12, color: COLORS.textLight,
+    marginTop: 40, textAlign: 'center', fontSize: 12, color: theme.textLight,
     paddingHorizontal: 20, lineHeight: 18
   }
 });

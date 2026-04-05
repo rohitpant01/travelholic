@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONTS, SPACING } from '../utils/theme';
+import { useAppTheme, FONTS, SPACING } from '../utils/theme';
 
 interface Props {
   step: number;
@@ -13,14 +13,16 @@ interface Props {
 }
 
 export default function RegisterHeader({ step, totalSteps, title, subtitle, onBack }: Props) {
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const progress = step / totalSteps;
 
   return (
-    <LinearGradient colors={[COLORS.teal, COLORS.tealDark]} style={styles.container}>
+    <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.container}>
       <View style={styles.topRow}>
         {onBack ? (
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+            <Ionicons name="arrow-back" size={24} color={theme.textWhite} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 40 }} />
@@ -39,7 +41,7 @@ export default function RegisterHeader({ step, totalSteps, title, subtitle, onBa
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   container: {
     paddingTop: 56, paddingBottom: 28, paddingHorizontal: SPACING.lg,
   },
@@ -56,10 +58,10 @@ const styles = StyleSheet.create({
     borderRadius: 2, marginBottom: 20, overflow: 'hidden',
   },
   progressFill: {
-    height: '100%', backgroundColor: COLORS.white, borderRadius: 2,
+    height: '100%', backgroundColor: theme.textWhite, borderRadius: 2,
   },
   title: {
-    fontSize: FONTS.xxl, fontWeight: '800', color: COLORS.white, marginBottom: 4,
+    fontSize: FONTS.xxl, fontWeight: '800', color: theme.textWhite, marginBottom: 4,
   },
   subtitle: {
     fontSize: FONTS.md, color: 'rgba(255,255,255,0.75)',

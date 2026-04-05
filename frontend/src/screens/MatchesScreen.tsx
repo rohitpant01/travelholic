@@ -10,7 +10,7 @@ import { matchAPI, userAPI, tripAPI, chatAPI } from '../api/services';
 import { setUnreadCounts, setMatches, setActiveChat } from '../store/slices/chatSlice';
 import { updateUser } from '../store/slices/authSlice';
 import { RootState } from '../store';
-import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
+import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import { Modal, Pressable, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { togglePin, toggleMute, removeMatch, clearUnreadForMatch } from '../store/slices/chatSlice';
@@ -39,6 +39,8 @@ interface Match {
 }
 
 export default function MatchesScreen() {
+  const theme = useAppTheme();
+  const styles = getStyles(theme);
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
   const currentUserId = useSelector((s: RootState) => s.auth.user?._id);
@@ -157,7 +159,7 @@ export default function MatchesScreen() {
         activeOpacity={0.8}
       >
         <View style={styles.likedBannerIcon}>
-          <Ionicons name="heart" size={28} color="#fff" />
+          <Ionicons name="heart" size={28} color={theme.textWhite} />
         </View>
         <View style={styles.likedBannerText}>
           <Text style={styles.likedBannerTitle}>
@@ -173,7 +175,7 @@ export default function MatchesScreen() {
               {likesReceived > 99 ? '99+' : likesReceived}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.8)" />
+          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
         </View>
       </TouchableOpacity>
     );
@@ -186,7 +188,7 @@ export default function MatchesScreen() {
       <TouchableOpacity
         style={[
           styles.matchItem,
-          selectedMatch?.matchId === item.matchId && { backgroundColor: COLORS.borderLight }
+          selectedMatch?.matchId === item.matchId && { backgroundColor: theme.border }
         ]}
         onPress={() => {
           // Clear unread locally + in DB
@@ -223,18 +225,25 @@ export default function MatchesScreen() {
             item.user.profilePhoto ? (
               <Image source={{ uri: item.user.profilePhoto }} style={styles.avatar} />
             ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: '#EDE7F6' }]}>
+              <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: theme.mode === 'dark' ? '#2D1B3D' : '#EDE7F6' }]}>
                 <Text style={styles.avatarEmoji}>{item.tripData?.mode === 'flight' ? '✈️' : item.tripData?.mode === 'train' ? '🚂' : '🎒'}</Text>
               </View>
             )
-          ) : item.user.profilePhoto ? (
-            <Image source={{ uri: item.user.profilePhoto }} style={styles.avatar} />
           ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarEmoji}>👤</Text>
-            </View>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('UserDetail', { userId: item.user._id })}
+              activeOpacity={0.9}
+            >
+              {item.user.profilePhoto ? (
+                <Image source={{ uri: item.user.profilePhoto }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarEmoji}>👤</Text>
+                </View>
+              )}
+              {item.user.isOnline && <View style={styles.onlineDot} />}
+            </TouchableOpacity>
           )}
-          {!isTrip && item.user.isOnline && <View style={styles.onlineDot} />}
         </View>
         <View style={styles.matchInfo}>
           <View style={styles.matchRow}>
@@ -245,13 +254,13 @@ export default function MatchesScreen() {
                   <Text style={styles.groupBadgeText}>Group</Text>
                 </View>
               )}
-              {!isTrip && item.user.isPhotoVerified && (
-                <Ionicons name="checkmark-circle" size={14} color={COLORS.teal} />
+               {!isTrip && item.user.isPhotoVerified && (
+                <Ionicons name="checkmark-circle" size={14} color={theme.teal} />
               )}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              {(item.muted || item.isMuted) && <Ionicons name="notifications-off" size={12} color={COLORS.textLight} />}
-              {(item.pinned || item.isPinned) && <Ionicons name="pin" size={12} color={COLORS.teal} />}
+              {(item.muted || item.isMuted) && <Ionicons name="notifications-off" size={12} color={theme.textSecondary} />}
+              {(item.pinned || item.isPinned) && <Ionicons name="pin" size={12} color={theme.teal} />}
               <Text style={styles.matchTime}>
                 {formatTime(item.lastMessage?.sentAt || item.matchedAt)}
               </Text>
@@ -259,11 +268,11 @@ export default function MatchesScreen() {
           </View>
 
           {isTrip ? (
-            <Text style={[styles.lastMessage, { color: COLORS.teal, fontWeight: '600' }]} numberOfLines={1}>
+            <Text style={[styles.lastMessage, { color: theme.teal, fontWeight: '600' }]} numberOfLines={1}>
               {item.tripData?.membersCount} members · {new Date(item.tripData?.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
             </Text>
           ) : item.user.city ? (
-            <Text style={[styles.lastMessage, { color: COLORS.textLight, fontSize: 13 }]} numberOfLines={1}>
+            <Text style={[styles.lastMessage, { color: theme.textSecondary, fontSize: 13 }]} numberOfLines={1}>
               📍 {item.user.city}{item.user.country ? `, ${item.user.country}` : ''}
               {item.distanceKm != null ? ` · ${item.distanceKm} km away` : ''}
             </Text>
@@ -298,6 +307,7 @@ export default function MatchesScreen() {
     const matchId = selectedMatch.matchId;
     const isTrip = selectedMatch.type === 'group';
 
+    setSelectedMatch(null);
     setIsSheetVisible(false);
 
     try {
@@ -330,7 +340,7 @@ export default function MatchesScreen() {
 
   if (loading) return (
     <View style={styles.loader}>
-      <ActivityIndicator size="large" color={COLORS.teal} />
+      <ActivityIndicator size="large" color={theme.teal} />
     </View>
   );
 
@@ -354,7 +364,7 @@ export default function MatchesScreen() {
                setLoading(true); // show loader for full refresh
                fetchAllChats(true);
             }}
-            tintColor={COLORS.teal}
+            tintColor={theme.teal}
           />
         }
         ListHeaderComponent={renderWhoLikedMeBanner}
@@ -380,11 +390,17 @@ export default function MatchesScreen() {
         visible={isSheetVisible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setIsSheetVisible(false)}
+        onRequestClose={() => {
+          setIsSheetVisible(false);
+          setSelectedMatch(null);
+        }}
       >
         <Pressable 
           style={styles.modalBackdrop} 
-          onPress={() => setIsSheetVisible(false)}
+          onPress={() => {
+            setIsSheetVisible(false);
+            setSelectedMatch(null);
+          }}
         >
           <View style={styles.modalContent}>
             <View style={styles.sheetHeader}>
@@ -399,11 +415,11 @@ export default function MatchesScreen() {
                 style={styles.sheetItem} 
                 onPress={() => handleAction('pin')}
               >
-                <View style={[styles.sheetIcon, { backgroundColor: '#E3F2FD' }]}>
+                <View style={[styles.sheetIcon, { backgroundColor: theme.mode === 'dark' ? '#1A2E41' : '#E3F2FD' }]}>
                   <Ionicons 
                     name={(selectedMatch?.pinned || selectedMatch?.isPinned) ? "push" : "push-outline"} 
                     size={20} 
-                    color="#1976D2" 
+                    color={theme.mode === 'dark' ? '#64B5F6' : '#1976D2'} 
                   />
                 </View>
                 <Text style={styles.sheetItemText}>
@@ -415,11 +431,11 @@ export default function MatchesScreen() {
                 style={styles.sheetItem} 
                 onPress={() => handleAction('mute')}
               >
-                <View style={[styles.sheetIcon, { backgroundColor: '#F5F5F5' }]}>
+                <View style={[styles.sheetIcon, { backgroundColor: theme.mode === 'dark' ? '#2A2A2A' : '#F5F5F5' }]}>
                   <Ionicons 
                     name={(selectedMatch?.muted || selectedMatch?.isMuted) ? "notifications-off" : "notifications"} 
                     size={20} 
-                    color="#424242" 
+                    color={theme.mode === 'dark' ? '#9E9E9E' : '#424242'} 
                   />
                 </View>
                 <Text style={styles.sheetItemText}>
@@ -435,8 +451,8 @@ export default function MatchesScreen() {
                     navigation.navigate('GroupDetails', { tripId: selectedMatch.matchId });
                   }}
                 >
-                  <View style={[styles.sheetIcon, { backgroundColor: '#E0F2F1' }]}>
-                    <Ionicons name="information-circle" size={20} color="#00796B" />
+                  <View style={[styles.sheetIcon, { backgroundColor: theme.mode === 'dark' ? '#1A3331' : '#E0F2F1' }]}>
+                    <Ionicons name="information-circle" size={20} color={theme.mode === 'dark' ? '#4DB6AC' : '#00796B'} />
                   </View>
                   <Text style={styles.sheetItemText}>View Details</Text>
                 </TouchableOpacity>
@@ -447,10 +463,10 @@ export default function MatchesScreen() {
                   style={styles.sheetItem} 
                   onPress={() => handleAction('leave')}
                 >
-                  <View style={[styles.sheetIcon, { backgroundColor: '#FFF3E0' }]}>
-                    <Ionicons name="exit" size={20} color="#E65100" />
+                  <View style={[styles.sheetIcon, { backgroundColor: theme.mode === 'dark' ? '#3B2314' : '#FFF3E0' }]}>
+                    <Ionicons name="exit" size={20} color={theme.mode === 'dark' ? '#FFB74D' : '#E65100'} />
                   </View>
-                  <Text style={[styles.sheetItemText, { color: '#E65100' }]}>Leave Trip</Text>
+                  <Text style={[styles.sheetItemText, { color: theme.mode === 'dark' ? '#FFB74D' : '#E65100' }]}>Leave Trip</Text>
                 </TouchableOpacity>
               )}
 
@@ -458,10 +474,10 @@ export default function MatchesScreen() {
                 style={styles.sheetItem} 
                 onPress={() => handleAction('delete')}
               >
-                <View style={[styles.sheetIcon, { backgroundColor: '#FFEBEE' }]}>
-                  <Ionicons name="trash" size={20} color="#D32F2F" />
+                <View style={[styles.sheetIcon, { backgroundColor: theme.mode === 'dark' ? '#3D1C1C' : '#FFEBEE' }]}>
+                  <Ionicons name="trash" size={20} color={theme.mode === 'dark' ? '#E57373' : '#D32F2F'} />
                 </View>
-                <Text style={[styles.sheetItemText, { color: '#D32F2F' }]}>
+                <Text style={[styles.sheetItemText, { color: theme.mode === 'dark' ? '#E57373' : '#D32F2F' }]}>
                   {selectedMatch?.type === 'group' ? 'Clear Chat' : 'Unmatch User'}
                 </Text>
               </TouchableOpacity>
@@ -473,16 +489,16 @@ export default function MatchesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.white },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
     paddingTop: 56, paddingBottom: 16, paddingHorizontal: SPACING.lg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.white,
+    borderBottomWidth: 1, borderBottomColor: theme.border,
+    backgroundColor: theme.white,
   },
-  headerTitle: { fontSize: FONTS.xxl, fontWeight: '800', color: COLORS.text },
-  headerCount: { fontSize: FONTS.sm, color: COLORS.textLight, marginTop: 2 },
+  headerTitle: { fontSize: FONTS.xxl, fontWeight: '800', color: theme.text },
+  headerCount: { fontSize: FONTS.sm, color: theme.textSecondary, marginTop: 2 },
   likedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -491,13 +507,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     padding: 16,
     borderRadius: 18,
-    backgroundColor: COLORS.teal,
+    backgroundColor: theme.teal,
     gap: 12,
-    shadowColor: COLORS.teal,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    ...SHADOW.md,
   },
   likedBannerIcon: {
     width: 48,
@@ -509,7 +521,7 @@ const styles = StyleSheet.create({
   },
   likedBannerText: { flex: 1 },
   likedBannerTitle: {
-    color: '#fff',
+    color: theme.textWhite,
     fontWeight: '800',
     fontSize: FONTS.base,
     marginBottom: 2,
@@ -524,7 +536,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   likedBadge: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.textWhite,
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -533,7 +545,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   likedBadgeText: {
-    color: COLORS.teal,
+    color: theme.teal,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -545,22 +557,22 @@ const styles = StyleSheet.create({
   avatarWrapper: { position: 'relative' },
   avatar: { width: 58, height: 58, borderRadius: 29 },
   avatarPlaceholder: {
-    backgroundColor: COLORS.tealLight, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.tealLight, alignItems: 'center', justifyContent: 'center',
   },
   avatarEmoji: { fontSize: 24 },
   onlineDot: {
     position: 'absolute', bottom: 2, right: 2,
     width: 14, height: 14, borderRadius: 7,
-    backgroundColor: COLORS.success, borderWidth: 2, borderColor: COLORS.white,
+    backgroundColor: theme.success, borderWidth: 2, borderColor: theme.white,
   },
   matchInfo: { flex: 1 },
   matchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  matchName: { fontSize: FONTS.base, fontWeight: '700', color: COLORS.text, flexShrink: 1 },
-  matchTime: { fontSize: FONTS.xs, color: COLORS.textLight },
-  lastMessage: { flex: 1, fontSize: FONTS.sm, color: COLORS.textSecondary, paddingRight: 8 },
+  matchName: { fontSize: FONTS.base, fontWeight: '700', color: theme.text, flexShrink: 1 },
+  matchTime: { fontSize: FONTS.xs, color: theme.textSecondary },
+  lastMessage: { flex: 1, fontSize: FONTS.sm, color: theme.textSecondary, paddingRight: 8 },
   unreadBadge: {
-    backgroundColor: COLORS.teal,
+    backgroundColor: theme.teal,
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -568,38 +580,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  unreadCountText: { fontSize: 10, color: COLORS.white, fontWeight: '700' },
+  unreadCountText: { fontSize: 10, color: theme.textWhite, fontWeight: '700' },
   groupBadge: {
-    backgroundColor: COLORS.tealLight,
+    backgroundColor: theme.tealLight,
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
     marginLeft: 4,
   },
   groupBadgeText: {
-    color: COLORS.tealDark,
+    color: theme.teal,
     fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
-  separator: { height: 1, backgroundColor: COLORS.borderLight, marginLeft: 86 },
+  separator: { height: 1, backgroundColor: theme.border, marginLeft: 86 },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
   emptyEmoji: { fontSize: 64 },
-  emptyTitle: { fontSize: FONTS.xl, fontWeight: '700', color: COLORS.text },
-  emptySubtitle: { fontSize: FONTS.base, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
+  emptyTitle: { fontSize: FONTS.xl, fontWeight: '700', color: theme.text },
+  emptySubtitle: { fontSize: FONTS.base, color: theme.textSecondary, textAlign: 'center', lineHeight: 22 },
   discoverBtn: {
-    backgroundColor: COLORS.teal, borderRadius: RADIUS.full,
+    backgroundColor: theme.teal, borderRadius: RADIUS.full,
     paddingHorizontal: 28, paddingVertical: 12, marginTop: 8,
   },
-  discoverBtnText: { color: COLORS.white, fontWeight: '700', fontSize: FONTS.base },
-  sheetItemText: { fontSize: 16, fontWeight: '600', color: COLORS.text },
+  discoverBtnText: { color: theme.textWhite, fontWeight: '700', fontSize: FONTS.base },
+  sheetItemText: { fontSize: 16, fontWeight: '600', color: theme.text },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.card,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
@@ -615,19 +627,19 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
+    borderBottomColor: theme.border,
   },
   sheetHandle: {
     width: 36,
     height: 5,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: theme.mode === 'dark' ? '#444' : '#E0E0E0',
     borderRadius: 3,
     marginBottom: 16,
   },
   sheetTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: COLORS.text,
+    color: theme.text,
   },
   sheetList: {
     paddingHorizontal: 20,
@@ -639,7 +651,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
+    borderBottomColor: theme.border,
   },
   sheetIcon: {
     width: 40,

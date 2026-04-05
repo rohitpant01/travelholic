@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Alert, TextInput, Modal, Image, ActivityIndicator,
+  Alert, TextInput, Modal, Image, ActivityIndicator, Platform
 } from 'react-native';
+import KeyboardWrapper from '../components/KeyboardWrapper';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,6 +34,12 @@ export default function GroupDetailsScreen() {
   const [updating, setUpdating] = useState(false);
 
   const fetchTripDetails = useCallback(async () => {
+    if (!tripId || String(tripId) === 'undefined' || String(tripId) === 'null') {
+      console.log('[GroupDetails] No tripId provided. Skipping fetchTripDetails.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await tripAPI.getTrip(tripId);
       setTrip(res.data.trip);
@@ -45,7 +52,7 @@ export default function GroupDetailsScreen() {
         setGroupIcon(res.data.trip.groupIcon);
       }
     } catch (e) {
-      console.error('[GroupDetails]', e);
+      console.error('[GroupDetails] fetch error:', e);
     } finally {
       setLoading(false);
     }
@@ -146,6 +153,14 @@ export default function GroupDetailsScreen() {
     );
   };
 
+  const handleMemberPress = (mUser: any) => {
+    if (mUser._id === user?._id) {
+      nav.navigate('Profile');
+    } else {
+      nav.navigate('UserDetail', { userId: mUser._id });
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center' }]}>
@@ -209,7 +224,7 @@ export default function GroupDetailsScreen() {
                <TouchableOpacity 
                   key={i} 
                   style={styles.memberRow} 
-                  disabled={!isAdmin || isMe} 
+                  onPress={() => handleMemberPress(mUser)}
                   onLongPress={() => handleRemoveMember(mUser)}
                >
                  <Image 
@@ -245,29 +260,37 @@ export default function GroupDetailsScreen() {
         </View>
       </ScrollView>
 
-      {/* Edit Name Modal */}
       <Modal visible={isEditingName} transparent animationType="fade">
-        <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter new group name</Text>
-            <TextInput
-              style={styles.input}
-              value={tempName}
-              onChangeText={setTempName}
-              placeholder="Group name"
-              autoFocus
-              maxLength={50}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalBtn} onPress={() => setIsEditingName(false)}>
-                <Text style={styles.modalBtnTextAlt}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnPrimary]} onPress={handleUpdateName} disabled={updating}>
-                 {updating ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalBtnText}>Save</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setIsEditingName(false)}
+        >
+          <KeyboardWrapper 
+            backgroundColor="transparent"
+            contentContainerStyle={styles.modalContentContainer}
+          >
+            <TouchableOpacity activeOpacity={1} style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Enter new group name</Text>
+              <TextInput
+                style={styles.input}
+                value={tempName}
+                onChangeText={setTempName}
+                placeholder="Group name"
+                autoFocus
+                maxLength={50}
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalBtn} onPress={() => setIsEditingName(false)}>
+                  <Text style={styles.modalBtnTextAlt}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalBtnPrimary]} onPress={handleUpdateName} disabled={updating}>
+                   {updating ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalBtnText}>Save</Text>}
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardWrapper>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -296,7 +319,8 @@ const styles = StyleSheet.create({
   adminText: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '600' },
   actionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.lg, paddingVertical: 16 },
   actionTextAlert: { fontSize: 16, color: COLORS.error, fontWeight: '600', marginLeft: SPACING.md },
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: SPACING.xl },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' },
+  modalContentContainer: { flexGrow: 1, justifyContent: 'center', padding: SPACING.xl },
   modalContent: { backgroundColor: '#fff', borderRadius: RADIUS.md, padding: SPACING.lg, ...SHADOW.lg },
   modalTitle: { fontSize: 16, fontWeight: '600', marginBottom: SPACING.md, color: COLORS.text },
   input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.sm, padding: SPACING.sm, fontSize: 16, marginBottom: SPACING.lg },
