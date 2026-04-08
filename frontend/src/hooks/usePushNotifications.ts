@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { useNavigation } from '@react-navigation/native';
 import { userAPI } from '../api/services';
 
 export interface PushNotificationState {
@@ -64,6 +65,7 @@ async function registerForPushNotificationsAsync() {
 }
 
 export const usePushNotifications = (user: any) => {
+  const navigation = useNavigation<any>();
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>();
   const [notification, setNotification] = useState<Notifications.Notification | undefined>();
   const notificationListener = useRef<Notifications.Subscription | null>(null);
@@ -83,8 +85,42 @@ export const usePushNotifications = (user: any) => {
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Notification tapped:', response);
-      // Todo: Navigate based on response.notification.request.content.data
+      try {
+        const data = response.notification.request.content.data;
+        console.log('Notification tapped with data:', data);
+
+        if (!data) return;
+
+        // 🟢 Navigation Logic
+        if (data.type === 'like' && data.fromUserId) {
+          // Open the profile of the person who liked you
+          navigation.navigate('UserDetail', { userId: data.fromUserId });
+        } 
+        else if (data.type === 'match' && data.matchId) {
+          // Open the chat with the new match
+          navigation.navigate('Chat', { 
+            type: 'individual', 
+            chatId: data.matchId,
+            userId: data.fromUserId || data.userId, // fallback
+            userName: data.fromUserName || 'New Match',
+            userPhoto: data.fromUserPhoto
+          });
+        }
+        else if (data.type === 'message' && data.matchId) {
+          // Open the specific chat
+          navigation.navigate('Chat', { 
+            type: 'individual', 
+            chatId: data.matchId,
+            userName: data.senderName || 'Traveler',
+            userPhoto: data.senderPhoto
+          });
+        }
+        else if (data.type === 'comment' && data.postId) {
+          navigation.navigate('PostDetail', { postId: data.postId });
+        }
+      } catch (err) {
+        console.error('Notification navigation error:', err);
+      }
     });
 
     return () => {

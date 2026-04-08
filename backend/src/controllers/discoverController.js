@@ -63,7 +63,13 @@ const handleMatch = async (userId1, userId2, isSuperLike = false) => {
         user2.pushToken,
         "It's a Match! 🎉",
         `You and ${user1.firstName} matched!`,
-        { type: 'match', matchId: match._id }
+        { 
+          type: 'match', 
+          matchId: match._id,
+          userId: userId1.toString(),
+          fromUserName: user1.firstName,
+          fromUserPhoto: user1Photo
+        }
       );
     }
 
@@ -373,7 +379,12 @@ const likeUser = async (req, res) => {
           targetUser.pushToken,
           "New Like! 👍",
           `${currentUser.firstName} liked your profile!`,
-          { type: 'like', fromUserId: currentUserId.toString() }
+          { 
+            type: 'like', 
+            fromUserId: currentUserId.toString(),
+            fromUserName: currentUser.firstName,
+            fromUserPhoto: profilePhoto
+          }
         );
       }
 
