@@ -1,6 +1,6 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY, { apiVersion: 'v1' });
 
 /**
  * Get unique, high-intent keywords for a city and category

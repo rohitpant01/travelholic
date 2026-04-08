@@ -78,21 +78,24 @@ const getCoordinates = async (place, fallbackToCenter = false) => {
         params: {
           input: place,
           inputtype: "textquery",
-          fields: "geometry",
+          fields: "geometry,photos",
           key: process.env.GOOGLE_PLACES_API_KEY,
         },
         timeout: 8000,
       }
     );
-    const loc = res.data.candidates?.[0]?.geometry?.location;
+    const candidate = res.data.candidates?.[0];
+    const loc = candidate?.geometry?.location;
+    const photo_reference = candidate?.photos?.[0]?.photo_reference;
+
     if (!loc || typeof loc.lat !== "number" || typeof loc.lng !== "number") {
       throw new Error(`No coordinates found for "${place}"`);
     }
-    return { lat: loc.lat, lng: loc.lng };
+    return { lat: loc.lat, lng: loc.lng, photo_reference };
   } catch (e) {
     if (fallbackToCenter) {
       console.warn(`[getCoordinates] Falling back to India center for "${place}": ${e.message}`);
-      return INDIA_CENTER;
+      return { ...INDIA_CENTER, photo_reference: null };
     }
     throw e;
   }
@@ -246,7 +249,7 @@ const runGeminiJSON = async (prompt, retries = 1) => {
   for (const key of GEMINI_KEYS) {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const genAI = new GoogleGenerativeAI(key);
+        const genAI = new GoogleGenerativeAI(key, { apiVersion: 'v1' });
         const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
         const result = await model.generateContent(prompt);
         const raw = (await result.response)
@@ -912,7 +915,7 @@ exports.generateQuote = async (req, res) => {
   try {
     const destination = (req.body.destination || "adventure").trim();
     // [A] FIX: GEMINI_MODEL is now defined at the top of the file
-    const genAI = new GoogleGenerativeAI(GEMINI_KEYS[0]);
+    const genAI = new GoogleGenerativeAI(GEMINI_KEYS[0], { apiVersion: 'v1' });
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
     const result = await model.generateContent(
       `Write one inspiring travel quote about ${destination}. Max 15 words. No quotation marks around it.`
@@ -955,7 +958,7 @@ Return ONLY the JSON array. No markdown, no extra text.
   // [D] Process coordinates sequentially to avoid Places API bursts
   for (const key of GEMINI_KEYS) {
     try {
-      const model = new GoogleGenerativeAI(key).getGenerativeModel({
+      const model = new GoogleGenerativeAI(key, { apiVersion: 'v1' }).getGenerativeModel({
         model: GEMINI_MODEL,
       });
       const result = await model.generateContent(prompt);
@@ -969,16 +972,28 @@ Return ONLY the JSON array. No markdown, no extra text.
       const places = JSON.parse(text);
 
       const enriched = [];
-      for (const p of places.slice(0, 6)) {
+      const apiKeyForPhotos = process.env.GOOGLE_PLACES_API_KEY;
+
+      for (const p of (Array.isArray(places) ? places : (places.destinations || places.places || [])).slice(0, 6)) {
         await sleep(150); // [D] avoid concurrent Places calls
         const coords = await getCoordinates(p.search_query || p.name, true);
+        
+        // 📸 REAL IMAGE FETCH from Google Places
+        let image = "https://images.unsplash.com/photo-1488646953014-85cb44e25828"; // default fallback
+        if (coords.photo_reference) {
+          image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${coords.photo_reference}&key=${apiKeyForPhotos}`;
+        } else if (p.unsplash_query || p.name) {
+          // Fallback to our proxy
+          image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.unsplash_query || p.name)}`;
+        }
+
         enriched.push({
           ...p,
           title: p.name,
           location: `${p.district}, ${p.state}`,
           lat: coords.lat,
           lng: coords.lng,
-          image: "https://images.unsplash.com/photo-1488646953014-85cb44e25828",
+          image: image,
         });
       }
       return enriched;
@@ -992,16 +1007,33 @@ Return ONLY the JSON array. No markdown, no extra text.
   try {
     const groqData = await runGroqJSON(prompt);
     const enriched = [];
-    for (const p of groqData.slice(0, 6)) {
+    const apiKeyForPhotos = process.env.GOOGLE_PLACES_API_KEY;
+    
+    // [FIX] Groq often returns an object { destinations: [...] } instead of a direct array
+    const placesArray = Array.isArray(groqData) ? groqData : (groqData.destinations || groqData.places || []);
+    
+    if (!Array.isArray(placesArray)) {
+        throw new Error("Groq returned data in an unexpected format (not an array).");
+    }
+
+    for (const p of placesArray.slice(0, 6)) {
       await sleep(150);
       const coords = await getCoordinates(p.search_query || p.name, true);
+      
+      let image = "https://images.unsplash.com/photo-1488646953014-85cb44e25828";
+      if (coords.photo_reference) {
+        image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${coords.photo_reference}&key=${apiKeyForPhotos}`;
+      } else if (p.unsplash_query || p.name) {
+        image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.unsplash_query || p.name)}`;
+      }
+
       enriched.push({
         ...p,
         title: p.name,
         location: `${p.district}, ${p.state}`,
         lat: coords.lat,
         lng: coords.lng,
-        image: "https://images.unsplash.com/photo-1488646953014-85cb44e25828",
+        image: image,
       });
     }
     return enriched;
@@ -1191,27 +1223,22 @@ No markdown, no extra text.
     for (const p of places) {
       await sleep(150);
       try {
-        const gRes = await axios.get(
-          "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
-          {
-            params: {
-              input: p.search_query || p.name,
-              inputtype: "textquery",
-              fields: "geometry",
-              // [FIX from original #2]: was GOOGLE_MAPS_API_KEY — corrected
-              key: process.env.GOOGLE_PLACES_API_KEY,
-            },
-            timeout: 8000,
-          }
-        );
-        const lat =
-          gRes.data.candidates?.[0]?.geometry?.location?.lat || INDIA_CENTER.lat;
-        const lng =
-          gRes.data.candidates?.[0]?.geometry?.location?.lng || INDIA_CENTER.lng;
+        const coords = await getCoordinates(p.search_query || p.name, true);
+        const lat = coords.lat;
+        const lng = coords.lng;
+
+        // 📸 REAL IMAGE FETCH from Google Places
+        let image = "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2";
+        if (coords.photo_reference) {
+          image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${coords.photo_reference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+        } else if (p.name) {
+          image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.name)}`;
+        }
+
         enriched.push({
           ...p,
           id: `top-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          image: "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2",
+          image,
           coordinates: { latitude: lat, longitude: lng },
         });
       } catch {
