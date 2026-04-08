@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "EkalGo",
-    "slug": "travelholic",
+    "slug": "ekalgo",
     "version": "1.0.0",
     "scheme": "ekalgo",
     "orientation": "portrait",
@@ -92,7 +92,7 @@
     "newArchEnabled": false,
     "extra": {
       "eas": {
-        "projectId": "6f07a716-0ff2-4eac-8462-3a2fa834fcad"
+        "appVersionSource": "remote"
       }
     },
     "owner": "rohitpant01"
