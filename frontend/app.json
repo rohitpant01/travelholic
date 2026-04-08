@@ -93,7 +93,7 @@
         }
       ]
     ],
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "extra": {
       "eas": {
         "appVersionSource": "remote",
