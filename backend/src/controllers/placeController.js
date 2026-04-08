@@ -185,19 +185,27 @@ exports.searchPlaces = async (req, res) => {
 
         spots = shuffleArray([...spots]);
         const limit = catKey === 'others' ? 40 : 15;
-        let processed = spots.slice(0, limit).map(p => ({
-          id: p.place_id,
-          name: p.name,
-          address: p.vicinity,
-          rating: p.rating,
-          totalRatings: p.user_ratings_total,
-          location: p.geometry.location,
-          photoReference: p.photos?.[0]?.photo_reference,
-          whyThisPlace: p.rating > 4.5 ? `Highly recommended spot! ★` : `${config.insight} ${config.emoji}`,
-          types: p.types,
-          distanceText: 'Nearby',
-          distanceKm: 0
-        }));
+        let processed = spots.slice(0, limit).map(p => {
+          const ref = p.photos?.[0]?.photo_reference;
+          const imgUrl = ref 
+            ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${ref}&key=${apiKey}`
+            : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`; // Fallback
+
+          return {
+            id: p.place_id,
+            name: p.name,
+            address: p.vicinity,
+            rating: p.rating,
+            totalRatings: p.user_ratings_total,
+            location: p.geometry.location,
+            photoReference: ref,
+            image: imgUrl, // 🔥 NEW: Real image URL
+            whyThisPlace: p.rating > 4.5 ? `Highly recommended spot! ★` : `${config.insight} ${config.emoji}`,
+            types: p.types,
+            distanceText: 'Nearby',
+            distanceKm: 0
+          };
+        });
 
         if (processed.length > 0) {
            const roadData = await fetchRoadDistances(userLat, userLng, processed.slice(0, 12), mapsKey);
@@ -224,19 +232,27 @@ exports.searchPlaces = async (req, res) => {
     const uncategorizedItems = Array.from(masterPool.values()).filter(p => !categorizedIds.has(p.place_id));
 
     if (uncategorizedItems.length > 0) {
-      const catchAllFormatted = uncategorizedItems.map(p => ({
-        id: p.place_id,
-        name: p.name,
-        address: p.vicinity,
-        rating: p.rating,
-        totalRatings: p.user_ratings_total,
-        location: p.geometry.location,
-        photoReference: p.photos?.[0]?.photo_reference,
-        whyThisPlace: `Highly recommended spot! 🪄`,
-        types: p.types,
-        distanceText: 'Nearby',
-        distanceKm: 0
-      }));
+      const catchAllFormatted = uncategorizedItems.map(p => {
+        const ref = p.photos?.[0]?.photo_reference;
+        const imgUrl = ref 
+          ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${ref}&key=${apiKey}`
+          : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`;
+
+        return {
+          id: p.place_id,
+          name: p.name,
+          address: p.vicinity,
+          rating: p.rating,
+          totalRatings: p.user_ratings_total,
+          location: p.geometry.location,
+          photoReference: ref,
+          image: imgUrl,
+          whyThisPlace: `Highly recommended spot! 🪄`,
+          types: p.types,
+          distanceText: 'Nearby',
+          distanceKm: 0
+        };
+      });
       categorizedResults['others'] = [...(categorizedResults['others'] || []), ...catchAllFormatted];
       totalFound += catchAllFormatted.length;
     }

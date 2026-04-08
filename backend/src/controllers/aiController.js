@@ -880,15 +880,22 @@ exports.getNearbyProxy = async (req, res) => {
         },
       }
     );
-    const results = response.data.results?.slice(0, 8).map((p) => ({
-      place_id: p.place_id,
-      name: p.name,
-      rating: p.rating,
-      vicinity: p.vicinity,
-      lat: p.geometry?.location?.lat,
-      lng: p.geometry?.location?.lng,
-      photo_reference: p.photos?.[0]?.photo_reference,
-    }));
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    const results = response.data.results?.slice(0, 8).map((p) => {
+      const ref = p.photos?.[0]?.photo_reference;
+      return {
+        place_id: p.place_id,
+        name: p.name,
+        rating: p.rating,
+        vicinity: p.vicinity,
+        lat: p.geometry?.location?.lat,
+        lng: p.geometry?.location?.lng,
+        photo_reference: ref,
+        image: ref 
+          ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${ref}&key=${apiKey}`
+          : `https://images.unsplash.com/photo-1512343879784-a960bf40e7f2`
+      };
+    });
     return res.json(results);
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -1054,7 +1061,7 @@ exports.generateDestinations = async (req, res) => {
   try {
     let doc = await GlobalDestination.findOne();
     const isStale =
-      !doc || Date.now() - new Date(doc.createdAt).getTime() > HOURS_12;
+      !doc || req.query.force === "true" || Date.now() - new Date(doc.createdAt).getTime() > HOURS_12;
 
     if (isStale) {
       const fresh = await fetchFromGemini(doc?.previousTitles || []);
@@ -1202,7 +1209,7 @@ exports.generateTopDestinations = async (req, res) => {
   try {
     const TopDestination = require("../models/TopDestination");
     let doc = await TopDestination.findOne();
-    if (doc && Date.now() - new Date(doc.createdAt).getTime() < HOURS_24) {
+    if (doc && req.query.force !== "true" && Date.now() - new Date(doc.createdAt).getTime() < HOURS_24) {
       return res.json({ destinations: doc.destinations, cached: true });
     }
 
