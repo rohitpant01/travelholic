@@ -10,21 +10,41 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 5000
       - key: MONGODB_URI
-        sync: false # User must set this in Render UI
+        sync: false
       - key: JWT_SECRET
         sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_VERIFY_SERVICE_SID
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: us-east-1
       - key: GOOGLE_GEMINI_API_KEY
         sync: false
-      - key: GOOGLE_MAPS_API_KEY
+      - key: GOOGLE_GEMINI_REC_API_KEY
+        sync: false
+      - key: GOOGLE_GEMINI_FALLBACK_KEY
         sync: false
       - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_API_KEY_FALLBACK
         sync: false
       - key: GROQ_HOTEL_API_KEY
         sync: false
@@ -36,3 +56,9 @@ services:
         sync: false
       - key: PIXABAY_API_KEY
         sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: CLIENT_URL
+        value: "*"

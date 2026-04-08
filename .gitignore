@@ -13,6 +13,7 @@ yarn-error.log*
 .env.production.local
 backend/.env
 frontend/.env
+frontend/service-account.json
 
 # Expo / React Native
 .expo/
