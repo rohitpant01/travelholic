@@ -65,6 +65,7 @@ export const userAPI = {
   saveDestination: (destination: any) => apiClient.post('/user/saved-destinations', destination),
   deleteSavedDestination: (destinationId: string) => apiClient.delete(`/user/saved-destinations/${destinationId}`),
   syncSavedDestinations: (localItems: any[]) => apiClient.post('/user/sync-saved-destinations', { localItems }),
+  getReverseGeocode: (lat: number, lng: number) => apiClient.get(`/places/reverse-geocode?lat=${lat}&lng=${lng}`),
 };
 
 // ============================================================

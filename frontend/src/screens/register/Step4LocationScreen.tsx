@@ -51,24 +51,12 @@ export default function Step4LocationScreen() {
 
       const { latitude, longitude } = loc.coords;
 
-      // Reverse geocode using Google Maps API
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
+      // 🔥 Reverse geocode using OUR BACKEND Proxy (fixes API Key 403 errors)
+      const res = await userAPI.getReverseGeocode(latitude, longitude);
+      const data = res.data;
 
-      // 🔍 DEBUG LOG: Catch API key / Permission issues
-      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-        console.warn(`[Google Geocoding Error] Status: ${data.status}`);
-        console.warn(`[Google Geocoding Error] Message: ${data.error_message || 'N/A'}`);
-        
-        // Let the user know if it's an API error vs GPS error
-        if (data.status === 'REQUEST_DENIED' || data.status === 'ApiNotActivated') {
-          Alert.alert('API Error', 'The Google Maps Key is not authorized for Geocoding. Please check your GCP console.');
-        }
-      }
-
-      if (data.status === 'OK' && data.results.length > 0) {
-        const components = data.results[0].address_components;
+      if (data.success && data.result) {
+        const components = data.result.address_components;
         const city = components.find((c: any) => c.types.includes('locality'))?.long_name || 
                      components.find((c: any) => c.types.includes('administrative_area_level_3'))?.long_name ||
                      components.find((c: any) => c.types.includes('sublocality_level_1'))?.long_name ||
@@ -79,10 +67,10 @@ export default function Step4LocationScreen() {
         Alert.alert('Location Found', `📍 ${city}, ${country}\nYour nearby travelers list is now updated!`);
       } else {
         setForm(f => ({ ...f, latitude, longitude }));
-        Alert.alert('Partially Found', 'GPS coordinates saved, but Google could not find the city name. Please enter it manually.');
+        Alert.alert('Partially Found', 'GPS coordinates saved, but city name could not be resolved. Please enter it manually.');
       }
-    } catch (error) {
-      console.error('GPS Location error:', error);
+    } catch (error: any) {
+      console.error('GPS Location error:', error.message);
       Alert.alert('Error', 'Could not determine your location. Please check your GPS settings.');
     } finally {
       setGpsLoading(false);

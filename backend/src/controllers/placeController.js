@@ -289,3 +289,23 @@ exports.searchPlaces = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+exports.reverseGeocode = async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+    if (!lat || !lng) return res.status(400).json({ error: 'Lat/Lng required' });
+
+    const { reverseGeocode } = require('../utils/geocodingService');
+    const result = await reverseGeocode(parseFloat(lat), parseFloat(lng));
+
+    if (!result) return res.status(404).json({ error: 'No location found' });
+
+    res.json({
+      success: true,
+      result
+    });
+  } catch (err) {
+    console.error('[REVERSE GEOCODE ERROR]', err);
+    res.status(500).json({ error: 'Failed to reverse geocode' });
+  }
+};
