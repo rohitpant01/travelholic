@@ -113,7 +113,7 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
   const theme = useAppTheme();
   const dispatch = useDispatch();
   const photoUrl = place.photoReference 
-    ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${place.photoReference}&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || 'AIzaSyByQ5WTuSA4F-eThrkdhcAgHoJyuI8k0fs'}`
+    ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${place.photoReference}&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY}`
     : 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80';
 
   const [details, setDetails] = useState<any>(null);

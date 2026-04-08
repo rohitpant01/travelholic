@@ -4,7 +4,7 @@ import axios from 'axios';
 const UNSPLASH_ACCESS_KEY = process.env.EXPO_PUBLIC_UNSPLASH_ACCESS_KEY || ''; 
 const PEXELS_API_KEY = process.env.EXPO_PUBLIC_PEXELS_API_KEY || '';
 const PIXABAY_API_KEY = process.env.EXPO_PUBLIC_PIXABAY_API_KEY || '';
-const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || 'AIzaSyByQ5WTuSA4F-eThrkdhcAgHoJyuI8k0fs';
+const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
 
 /**
  * Main function to fetch place images using Google Places Photo API
