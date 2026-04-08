@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //   Local (Expo simulator): 'http://localhost:5000/api'
 //   Production (Render):    'https://travelholic-api.onrender.com/api'
 // ================================================================
-export const API_BASE_URL = 'http://10.62.246.2:5001/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.62.246.2:5001/api';
 // Use 'http://localhost:5000/api' for iOS Simulator
 // Use 'http://10.62.246.2:5001/api' for physical device (your PC IP)
 // ⚠️ IMPORTANT: For the APK to work, your PC and Phone MUST be on the same WiFi!
