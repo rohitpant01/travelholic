@@ -393,7 +393,11 @@ const likeUser = async (req, res) => {
       // Socket may not be active, non-fatal
     }
 
+    // ✅ ADDED: Send final response to client so app doesn't hang!
+    res.json({ success: true, matched: false, message: 'Like sent!' });
+
   } catch (error) {
+
     if (error.code === 11000) {
       // Gracefully handle "Already liked/swiped" — return success for UX
       return res.json({ matched: false, message: 'Already liked!' });
