@@ -9,41 +9,45 @@ import { fetchNotifications } from '../store/slices/notificationSlice';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { discoverAPI } from '../api/services';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import ShimmerPlaceholder from 'react-native-shimmer-placeholder';
 
+import Swiper from 'react-native-deck-swiper';
+
 // New Components
 import DiscoveryHeader from '../components/DiscoveryHeader';
-import TravelersMapView from '../components/TravelersMapView';
-import TravelerPreviewSheet from '../components/TravelerPreviewSheet';
 import TravelerDiscoveryCard, { Profile } from '../components/TravelerDiscoveryCard';
+import FeedTab from '../components/FeedTab';
 
 const { width: W, height: H } = Dimensions.get('window');
 
 export default function DiscoverScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const dispatch = useDispatch<AppDispatch>();
   const theme = useAppTheme();
   const styles = getStyles(theme);
+  const swiperRef = useRef<any>(null);
 
   const { user } = useSelector((state: RootState) => state.auth);
   const { unreadCount } = useSelector((state: RootState) => state.notification);
 
   // Discovery State
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-
-  // Map Interaction State
-  const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
-  const [focusUserId, setFocusUserId] = useState<string | undefined>(undefined);
 
   // UI State
+  const [activeTab, setActiveTab] = useState<'discover' | 'feed'>('feed');
   const [matchPopup, setMatchPopup] = useState<{ name: string; photo?: string } | null>(null);
   const [showVerifyPopup, setShowVerifyPopup] = useState(false);
+
+  useEffect(() => {
+    if (route.params?.initialTab === 'feed') {
+      setActiveTab('feed');
+    }
+  }, [route.params?.initialTab]);
 
   useEffect(() => {
     if (user && !user.isEmailVerified && (user.registrationStep || 0) >= 9) {
@@ -68,10 +72,9 @@ export default function DiscoverScreen() {
           lat = currentLoc.coords.latitude;
           lng = currentLoc.coords.longitude;
         }
-        if (lat && lng) setUserLocation({ latitude: lat, longitude: lng });
       }
 
-      const res = await discoverAPI.getProfiles(lat, lng);
+      const res = await discoverAPI.getProfiles(lat, lng, 'default');
       setProfiles(res.data.profiles || []);
     } catch (e) {
       console.error('[FETCH PROFILES ERROR]', e);
@@ -86,14 +89,11 @@ export default function DiscoverScreen() {
     dispatch(fetchNotifications());
   }, []);
 
-  const removeTop = () => setProfiles(p => p.slice(1));
-
-  const handleLike = async () => {
-    const top = profiles[0];
-    if (!top) return;
-    removeTop();
+  const handleLike = async (index: number) => {
+    const profile = profiles[index];
+    if (!profile) return;
     try {
-      const res = await discoverAPI.like(top._id);
+      const res = await discoverAPI.like(profile._id);
       if (res.data.matched) {
         setMatchPopup({ name: res.data.matchedUser.firstName, photo: res.data.matchedUser.profilePhoto });
         setTimeout(() => setMatchPopup(null), 3500);
@@ -101,32 +101,20 @@ export default function DiscoverScreen() {
     } catch (e) { }
   };
 
-  const handleSkip = async () => {
-    const top = profiles[0];
-    if (!top) return;
-    removeTop();
-    try { await discoverAPI.skip(top._id); } catch (e) { }
+  const handleSkip = async (index: number) => {
+    const profile = profiles[index];
+    if (!profile) return;
+    try { await discoverAPI.skip(profile._id); } catch (e) { }
   };
 
-  const handleSuperLike = async () => {
-    const top = profiles[0];
-    if (!top) return;
-    removeTop();
-    try { await discoverAPI.superLike(top._id); } catch (e) { }
+  const handleSuperLike = async (index: number) => {
+    const profile = profiles[index];
+    if (!profile) return;
+    try { await discoverAPI.superLike(profile._id); } catch (e) { }
   };
 
-  const handleMarkerPress = useCallback((user: Profile) => {
-    setSelectedUser(user);
-    setFocusUserId(user._id);
-  }, []);
-
-  const removeUserFromStack = useCallback((userId: string) => {
-    setProfiles(prev => prev.filter(p => p._id !== userId));
-  }, []);
-
-  const handleViewOnMap = (userId: string) => {
-    setViewMode('map');
-    setFocusUserId(userId);
+  const handleSwipedAll = () => {
+    setProfiles([]); // Triggers the empty state UI
   };
 
   const renderShimmer = () => (
@@ -143,87 +131,166 @@ export default function DiscoverScreen() {
   return (
     <View style={styles.container}>
       <DiscoveryHeader
-        viewMode={viewMode}
-        onToggle={setViewMode}
-        onFilterPress={() => { }} // TODO: Connect filter
         unreadCount={unreadCount}
         onSavedPress={() => navigation.navigate('SavedDestinations')}
         onNotificationsPress={() => navigation.navigate('Notifications')}
       />
 
+      <View style={styles.tabSwitcherContainer}>
+        <View style={styles.tabSwitcher}>
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => setActiveTab('feed')}
+            style={[styles.tabItem, activeTab === 'feed' && styles.activeTabItem]}
+          >
+            <Ionicons name={activeTab === 'feed' ? 'sparkles' : 'sparkles-outline'} size={18} color={activeTab === 'feed' ? theme.textWhite : theme.textSecondary} />
+            <Text style={[styles.tabText, activeTab === 'feed' && styles.activeTabText]}>Travel Feed</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => setActiveTab('discover')}
+            style={[styles.tabItem, activeTab === 'discover' && styles.activeTabItem]}
+          >
+            <Ionicons name={activeTab === 'discover' ? 'people' : 'people-outline'} size={18} color={activeTab === 'discover' ? theme.textWhite : theme.textSecondary} />
+            <Text style={[styles.tabText, activeTab === 'discover' && styles.activeTabText]}>Find Travelers</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <View style={styles.contentArea}>
-        {loading ? (
+        {activeTab === 'feed' ? (
+          <FeedTab />
+        ) : loading ? (
           renderShimmer()
         ) : profiles.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🌍</Text>
             <Text style={styles.emptyTitle}>Discover Travelers</Text>
             <Text style={styles.emptySubtitle}>No travelers nearby right now, but your journey is waiting.</Text>
-            <TouchableOpacity style={styles.exploreBtn} onPress={() => navigation.navigate('AllDestinations')}>
-              <Text style={styles.exploreBtnText}>Explore Destinations</Text>
-            </TouchableOpacity>
-          </View>
-        ) : viewMode === 'list' ? (
-          <View style={styles.listContainer}>
-            <View style={styles.cardsStack}>
-              {profiles.slice(0, 3).reverse().map((profile, index) => {
-                const isTop = index === Math.min(profiles.length, 3) - 1;
-                return (
-                  <TravelerDiscoveryCard
-                    key={profile._id}
-                    profile={profile}
-                    isTop={isTop}
-                    onLike={handleLike}
-                    onSkip={handleSkip}
-                    onSuperLike={handleSuperLike}
-                    onPressProfile={(p) => navigation.navigate('UserDetail', {
-                      userId: p._id,
-                      profile: p,
-                      onActionPerformed: () => removeUserFromStack(p._id)
-                    })}
-                  />
-                );
-              })}
-            </View>
-
-            {/* Floating Actions overlay for List mode only */}
-            <View style={styles.actions}>
-              <TouchableOpacity style={[styles.actionBtn, styles.skipBtn]} onPress={handleSkip}>
-                <Ionicons name="close" size={32} color={theme.error} />
+            <View style={{ gap: 12 }}>
+              <TouchableOpacity style={styles.exploreBtn} onPress={() => navigation.navigate('AllDestinations')}>
+                <Text style={styles.exploreBtnText}>Explore Destinations</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.superLikeBtn]} onPress={handleSuperLike}>
-                <Ionicons name="star" size={28} color={theme.gold} />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.likeBtn]} onPress={handleLike}>
-                <Ionicons name="heart" size={32} color={theme.teal} />
+              <TouchableOpacity style={styles.refreshBtn} onPress={fetchProfiles}>
+                <Ionicons name="refresh" size={18} color={theme.teal} />
+                <Text style={[styles.refreshBtnText, { color: theme.teal }]}>Refresh Feed</Text>
               </TouchableOpacity>
             </View>
           </View>
         ) : (
-          <View style={styles.mapContainer}>
-            <TravelersMapView
-              profiles={profiles}
-              userLocation={userLocation}
-              onMarkerPress={handleMarkerPress}
-              selectedUserId={focusUserId}
+          <View style={styles.listContainer}>
+            <Swiper
+              ref={swiperRef}
+              cards={profiles}
+              renderCard={(profile) => (
+                <View style={styles.cardWrapper}>
+                  <TravelerDiscoveryCard
+                    profile={profile}
+                    onPressProfile={(p) => navigation.navigate('UserDetail', {
+                      userId: p._id,
+                      profile: p,
+                    })}
+                  />
+                </View>
+              )}
+              onSwipedRight={(index) => handleLike(index)}
+              onSwipedLeft={(index) => handleSkip(index)}
+              onSwipedTop={(index) => handleSuperLike(index)}
+              onSwipedAll={handleSwipedAll}
+              cardIndex={0}
+              backgroundColor={'transparent'}
+              stackSize={3}
+              stackSeparation={15}
+              animateCardOpacity
+              cardVerticalMargin={0}
+              containerStyle={styles.swiperContainer}
+              disableBottomSwipe
+              animateOverlayLabelsOpacity
+              useViewOverflow={Platform.OS === 'ios'}
+              overlayOpacityVerticalThreshold={H * 0.1}
+              overlayOpacityHorizontalThreshold={W * 0.1}
+              verticalThreshold={H * 0.15}
+              horizontalThreshold={W * 0.15}
+              overlayLabels={{
+                left: {
+                  title: 'NOPE',
+                  style: {
+                    label: {
+                      backgroundColor: theme.error,
+                      borderColor: theme.error,
+                      color: 'white',
+                      borderWidth: 1
+                    },
+                    wrapper: {
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      justifyContent: 'flex-start',
+                      marginTop: 30,
+                      marginLeft: -30
+                    }
+                  }
+                },
+                right: {
+                  title: 'LIKE',
+                  style: {
+                    label: {
+                      backgroundColor: theme.teal,
+                      borderColor: theme.teal,
+                      color: 'white',
+                      borderWidth: 1
+                    },
+                    wrapper: {
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      justifyContent: 'flex-start',
+                      marginTop: 30,
+                      marginLeft: 30
+                    }
+                  }
+                },
+                top: {
+                  title: 'SUPER LIKE',
+                  style: {
+                    label: {
+                      backgroundColor: theme.gold,
+                      borderColor: theme.gold,
+                      color: 'white',
+                      borderWidth: 1
+                    },
+                    wrapper: {
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }
+                  }
+                }
+              }}
             />
+
+            {/* Floating Actions */}
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.skipBtn]}
+                onPress={() => swiperRef.current?.swipeLeft()}
+              >
+                <Ionicons name="close" size={32} color={theme.error} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.superLikeBtn]}
+                onPress={() => swiperRef.current?.swipeTop()}
+              >
+                <Ionicons name="star" size={28} color={theme.gold} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.likeBtn]}
+                onPress={() => swiperRef.current?.swipeRight()}
+              >
+                <Ionicons name="heart" size={32} color={theme.teal} />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
-
-      {/* Map Preview Sheet */}
-      <TravelerPreviewSheet
-        user={selectedUser}
-        onClose={() => { setSelectedUser(null); setFocusUserId(undefined); }}
-        onViewProfile={(p) => {
-          setSelectedUser(null);
-          navigation.navigate('UserDetail', {
-            userId: p._id,
-            profile: p,
-            onActionPerformed: () => removeUserFromStack(p._id)
-          });
-        }}
-      />
 
       {/* Match popup */}
       {matchPopup && (
@@ -264,13 +331,51 @@ export default function DiscoverScreen() {
 const getStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   contentArea: { flex: 1 },
-  listContainer: { flex: 1 },
-  mapContainer: { flex: 1 },
-  cardsStack: {
+  
+  // Tab Switcher
+  tabSwitcherContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: theme.background,
+  },
+  tabSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+    borderRadius: 20,
+    padding: 4,
+    height: 48,
+  },
+  tabItem: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 30, // Start cards from the top area
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 16,
+  },
+  activeTabItem: {
+    backgroundColor: theme.teal,
+    ...SHADOW.md,
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  activeTabText: {
+    color: theme.textWhite,
+  },
+
+  listContainer: { flex: 1, position: 'relative' },
+  swiperContainer: {
+    flex: 1,
+    marginTop: -20, // Adjust to overlap header slightly for premium feel
+  },
+  cardWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -210, // Move cards even higher to match previous position
   },
 
   actions: {
@@ -293,6 +398,8 @@ const getStyles = (theme: any) => StyleSheet.create({
   emptySubtitle: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   exploreBtn: { backgroundColor: theme.teal, borderRadius: RADIUS.full, paddingHorizontal: 28, paddingVertical: 14, ...SHADOW.md },
   exploreBtnText: { color: theme.textWhite, fontWeight: '800', fontSize: 15 },
+  refreshBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 6 },
+  refreshBtnText: { fontWeight: '700', fontSize: 14 },
 
   shimmerContainer: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', padding: 16, paddingTop: 30 },
   shimmerCard: { width: W - 32, height: H * 0.6, borderRadius: 24, marginBottom: 40 },

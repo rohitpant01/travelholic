@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.travelholic",
+      "sha256_cert_fingerprints": [
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:46:28:C9:39:98:56:06:81:0B:A9:B1:01:23:45:67:89:AB:CD:EF:00:11"
+      ]
+    }
+  }
+]

@@ -6,20 +6,23 @@ const Notification = require('../models/Notification');
 const getNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({ recipient: req.user._id })
-      .populate('sender', 'firstName lastName photos')
+      .populate('sender', 'firstName lastName photos isDeleted')
       .sort({ createdAt: -1 })
       .limit(50);
+    
+    // Filter out notifications from deleted users
+    const filteredNotifications = notifications.filter(n => n.sender && !n.sender.isDeleted);
     
     const unreadCount = await Notification.countDocuments({ 
       recipient: req.user._id, 
       isRead: false 
     });
 
-    console.log(`[NOTIFICATIONS] Sent ${notifications.length} notifications (${unreadCount} unread) to user ${req.user._id}`);
+    console.log(`[NOTIFICATIONS] Sent ${filteredNotifications.length} notifications (${unreadCount} unread) to user ${req.user._id}`);
     
     // Disable caching for this sensitive route
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    res.json({ notifications, unreadCount });
+    res.json({ notifications: filteredNotifications, unreadCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

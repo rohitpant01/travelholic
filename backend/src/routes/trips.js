@@ -21,7 +21,8 @@ const {
   updateGroupInfo,
   getPendingRequests,
   togglePinTrip,
-  toggleMuteTrip
+  toggleMuteTrip,
+  reportTrip
 } = require('../controllers/tripController');
 const { uploadPhoto, uploadVoice, uploadChatMedia } = require('../config/cloudinary');
 
@@ -55,5 +56,6 @@ router.post('/:id/send-voice', uploadChatMedia.fields([{ name: 'audio', maxCount
 router.put('/:id/group-info', protect, uploadPhoto.single('icon'), updateGroupInfo);
 router.post('/:id/pin', protect, togglePinTrip);
 router.post('/:id/mute', protect, toggleMuteTrip);
+router.post('/:id/report', protect, reportTrip);
 
 module.exports = router;

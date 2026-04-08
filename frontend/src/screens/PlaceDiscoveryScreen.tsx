@@ -334,7 +334,7 @@ export default function PlaceDiscoveryScreen() {
   }, []);
 
   useEffect(() => {
-    if (searchQuery.trim() === '' && !loading && location) {
+    if ((searchQuery || '').trim() === '' && !loading && location) {
       handleSearch('', location.coords.latitude, location.coords.longitude);
     }
   }, [searchQuery]);
@@ -351,6 +351,7 @@ export default function PlaceDiscoveryScreen() {
 
     try {
       const res = await placeService.searchNearMe(query, sLat, sLng);
+      console.log(res.data.cached ? "📡 [EXPLORER] Loaded from DB (24h/20km Cache)" : "🚀 [EXPLORER] Fresh Discovery from AI Magic");
       setPlaces(res.data.results);
       setLocationName(res.data.locationName || (res.data.isCitySearch ? query : 'Nearby'));
       
@@ -383,7 +384,7 @@ export default function PlaceDiscoveryScreen() {
   };
 
   const handleCategoryPress = (cat: typeof CATEGORY_MAP[0]) => {
-    if (searchQuery.trim() === '' && sectionPositions.current[cat.key] !== undefined) {
+    if ((searchQuery || '').trim() === '' && sectionPositions.current[cat.key] !== undefined) {
       scrollRef.current?.scrollTo({ y: sectionPositions.current[cat.key], animated: true });
       setActiveTab(cat.key);
     } else {
@@ -520,6 +521,9 @@ export default function PlaceDiscoveryScreen() {
       {isMapView && searchCenter ? (
         <MapView 
            style={styles.map}
+           showsUserLocation={true}
+           showsMyLocationButton={true}
+           followsUserLocation={false} // Don't snap back to user if they are exploring
            initialRegion={{
              latitude: searchCenter.lat,
              longitude: searchCenter.lng,
@@ -529,7 +533,7 @@ export default function PlaceDiscoveryScreen() {
         >
           {allPlaces.map((p, idx) => (
              <Marker 
-               key={p.id || idx} 
+               key={p.id || `marker-${idx}`} 
                coordinate={{ latitude: p.location.lat, longitude: p.location.lng }}
                title={p.name}
                description={p.distanceText}
@@ -589,7 +593,7 @@ export default function PlaceDiscoveryScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.horizontalList}
                     data={catPlaces.slice(0, 6)}
-                    keyExtractor={(item) => `${cat.key}-${item.id}`}
+                    keyExtractor={(item, idx) => `${cat.key}-${item.id || idx}`}
                     renderItem={({ item }) => <PlaceCard place={item} onMapPress={() => handleViewOnMap(item)} />}
                   />
                 </View>

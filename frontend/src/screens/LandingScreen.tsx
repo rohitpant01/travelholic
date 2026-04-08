@@ -12,11 +12,11 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import * as ImagePicker from 'expo-image-picker';
-import Animated, { 
-  FadeInDown, 
-  FadeInRight, 
-  useAnimatedStyle, 
-  withSpring, 
+import Animated, {
+  FadeInDown,
+  FadeInRight,
+  useAnimatedStyle,
+  withSpring,
   useSharedValue,
   FadeIn
 } from 'react-native-reanimated';
@@ -25,20 +25,17 @@ import { aiAPI, userAPI } from '../api/services';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 
 const { width, height } = Dimensions.get('window');
+const ANIMATED_WORDS = ["Unseen", "Offbeat", "Hidden"];
+
 
 const LandingScreen = () => {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-  
+
   // States
   const [heroImage, setHeroImage] = useState('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000&auto=format&fit=crop');
-  const [destinations, setDestinations] = useState<any[]>([]);
-  const [quote, setQuote] = useState("Travel is the only thing you buy that makes you richer.");
-  const [quoteImage, setQuoteImage] = useState('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1000&auto=format&fit=crop');
-  const [loadingQuote, setLoadingQuote] = useState(false);
-  const [loadingDestinations, setLoadingDestinations] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
@@ -46,52 +43,59 @@ const LandingScreen = () => {
   // Animation Shared Values
   const buttonScale = useSharedValue(1);
 
+  // Typing Animation States
+  const [displayText, setDisplayText] = useState("");
+  const [wordIndex, setWordIndex] = useState(0);
+  const [charIndex, setCharIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showCursor, setShowCursor] = useState(true);
+
+  // Typing Logic
+  useEffect(() => {
+    const currentWord = ANIMATED_WORDS[wordIndex];
+    const typingSpeed = isDeleting ? 40 : 100;
+    
+    const timeout = setTimeout(() => {
+      if (!isDeleting) {
+        setDisplayText(currentWord.substring(0, charIndex + 1));
+        setCharIndex(prev => prev + 1);
+        if (charIndex + 1 === currentWord.length) {
+          setTimeout(() => setIsDeleting(true), 2000); // Pause on full word
+        }
+      } else {
+        setDisplayText(currentWord.substring(0, charIndex - 1));
+        setCharIndex(prev => prev - 1);
+        if (charIndex - 1 === 0) {
+          setIsDeleting(false);
+          setWordIndex((prev) => (prev + 1) % ANIMATED_WORDS.length);
+        }
+      }
+    }, typingSpeed);
+    
+    return () => clearTimeout(timeout);
+  }, [charIndex, isDeleting, wordIndex]);
+
+  // Cursor Blink
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setShowCursor(prev => !prev);
+    }, 530);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     loadInitialData();
   }, []);
 
   const loadInitialData = async () => {
     try {
-      // Fetch 4 unique destinations based on time of day (Morning/Afternoon/Night)
-      const richData = getRichDestinations();
-      const hour = new Date().getHours();
-      let startIndex = 0;
-      
-      if (hour < 12) {
-        startIndex = 0; // Morning (0-3)
-      } else if (hour < 18) {
-        startIndex = 4; // Afternoon (4-7)
-      } else {
-        startIndex = 8; // Night (8-11)
-      }
-
-      setDestinations(richData.slice(startIndex, startIndex + 4));
-      
       const imgs = await fetchRandomTravelImages(1);
-      if (imgs.length > 0) setHeroImage(imgs[0].image);
-      
-      refreshQuote();
+      if (imgs && imgs.length > 0) setHeroImage(imgs[0].image);
     } catch (err) {
       console.warn('Landing data load failed:', err);
-    } finally {
-      setLoadingDestinations(false);
     }
   };
 
-  const refreshQuote = async () => {
-    setLoadingQuote(true);
-    try {
-      const res = await aiAPI.generateQuote();
-      if (res.data?.quote) setQuote(res.data.quote);
-      
-      const randomImg = await fetchRandomTravelImages(1);
-      if (randomImg.length > 0) setQuoteImage(randomImg[0].image);
-    } catch (err) {
-      console.warn('Quote refresh failed:', err);
-    } finally {
-      setLoadingQuote(false);
-    }
-  };
 
   const pickHeroImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -123,43 +127,12 @@ const LandingScreen = () => {
     );
   };
 
-  const renderDestinationCard = (item: any, index: number) => (
-    <Animated.View 
-      key={index}
-      entering={FadeInRight.delay(index * 100)}
-      style={styles.destCardContainer}
-    >
-      <TouchableOpacity 
-        style={styles.destCard}
-        onPress={() => handleDestinationClick(item)}
-        activeOpacity={0.9}
-      >
-        <Image source={{ uri: item.image }} style={styles.destImage} />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.8)']}
-          style={styles.destGradient}
-        >
-          <View style={styles.destInfoRow}>
-            <View>
-              <Text style={styles.destName}>{item.name}</Text>
-              <Text style={styles.destLoc}>{item.location}</Text>
-            </View>
-            <View style={styles.miniRating}>
-              <Ionicons name="star" size={14} color="#FFD700" />
-              <Text style={styles.miniRatingText}>{item.rating}</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-      </TouchableOpacity>
-    </Animated.View>
-  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      
-      <ScrollView 
+
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -169,20 +142,25 @@ const LandingScreen = () => {
             colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.1)', theme.background]}
             style={styles.heroOverlay}
           >
-              <SafeAreaView style={styles.heroHeader}>
-               <View style={styles.headerRow}>
-                 <TouchableOpacity activeOpacity={0.8} onPress={() => setAboutModalVisible(true)}>
-                   <Animated.View entering={FadeIn.delay(200)} style={styles.logoTag}>
-                     <Image source={require('../../assets/logo.png')} style={{width: 22, height: 22, borderRadius: 6}} />
-                     <Text style={styles.logoTagText}>EkalGo</Text>
-                   </Animated.View>
-                 </TouchableOpacity>
-               </View>
+            <SafeAreaView style={styles.heroHeader}>
+              <View style={styles.headerRow}>
+                <TouchableOpacity activeOpacity={0.8} onPress={() => setAboutModalVisible(true)}>
+                  <Animated.View entering={FadeIn.delay(200)} style={styles.logoTag}>
+                    <Image source={require('../../assets/logo.png')} style={{ width: 22, height: 22, borderRadius: 6 }} />
+                    <Text style={styles.logoTagText}>EKAL<Text style={{ color: '#F7A731' }}>GO</Text></Text>
+                  </Animated.View>
+                </TouchableOpacity>
+              </View>
             </SafeAreaView>
 
             <Animated.View entering={FadeInDown.duration(1000).springify()} style={styles.heroBottom}>
-              <Text style={styles.heroTitle}>Explore India</Text>
-              
+              <View>
+                <Text style={styles.heroMain}>
+                  {displayText}
+                  <Text style={{ opacity: showCursor ? 1 : 0 }}>|</Text>
+                </Text>
+                <Text style={styles.heroSub}>with EKAL<Text style={{ color: '#F7A731' }}>GO</Text></Text>
+              </View>
               <View style={styles.heroButtonsContainer}>
                 <GoogleSignInButton title="Continue with Google" />
 
@@ -192,7 +170,7 @@ const LandingScreen = () => {
                   <View style={[styles.line, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
                 </View>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   activeOpacity={0.8}
                   onPressIn={() => buttonScale.value = 0.95}
                   onPressOut={() => buttonScale.value = 1}
@@ -210,7 +188,7 @@ const LandingScreen = () => {
                   </Animated.View>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => (navigation.navigate as any)('Register_Step1')}
                   style={styles.loginLink}
                 >
@@ -223,51 +201,6 @@ const LandingScreen = () => {
           </LinearGradient>
         </ImageBackground>
 
-        {/* DESTINATIONS SECTION */}
-        <View style={styles.destinationsContainer}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Top Destinations</Text>
-          </View>
-          {loadingDestinations ? (
-            <ActivityIndicator size="small" color={COLORS.teal} style={{ marginVertical: 30 }} />
-          ) : (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.destList}
-            >
-              {destinations.slice(0, 4).map(renderDestinationCard)}
-            </ScrollView>
-          )}
-        </View>
-
-        {/* PREMIUM QUOTE SECTION */}
-        <Animated.View entering={FadeInDown.delay(800)} style={styles.quoteSection}>
-           <TouchableOpacity activeOpacity={0.9} onPress={refreshQuote}>
-             <ImageBackground 
-               source={{ uri: quoteImage }} 
-               style={styles.quoteCard}
-               imageStyle={{ borderRadius: RADIUS.xl }}
-             >
-                <View style={styles.quoteOverlay}>
-                  {loadingQuote ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <FontAwesome5 name="quote-left" size={20} color="rgba(255,255,255,0.6)" style={styles.quoteIcon} />
-                      <Text style={styles.quoteText}>{quote}</Text>
-                      <View style={styles.quoteFooter}>
-                         <View style={styles.glassTag}>
-                           <Text style={styles.glassTagText}>AI Inspired</Text>
-                         </View>
-                         <Text style={styles.tapTip}>✨ Tap to refresh</Text>
-                      </View>
-                    </>
-                  )}
-                </View>
-             </ImageBackground>
-           </TouchableOpacity>
-        </Animated.View>
 
         {/* ACTIONS / Terms */}
         <View style={styles.actions}>
@@ -301,7 +234,7 @@ const LandingScreen = () => {
             />
 
             <View style={styles.aboutHeaderHandle} />
-            
+
             <ScrollView contentContainerStyle={styles.aboutScroll} showsVerticalScrollIndicator={false}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                 <Image source={require('../../assets/logo.png')} style={{ width: 45, height: 45, borderRadius: 12, marginRight: 15 }} />
@@ -312,7 +245,7 @@ const LandingScreen = () => {
                   <Text style={styles.aboutHeaderSubtitle}>From Solo Trips to Shared Memories.</Text>
                 </View>
               </View>
-              
+
               <Text style={[styles.aboutDescription, { color: theme.text }]}>
                 Experience a revolutionary travel platform that connects you with global explorers, AI-curated itineraries, and breathtaking destinations instantly.
               </Text>
@@ -320,19 +253,19 @@ const LandingScreen = () => {
               <View style={styles.featuresList}>
                 <View style={[styles.featureItem, { backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
                   <View style={styles.featureIconBox}>
-                     <Ionicons name="compass" size={20} color={COLORS.teal} />
+                    <Ionicons name="compass" size={20} color={COLORS.teal} />
                   </View>
                   <Text style={[styles.featureText, { color: theme.text }]}>Discover Hidden Gems</Text>
                 </View>
                 <View style={[styles.featureItem, { backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
                   <View style={styles.featureIconBox}>
-                     <Ionicons name="chatbubbles" size={20} color={COLORS.teal} />
+                    <Ionicons name="chatbubbles" size={20} color={COLORS.teal} />
                   </View>
                   <Text style={[styles.featureText, { color: theme.text }]}>Connect with Travelers</Text>
                 </View>
                 <View style={[styles.featureItem, { backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
                   <View style={styles.featureIconBox}>
-                     <Ionicons name="map" size={20} color={COLORS.teal} />
+                    <Ionicons name="map" size={20} color={COLORS.teal} />
                   </View>
                   <Text style={[styles.featureText, { color: theme.text }]}>AI-Powered Itineraries</Text>
                 </View>
@@ -358,17 +291,17 @@ const LandingScreen = () => {
                 <Text style={styles.taglineText}>Driven by curiosity, built for explorers</Text>
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 activeOpacity={0.9}
                 onPress={() => setAboutModalVisible(false)}
               >
                 <LinearGradient
-                   colors={['#00C9A7', '#00A8E8']}
-                   start={{ x: 0, y: 0 }}
-                   end={{ x: 1, y: 0 }}
-                   style={styles.aboutBtn}
+                  colors={['#00C9A7', '#00A8E8']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.aboutBtn}
                 >
-                   <Text style={styles.aboutBtnText}>Start Exploring</Text>
+                  <Text style={styles.aboutBtnText}>Start Exploring</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </ScrollView>
@@ -489,115 +422,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.2)',
   },
   loginBtnMiniText: { color: '#fff', fontWeight: '700' },
-  heroTitle: { fontSize: 44, fontWeight: '900', color: '#fff', letterSpacing: -1 },
-  heroSubtitle: {
-    color: 'rgba(255,255,255,0.85)',
+  heroMain: {
+    fontSize: 44,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 1,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  heroSub: {
     fontSize: 16,
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  destinationsContainer: { paddingHorizontal: 24, marginTop: 32 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between',    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  seeAllText: {
-    fontSize: FONTS.sm,
-    fontWeight: '700',
-  },
-  sectionTitle: { fontSize: 24, fontWeight: '800' },
-  seeAll: {
-    fontSize: 14,
+    color: "#E0E0E0",
+    marginTop: 6,
+    letterSpacing: 0.5,
     fontWeight: '600',
-  },
-  destList: { paddingRight: 24 },
-  destCardContainer: { width: width * 0.75, marginRight: 16 },
-  destCard: {
-    height: 240,
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-    ...SHADOW.lg,
-    backgroundColor: '#fff',
-  },
-  destImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
-  destGradient: { 
-    position: 'absolute', bottom: 0, left: 0, right: 0, 
-    height: 120, padding: 16, justifyContent: 'flex-end' 
-  },
-  destInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  destName: { fontSize: 20, fontWeight: '800', color: '#fff' },
-  destLoc: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  miniRating: { 
-    flexDirection: 'row', alignItems: 'center', gap: 4, 
-    backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, 
-    paddingVertical: 4, borderRadius: 8 
-  },
-  miniRatingText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  heartOverlay: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  quoteSection: {
-    marginHorizontal: SPACING.lg,
-    marginTop: 30,
-  },
-  quoteCard: {
-    width: '100%',
-    height: 160,
-    ...SHADOW.lg,
-  },
-  quoteOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 25,
-    padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quoteIcon: {
-    position: 'absolute',
-    top: 15,
-    left: 15,
-  },
-  quoteText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    lineHeight: 22,
-  },
-  quoteFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    position: 'absolute',
-    bottom: 12,
-    paddingHorizontal: 15,
-  },
-  glassTag: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  glassTagText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  tapTip: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 11,
   },
   actions: {
     paddingHorizontal: SPACING.lg,

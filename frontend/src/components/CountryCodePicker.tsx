@@ -18,7 +18,7 @@ export default function CountryCodePicker({ selected, onSelect }: Props) {
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return COUNTRIES;
+    if (!(search || '').trim()) return COUNTRIES;
     const q = search.toLowerCase();
     return COUNTRIES.filter(c =>
       c.name.toLowerCase().includes(q) || c.dial.includes(q) || c.code.toLowerCase().includes(q)

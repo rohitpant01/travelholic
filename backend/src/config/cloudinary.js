@@ -12,7 +12,7 @@ cloudinary.config({
 const photoStorage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: 'travelholic/photos',
+    folder: 'ekalgo/photos',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     transformation: [{ width: 800, height: 1000, crop: 'limit', quality: 'auto' }],
   },
@@ -22,7 +22,7 @@ const photoStorage = new CloudinaryStorage({
 const selfieStorage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: 'travelholic/selfies',
+    folder: 'ekalgo/selfies',
     allowed_formats: ['jpg', 'jpeg', 'png'],
     transformation: [{ width: 400, height: 400, crop: 'fill', quality: 'auto' }],
   },
@@ -32,7 +32,7 @@ const selfieStorage = new CloudinaryStorage({
 const voiceStorage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: 'travelholic/voice',
+    folder: 'ekalgo/voice',
     resource_type: 'video', // Audio is handled as 'video' in Cloudinary
   },
 });
@@ -79,7 +79,7 @@ const chatMediaStorage = new CloudinaryStorage({
   params: async (req, file) => {
     const isAudio = file.mimetype.startsWith('audio/') || file.originalname.match(/\.(mp3|wav|m4a|aac)$/i);
     return {
-      folder: isAudio ? 'travelholic/voice' : 'travelholic/photos',
+      folder: isAudio ? 'ekalgo/voice' : 'ekalgo/photos',
       resource_type: isAudio ? 'video' : 'image',
       allowed_formats: isAudio ? undefined : ['jpg', 'jpeg', 'png', 'webp'],
       transformation: isAudio ? undefined : [{ width: 1080, crop: 'limit', quality: 'auto' }],

@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "com.travelholic",
+        "paths": ["/trip/*", "/post/*", "/user/*", "/discover"]
+      }
+    ]
+  }
+}

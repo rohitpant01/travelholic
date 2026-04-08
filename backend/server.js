@@ -6,6 +6,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
+const path = require("path");
 
 const connectDB = require("./src/config/db");
 const { initSocket } = require("./src/socket/socketHandler");
@@ -18,6 +19,13 @@ const matchRoutes = require("./src/routes/matches");
 const chatRoutes = require("./src/routes/chat");
 const tripRoutes = require("./src/routes/trips");
 const notificationRoutes = require("./src/routes/notification");
+const aiRoutes = require("./src/routes/ai");
+const waitlistRoutes = require("./src/routes/waitlist");
+const placeRoutes = require("./src/routes/places");
+const itineraryRoutes = require("./src/routes/itinerary");
+const feedRoutes = require("./src/routes/feedRoutes");
+const storyRoutes = require("./src/routes/storyRoutes");
+const commentRoutes = require("./src/routes/commentRoutes");
 
 const app = express();
 const server = http.createServer(app);
@@ -58,7 +66,7 @@ app.use(
 // ── Main Home Route ──────────────────────────────────────────
 app.get("/", (req, res) => {
   res.json({ 
-    message: "TravelHolic Backend API is LIVE 🚀",
+    message: "EkalGo Backend API is LIVE 🚀",
     status: "Active",
     time: new Date().toISOString()
   });
@@ -77,22 +85,15 @@ app.post("/api/test-upload", (req, res) => {
   res.json({ message: "API IS REACHABLE (POST)", body: req.body });
 });
 
-// Rate limit
-
-// Body parsing
-// (Move logger before everything else)
-
-// Rate limit
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === "development" ? 10000 : 100,
-});
-
-app.use("/api/", limiter);
-
 // Body parsing
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+// ── Feature Routes (Discovery & Itinerary) ────────────────────
+console.log('🛣️  Registering Discovery & Itinerary routes...');
+app.use("/api/places", placeRoutes);
+app.use("/api/itinerary", itineraryRoutes);
+console.log('✅ Discovery & Itinerary routes READY');
 
 // Logging
 if (process.env.NODE_ENV === "development") {
@@ -103,11 +104,19 @@ if (process.env.NODE_ENV === "development") {
 app.get("/health", (req, res) => {
   res.json({
     status: "OK",
-    app: "TravelHolic API",
+    app: "EkalGo API",
   });
 });
 
-// Routes
+// ── UNIVERSAL DEEP LINKING (AASA / ASSETLINKS) ────────────────
+app.use('/.well-known', express.static(path.join(__dirname, 'public/.well-known')));
+
+// ── STATIC FRONTEND SERVING ───────────────────────────────────
+// This handles the Web App build
+const webBuildPath = path.join(__dirname, '../frontend/web-build');
+app.use(express.static(webBuildPath));
+
+// Other Routes
 app.use("/api/auth", authRoutes);
 app.post("/api/update-location", require("./src/middleware/auth").protect, require("./src/controllers/userController").updateLocation);
 app.get("/api/nearby-users", require("./src/middleware/auth").protect, require("./src/controllers/discoverController").getDiscoverProfiles);
@@ -117,10 +126,36 @@ app.use("/api/matches", matchRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/trips", tripRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/ai", aiRoutes);
+app.use("/api/waitlist", waitlistRoutes);
+app.use("/api/feed", feedRoutes);
+app.use("/api/stories", storyRoutes);
+app.use("/api/comments", commentRoutes);
 
-// 404
-app.use((req, res) => {
-  res.status(404).json({ error: "Route not found" });
+// 🛡️ CATCH-ALL ROUTE (MUST BE LAST)
+// Redirects any non-API web request to index.html for SPA support
+app.get('*', (req, res) => {
+  if (req.url.startsWith('/api')) {
+    return res.status(404).json({ error: "API Route not found" });
+  }
+  res.sendFile(path.join(webBuildPath, 'index.html'), (err) => {
+    if (err) {
+      // Fallback if frontend is not built
+      res.status(200).send(`
+        <!DOCTYPE html>
+        <html>
+          <head><title>EkalGo | AI Travel Architect</title></head>
+          <body style="background:#000; color:#fff; display:flex; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">
+            <div style="text-align:center;">
+              <h1>EkalGo ✨🌍</h1>
+              <p>Redirecting to mobile experience...</p>
+              <a href="https://ekalgo.com/download" style="color:#00B4B4; text-decoration:none; font-weight:bold;">Download the App Now</a>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+  });
 });
 
 // Error handler
@@ -136,6 +171,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 TravelHolic Server running on port ${PORT}`);
+  console.log(`🚀 EkalGo Server running on port ${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV}`);
 });

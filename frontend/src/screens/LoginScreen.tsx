@@ -38,32 +38,66 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const res = await authAPI.login({ emailOrPhone: finalIdentifier, password });
-      const { token, user } = res.data;
+      const { token, user, isDeletionPending } = res.data;
       
-      await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-      // Sync local bucket list
-      const localItems = await getLocalBucketList();
-      if (localItems.length > 0) {
-        try {
-          await userAPI.syncSavedDestinations(localItems);
-          await clearLocalBucketList();
-        } catch (syncError) {
-          console.warn('Bucket list sync failed:', syncError);
-        }
+      if (isDeletionPending) {
+        setLoading(false);
+        Alert.alert(
+          'Restore Account?',
+          'Your account is scheduled for deletion. Would you like to cancel the deletion and restore your account?',
+          [
+            {
+              text: 'Keep Scheduled',
+              style: 'destructive',
+              onPress: () => {
+                // Do not finish login. Keep user on login screen to prevent 401 glitch.
+                Alert.alert('Notice', 'You must restore your account to log in. It will be permanently deleted after 7 days.');
+              }
+            },
+            {
+              text: 'Restore Now',
+              onPress: async () => {
+                try {
+                  apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                  await userAPI.restoreAccount();
+                  user.isDeleted = false; // Optimistic update
+                  await finishLogin(token, user);
+                  Alert.alert('Success', 'Your account has been fully restored! ✨');
+                } catch (e) {
+                  Alert.alert('Error', 'Failed to restore account. Please try again later.');
+                }
+              }
+            }
+          ]
+        );
+        return;
       }
 
-      dispatch(setToken(token));
-      dispatch(setUser(user));
-      if (user.savedDestinations) {
-        dispatch(setSavedDestinations(user.savedDestinations));
-      }
+      await finishLogin(token, user);
     } catch (error: any) {
       Alert.alert('Login Failed', error.response?.data?.error || 'Something went wrong');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const finishLogin = async (token: string, user: any) => {
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('user', JSON.stringify(user));
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+    const localItems = await getLocalBucketList();
+    if (localItems.length > 0) {
+      try {
+        await userAPI.syncSavedDestinations(localItems);
+        await clearLocalBucketList();
+      } catch (syncError) {}
+    }
+
+    dispatch(setToken(token));
+    dispatch(setUser(user));
+    if (user.savedDestinations) {
+      dispatch(setSavedDestinations(user.savedDestinations));
     }
   };
 

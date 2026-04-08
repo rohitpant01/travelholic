@@ -5,6 +5,10 @@ import tripReducer from './slices/tripSlice';
 import notificationReducer from './slices/notificationSlice';
 import themeReducer from './slices/themeSlice';
 import savedReducer from './slices/savedSlice';
+import feedReducer from './slices/feedSlice';
+import storyReducer from './slices/storySlice';
+import uploadReducer from './slices/uploadSlice';
+import commentReducer from './slices/commentSlice';
 
 const store = configureStore({
   reducer: {
@@ -14,6 +18,10 @@ const store = configureStore({
     notification: notificationReducer,
     theme: themeReducer,
     saved: savedReducer,
+    feed: feedReducer,
+    stories: storyReducer,
+    uploads: uploadReducer,
+    comments: commentReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

@@ -10,18 +10,12 @@ import Animated, {
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW, useAppTheme } from '../utils/theme';
 
 interface DiscoveryHeaderProps {
-  viewMode: 'list' | 'map';
-  onToggle: (mode: 'list' | 'map') => void;
-  onFilterPress: () => void;
   onSavedPress: () => void;
   onNotificationsPress: () => void;
   unreadCount: number;
 }
 
 export default function DiscoveryHeader({
-  viewMode,
-  onToggle,
-  onFilterPress,
   onSavedPress,
   onNotificationsPress,
   unreadCount
@@ -29,17 +23,6 @@ export default function DiscoveryHeader({
   const theme = useAppTheme();
   const styles = getStyles(theme);
   
-  // Reanimated switch offset
-  const switchTranslate = useSharedValue(viewMode === 'list' ? 2 : 80);
-
-  useEffect(() => {
-    switchTranslate.value = withSpring(viewMode === 'list' ? 2 : 80, { damping: 15 });
-  }, [viewMode]);
-
-  const animatedSwitchStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: switchTranslate.value }],
-  }));
-
   return (
     <View style={styles.header}>
       <View style={styles.topRow}>
@@ -60,47 +43,9 @@ export default function DiscoveryHeader({
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity onPress={onFilterPress}>
-            <Ionicons name="options-outline" size={24} color={theme.text} />
-          </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.toggleRow}>
-        <View style={styles.toggleContainer}>
-          <Animated.View style={[styles.toggleActiveBg, animatedSwitchStyle]} />
-          <TouchableOpacity 
-            style={styles.toggleTab} 
-            onPress={() => onToggle('list')}
-            activeOpacity={1}
-          >
-            <Ionicons 
-              name="list" 
-              size={18} 
-              color={viewMode === 'list' ? theme.textWhite : theme.textSecondary} 
-            />
-            <Text style={[
-              styles.toggleText, 
-              viewMode === 'list' && styles.toggleTextActive
-            ]}>List</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.toggleTab} 
-            onPress={() => onToggle('map')}
-            activeOpacity={1}
-          >
-            <Ionicons 
-              name="map" 
-              size={18} 
-              color={viewMode === 'map' ? theme.textWhite : theme.textSecondary} 
-            />
-            <Text style={[
-              styles.toggleText, 
-              viewMode === 'map' && styles.toggleTextActive
-            ]}>Map</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
     </View>
   );
 }
@@ -143,44 +88,4 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderColor: theme.background,
   },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  
-  toggleRow: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-    borderRadius: RADIUS.full,
-    padding: 2,
-    width: 160,
-    height: 38,
-    position: 'relative',
-  },
-  toggleActiveBg: {
-    position: 'absolute',
-    top: 2,
-    left: 0,
-    width: 78,
-    height: 34,
-    backgroundColor: theme.teal,
-    borderRadius: RADIUS.full,
-    ...SHADOW.sm,
-  },
-  toggleTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    zIndex: 1,
-  },
-  toggleText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  toggleTextActive: {
-    color: theme.textWhite,
-  },
 });

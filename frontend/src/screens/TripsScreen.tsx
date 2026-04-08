@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   RefreshControl, ActivityIndicator, Modal, ScrollView,
-  TextInput, Alert, KeyboardAvoidingView, Platform
+  TextInput, Alert, KeyboardAvoidingView, Platform, Keyboard
 } from 'react-native';
 import KeyboardWrapper from '../components/KeyboardWrapper';
 import { useDispatch, useSelector } from 'react-redux';
@@ -11,9 +11,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
-import { tripAPI } from '../api/services';
-import { setTrips, appendTrips, setMyTrips, setLoading, setActiveTab } from '../store/slices/tripSlice';
+import { tripAPI, lyraAPI, aiAPI } from '../api/services';
+import Slider from '@react-native-community/slider';
+import { setTrips, appendTrips, setMyTrips, setLoading, setActiveTab, removeTripFromList } from '../store/slices/tripSlice';
 import { RootState } from '../store';
+
+const getBudgetLabel = (val: number) => {
+  if (val < 5000) return `₹${val.toLocaleString('en-IN')} (Extreme Budget) 🎒`;
+  if (val < 20000) return `₹${val.toLocaleString('en-IN')} (Economy) 💸`;
+  if (val < 60000) return `₹${val.toLocaleString('en-IN')} (Mid-range) 🏨`;
+  return `₹${val.toLocaleString('en-IN')} (Premium/Luxury) 💎`;
+};
 
 const MODE_ICONS: Record<string, string> = {
   flight: '✈️', train: '🚂', car: '🚗', bus: '🚌', bike: '🏍️', other: '🌍',
@@ -50,10 +58,9 @@ export default function TripsScreen() {
   const [aiForm, setAiForm] = useState({
     sourceCity: '',
     destination: '',
-    days: '3',
-    customDays: '',
-    budget: '10000',
-    customBudget: '',
+    days: 'Weekend Escape (2 Days)',
+    actualDays: 2,
+    budget: 25000,
     travelType: 'Solo',
     interests: [] as string[],
   });
@@ -61,34 +68,41 @@ export default function TripsScreen() {
   const [sourceSuggestions, setSourceSuggestions] = useState<any[]>([]);
   const [destSuggestions, setDestSuggestions] = useState<any[]>([]);
   const [fetchingSuggestions, setFetchingSuggestions] = useState(false);
+  const [showDurationPicker, setShowDurationPicker] = useState(false);
+
+  // 🧪 PERSISTENT DEBOUNCE
+  const debounceRef = useRef<any>(null);
 
   const fetchSuggestions = async (q: string, setSugg: Function) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
     if (q.length < 3) {
       setSugg([]);
       return;
     }
-    try {
-      setFetchingSuggestions(true);
-      const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ''; 
-      const res = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${q}&types=(cities)&key=${key}`
-      );
-      const data = await res.json();
-      
-      // 🔍 DEBUG LOG: Catch API key / Permission issues
-      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-        console.warn(`[Google Places Error] Status: ${data.status}`);
-        console.warn(`[Google Places Error] Message: ${data.error_message || 'N/A'}`);
-      }
 
-      if (data.predictions) {
-        setSugg(data.predictions);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        setFetchingSuggestions(true);
+        const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+        const res = await fetch(
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${q}&types=(cities)&key=${key}`
+        );
+        const data = await res.json();
+
+        if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+          console.warn(`[Google Places Error] Status: ${data.status}`);
+        }
+
+        if (data.predictions) {
+          setSugg(data.predictions);
+        }
+      } catch (e) {
+        console.error('Autocomplete error:', e);
+      } finally {
+        setFetchingSuggestions(false);
       }
-    } catch (e) {
-      console.error('Autocomplete error:', e);
-    } finally {
-      setFetchingSuggestions(false);
-    }
+    }, 500);
   };
 
   const BUDGET_OPTIONS = ['5000', '10000', '20000', '50000', '100000'];
@@ -112,7 +126,35 @@ export default function TripsScreen() {
       dispatch(setLoading(false));
       setRefreshing(false);
     }
-  }, [filters, page]);
+  }, [filters, page, dispatch]);
+
+  const handleDeleteTrip = async (id: string, type: 'social' | 'lyra') => {
+    Alert.alert(
+      'Delete Trip?',
+      'This will permanently remove this itinerary from your collection.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (type === 'lyra') {
+                await lyraAPI.delete(id);
+              } else if (type === 'ai_itinerary') {
+                await aiAPI.deleteItinerary(id);
+              } else {
+                await tripAPI.deleteTrip(id);
+              }
+              dispatch(removeTripFromList(id));
+            } catch (e: any) {
+              Alert.alert('Error', e.response?.data?.error || 'Failed to delete');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const fetchMyTrips = useCallback(async () => {
     try {
@@ -145,260 +187,309 @@ export default function TripsScreen() {
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   };
 
-  const renderAIPlanner = () => (
-    <KeyboardWrapper 
-      backgroundColor="transparent"
-      contentContainerStyle={{ padding: SPACING.md, paddingBottom: 120 }}
-    >
-      <View style={styles.aiCard}>
-        <LinearGradient colors={['#FF6B35', '#FF8A5C']} style={styles.aiHeaderGrad}>
-          <Text style={styles.aiTitle}>Magic AI Travel Planner 🪄</Text>
-          <Text style={styles.aiSubtitle}>Generate a pro-level itinerary in seconds</Text>
-        </LinearGradient>
+  const renderAIPlanner = () => {
+    const DURATION_OPTIONS = [
+      { id: '1', label: '1 Day Trip', days: 1 },
+      { id: 'weekend', label: 'Weekend Escape (2 Days)', days: 2 },
+      { id: 'mini', label: 'Mini Adventure (4 Days)', days: 4 },
+      { id: 'explorer', label: 'Explorer Mode (7 Days)', days: 7 },
+    ];
 
-        <View style={styles.aiFormBody}>
-          {/* Source City */}
-          <Text style={styles.aiLabel}>🗺️ Starting From?</Text>
-          <TextInput
-            style={styles.aiInput}
-            placeholder="e.g. Delhi, Mumbai..."
-            placeholderTextColor={theme.textLight}
-            value={aiForm.sourceCity}
-            onChangeText={(t) => {
-              setAiForm(f => ({ ...f, sourceCity: t }));
-              fetchSuggestions(t, setSourceSuggestions);
-            }}
-          />
-          {sourceSuggestions.length > 0 && (
-            <View style={styles.suggestionsContainer}>
-               {sourceSuggestions.map((s, i) => (
-                 <TouchableOpacity 
-                   key={i} 
-                   style={styles.suggestionItem}
-                   onPress={() => {
-                     setAiForm(f => ({ ...f, sourceCity: s.description }));
-                     setSourceSuggestions([]);
-                   }}
-                 >
-                   <Ionicons name="location-outline" size={16} color={theme.teal} />
-                   <Text style={styles.suggestionText}>{s.description}</Text>
-                 </TouchableOpacity>
-               ))}
+    const getBudgetLabel = (val: number) => {
+      const formatted = new Intl.NumberFormat('en-IN', {
+        maximumFractionDigits: 0,
+      }).format(val);
+
+      if (val < 15000) return `₹${formatted} 💸`;
+      if (val < 40000) return `₹${formatted} ⚖️`;
+      return `₹${formatted} 💎`;
+    };
+
+    const TRENDING = [
+      { name: 'Goa', emoji: '🏝️', color: '#00C9A7' },
+      { name: 'Manali', emoji: '❄️', color: '#008E7F' },
+      { name: 'Bali', emoji: '🌴', color: '#FF7E5F' },
+    ];
+
+    return (
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: SPACING.lg, paddingBottom: 150 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.glassCard}>
+          <Text style={styles.glassTitle}>✨ Build Your Perfect Trip</Text>
+          <Text style={styles.glassSubtitle}>AI-crafted trips, just for you</Text>
+
+          <View style={styles.glassForm}>
+            {/* Source */}
+            <View style={[styles.inputSection, { zIndex: sourceSuggestions.length > 0 ? 1001 : 100 }]}>
+              <Text style={styles.glassLabel}>📍 Where are you starting from?</Text>
+              <TextInput
+                style={styles.glassInput}
+                placeholder="Enter your departure city"
+                placeholderTextColor={theme.textSecondary}
+                value={aiForm.sourceCity}
+                onChangeText={(t) => {
+                  setAiForm(f => ({ ...f, sourceCity: t }));
+                  fetchSuggestions(t, setSourceSuggestions);
+                }}
+              />
+              {sourceSuggestions.length > 0 && (
+                <View style={styles.glassSuggestions}>
+                  {sourceSuggestions.map((s, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.glassSuggestionItem}
+                      onPress={() => {
+                        setAiForm(f => ({ ...f, sourceCity: s.description }));
+                        setSourceSuggestions([]);
+                        Keyboard.dismiss();
+                      }}
+                    >
+                      <Ionicons name="location" size={14} color={theme.teal} />
+                      <Text style={styles.glassSuggestionText} numberOfLines={1}>{s.description}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
-          )}
 
-          {/* Destination */}
-          <Text style={styles.aiLabel}>📍 Where to?</Text>
-          <TextInput
-            style={styles.aiInput}
-            placeholder="e.g. Manali, Goa, Japan..."
-            placeholderTextColor={theme.textLight}
-            value={aiForm.destination}
-            onChangeText={(t) => {
-              setAiForm(f => ({ ...f, destination: t }));
-              fetchSuggestions(t, setDestSuggestions);
-            }}
-          />
-          {destSuggestions.length > 0 && (
-            <View style={styles.suggestionsContainer}>
-               {destSuggestions.map((s, i) => (
-                 <TouchableOpacity 
-                   key={i} 
-                   style={styles.suggestionItem}
-                   onPress={() => {
-                     setAiForm(f => ({ ...f, destination: s.description }));
-                     setDestSuggestions([]);
-                   }}
-                 >
-                   <Ionicons name="location-outline" size={16} color={theme.teal} />
-                   <Text style={styles.suggestionText}>{s.description}</Text>
-                 </TouchableOpacity>
-               ))}
-            </View>
-          )}
-
-          {/* Days */}
-          <Text style={styles.aiLabel}>⏳ Duration (Days)</Text>
-          <View style={styles.aiChipRow}>
-            {['1', '2', '3', '4', '5'].map(d => (
-              <TouchableOpacity
-                key={d}
-                style={[styles.aiChip, aiForm.days === d && styles.aiChipActive]}
-                onPress={() => setAiForm(f => ({ ...f, days: d }))}
-              >
-                <Text style={[styles.aiChipText, aiForm.days === d && styles.aiChipTextActive]}>{d} Days</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Budget */}
-          <Text style={styles.aiLabel}>💰 Budget (INR)</Text>
-          <View style={styles.aiChipRow}>
-            {BUDGET_OPTIONS.concat(['Other']).map(b => (
-              <TouchableOpacity
-                key={b}
-                style={[styles.aiChip, aiForm.budget === b && styles.aiChipActive]}
-                onPress={() => setAiForm(f => ({ ...f, budget: b }))}
-              >
-                <Text style={[styles.aiChipText, aiForm.budget === b && styles.aiChipTextActive]}>
-                  {b === 'Other' ? 'Other ✏️' : `₹${parseInt(b).toLocaleString('en-IN')}`}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          {aiForm.budget === 'Other' && (
-            <TextInput
-              style={[styles.aiInput, { marginTop: 10 }]}
-              placeholder="Enter budget in INR"
-              keyboardType="numeric"
-              value={aiForm.customBudget}
-              onChangeText={(t) => setAiForm(f => ({ ...f, customBudget: t }))}
-            />
-          )}
-
-          {/* Travel Type */}
-          <Text style={styles.aiLabel}>🧳 Travel Type</Text>
-          <View style={styles.aiChipRow}>
-            {['Solo', 'Couple', 'Group'].map(t => (
-              <TouchableOpacity
-                key={t}
-                style={[styles.aiChip, aiForm.travelType === t && styles.aiChipActive]}
-                onPress={() => setAiForm(f => ({ ...f, travelType: t }))}
-              >
-                <Text style={[styles.aiChipText, aiForm.travelType === t && styles.aiChipTextActive]}>{t}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Interests */}
-          <Text style={styles.aiLabel}>🏷️ Interests</Text>
-          <View style={styles.aiChipRow}>
-            {FILTER_OPTIONS.tags.map(t => {
-              const active = aiForm.interests.includes(t);
-              return (
-                <TouchableOpacity
-                  key={t}
-                  style={[styles.aiChip, active && styles.aiChipActive]}
-                  onPress={() => {
-                    setAiForm(f => ({
-                      ...f,
-                      interests: active ? f.interests.filter(x => x !== t) : [...f.interests, t]
-                    }));
-                  }}
-                >
-                  <Text style={[styles.aiChipText, active && styles.aiChipTextActive]}>{t}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <TouchableOpacity
-            style={styles.generateBtn}
-            onPress={() => {
-              if (!aiForm.destination) {
-                Alert.alert('Missing Info', 'Where would you like to go?');
-                return;
-              }
-              const finalBudget = aiForm.budget === 'Other' ? aiForm.customBudget : aiForm.budget;
-              
-              if (!aiForm.days || isNaN(parseInt(aiForm.days))) {
-                Alert.alert('Missing Info', 'Please select a duration.');
-                return;
-              }
-              if (!finalBudget || isNaN(parseInt(finalBudget))) {
-                Alert.alert('Missing Info', 'Please enter a valid budget.');
-                return;
-              }
-
-              nav.navigate('AIItinerary', { 
-                trip: {
-                  source: { city: aiForm.sourceCity || 'Local' },
-                  destination: { city: aiForm.destination },
-                  duration: parseInt(aiForm.days),
-                  budget: `₹${parseInt(finalBudget).toLocaleString('en-IN')}`,
-                  travelType: aiForm.travelType,
-                  interests: aiForm.interests,
-                } 
-              });
-            }}
-          >
-            <LinearGradient colors={['#FF6B35', '#FF8A5C']} style={styles.generateGrad}>
-              <Ionicons name="sparkles" size={20} color="#fff" />
-              <Text style={styles.generateText}>Generate Magic Itinerary ✨</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </KeyboardWrapper>
-  );
-
-  const renderTripCard = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.85}
-      onPress={() => nav.navigate('TripDetail', { tripId: item._id })}
-    >
-      <View style={styles.cardHeader}>
-        <Text style={styles.modeIcon}>{MODE_ICONS[item.mode] || '🌍'}</Text>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={styles.routeText}>
-            {item.source?.city} → {item.destination?.city}
-          </Text>
-          <Text style={styles.dateText}>{MODE_ICONS[item.mode] || '📅'} {formatDate(item.date)}</Text>
-        </View>
-        <View style={[styles.budgetBadge, { backgroundColor: BUDGET_COLORS[item.budget] || theme.teal }]}>
-          <Text style={styles.budgetText}>{item.budget}</Text>
-        </View>
-      </View>
-
-      <View style={styles.cardBody}>
-        <View style={styles.metaRow}>
-          <View style={styles.metaItem}>
-            <Ionicons name="people" size={14} color={theme.textSecondary} />
-            <Text style={styles.metaText}>{item.membersCount || 1}/{item.maxTravelers} travelers</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Ionicons name="compass" size={14} color={theme.textSecondary} />
-            <Text style={styles.metaText}>{item.travelType}</Text>
-          </View>
-        </View>
-
-        {item.tags?.length > 0 && (
-          <View style={styles.tagsRow}>
-            {item.tags.slice(0, 3).map((tag: string, i: number) => (
-              <View key={i} style={styles.tagChip}>
-                <Text style={styles.tagText}>{tag}</Text>
+            {/* Destination */}
+            <View style={[styles.inputSection, { zIndex: destSuggestions.length > 0 ? 1001 : 90 }]}>
+              <Text style={styles.glassLabel}>🌍 Where do you want to go?</Text>
+              <TextInput
+                style={styles.glassInput}
+                placeholder="Search destinations (Goa, Bali)"
+                placeholderTextColor={theme.textSecondary}
+                value={aiForm.destination}
+                onChangeText={(t) => {
+                  setAiForm(f => ({ ...f, destination: t }));
+                  fetchSuggestions(t, setDestSuggestions);
+                }}
+              />
+              <View style={styles.chipRow}>
+                {['Goa', 'Manali', 'Dubai'].map(city => (
+                  <TouchableOpacity key={city} style={styles.pillChip} onPress={() => setAiForm(f => ({ ...f, destination: city }))}>
+                    <Text style={styles.pillChipText}>{city}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            ))}
-            {item.tags.length > 3 && (
-              <Text style={styles.moreTagText}>+{item.tags.length - 3}</Text>
-            )}
-          </View>
-        )}
+              {destSuggestions.length > 0 && (
+                <View style={styles.glassSuggestions}>
+                  {destSuggestions.map((s, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.glassSuggestionItem}
+                      onPress={() => {
+                        setAiForm(f => ({ ...f, destination: s.description }));
+                        setDestSuggestions([]);
+                        Keyboard.dismiss();
+                      }}
+                    >
+                      <Ionicons name="location" size={14} color={theme.teal} />
+                      <Text style={styles.glassSuggestionText} numberOfLines={1}>{s.description}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
 
-        {item.userStatus && (
-          <View style={[styles.statusBadge,
-            item.userStatus === 'accepted' ? { backgroundColor: theme.mode === 'dark' ? '#1A331E' : '#E8F5E9' } :
-            item.userStatus === 'pending' ? { backgroundColor: theme.mode === 'dark' ? '#3B2F14' : '#FFF8E1' } : { backgroundColor: theme.mode === 'dark' ? '#3D1C1C' : '#FFEBEE' }
-          ]}>
-            <Text style={[styles.statusText, { color: item.userStatus === 'accepted' ? theme.success : item.userStatus === 'pending' ? theme.warning : theme.error }]}>
-              {item.userStatus === 'accepted' ? '✅ Joined' :
-               item.userStatus === 'pending' ? '⏳ Pending' : '❌ Rejected'}
+            {/* Duration Dropdown */}
+            <View style={styles.inputSection}>
+              <Text style={styles.glassLabel}>⏳ How long is your trip?</Text>
+              <TouchableOpacity
+                style={styles.glassSelect}
+                onPress={() => setShowDurationPicker(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.glassSelectText}>{aiForm.days}</Text>
+                <Ionicons name="chevron-down" size={20} color={theme.teal} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Budget */}
+            <View style={styles.inputSection}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                <View>
+                  <Text style={styles.glassLabel}>💰 Budget Range</Text>
+                  <Text style={{ fontSize: 10, color: theme.textSecondary, marginTop: -8 }}>Manual entry or slide</Text>
+                </View>
+                <View style={styles.manualBudgetInputWrapper}>
+                  <Text style={{ color: theme.teal, fontWeight: '900', fontSize: 18, marginRight: 4 }}>₹</Text>
+                  <TextInput
+                    style={styles.manualBudgetInput}
+                    keyboardType="numeric"
+                    value={aiForm.budget.toString()}
+                    onChangeText={(val) => {
+                      const num = parseInt(val.replace(/[^0-9]/g, '')) || 0;
+                      setAiForm(f => ({ ...f, budget: num > 1000000 ? 1000000 : num }));
+                    }}
+                    maxLength={7}
+                  />
+                </View>
+              </View>
+              <Slider
+                style={{ width: '100%', height: 40 }}
+                minimumValue={500}
+                maximumValue={150000}
+                step={500}
+                value={aiForm.budget}
+                onValueChange={(v) => setAiForm(f => ({ ...f, budget: v }))}
+                minimumTrackTintColor={theme.teal}
+                maximumTrackTintColor={theme.border}
+                thumbTintColor={theme.teal}
+              />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={styles.rangeLimit}>₹1k</Text>
+                <Text style={styles.rangeLimit}>₹1.5L+</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.premiumCTA}
+              activeOpacity={0.8}
+              onPress={() => {
+                if (!aiForm.destination) {
+                  Alert.alert('EkalGo AI', 'Tell us where you want to go! ✨');
+                  return;
+                }
+                nav.navigate('AIItinerary', {
+                  trip: {
+                    source: { city: aiForm.sourceCity || 'Nearby' },
+                    destination: { city: aiForm.destination },
+                    duration: aiForm.actualDays,
+                    budget: `₹${aiForm.budget.toLocaleString('en-IN')}`,
+                    travelType: aiForm.travelType,
+                    interests: aiForm.interests,
+                  }
+                });
+              }}
+            >
+              <LinearGradient colors={['#00C9A7', '#008E7F']} style={styles.premiumCTAGrad}>
+                <Text style={styles.premiumCTAText}>✨ Create My Trip</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>🔥 Trending Right Now</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingRow}>
+          {TRENDING.map((t, i) => (
+            <TouchableOpacity
+              key={i}
+              style={[styles.trendingCard, { backgroundColor: t.color + '15', borderColor: t.color + '40' }]}
+              onPress={() => setAiForm(f => ({ ...f, destination: t.name }))}
+            >
+              <Text style={styles.trendingEmoji}>{t.emoji}</Text>
+              <Text style={styles.trendingName}>{t.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </ScrollView>
+    );
+  };
+
+  const renderTripCard = ({ item }: { item: any }) => {
+    const isLyra = item.tripType === 'lyra';
+    const isAI = item.tripType === 'ai_itinerary';
+    
+    return (
+      <TouchableOpacity
+        style={[styles.card, (isLyra || isAI) && { borderColor: theme.teal, borderWidth: 1 }]}
+        activeOpacity={0.85}
+        onPress={() => {
+          if (isLyra) nav.navigate('LyraItinerary', { data: item, savedId: item._id });
+          else if (isAI) nav.navigate('AIItinerary', { savedData: item });
+          else nav.navigate('TripDetail', { tripId: item._id });
+        }}
+      >
+        <View style={styles.cardHeader}>
+          <Text style={styles.modeIcon}>{isLyra || isAI ? '✨' : (MODE_ICONS[item.mode] || '🌍')}</Text>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.routeText} numberOfLines={1}>
+              {item.displayDestination || (item.destination?.city ? (item.source?.city ? `${item.source.city} → ${item.destination.city}` : item.destination.city) : (typeof item.destination === 'string' ? item.destination : 'Untitled Trip'))}
+            </Text>
+            <Text style={styles.dateText}>
+              {isLyra || isAI ? 'AI Itinerary' : `${MODE_ICONS[item.mode] || '📅'} ${formatDate(item.date)}`}
             </Text>
           </View>
-        )}
-      </View>
-
-      <View style={styles.cardFooter}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={styles.creatorText}>
-            by {item.creator?.firstName || 'Unknown'}
-          </Text>
+          <View style={[styles.budgetBadge, { backgroundColor: (isLyra || isAI) ? theme.teal : (BUDGET_COLORS[item.budget] || theme.teal) }]}>
+            <Text style={styles.budgetText}>{isLyra || isAI ? 'AI Plan' : item.budget}</Text>
+          </View>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={theme.textLight} />
-      </View>
-    </TouchableOpacity>
-  );
+
+        <View style={styles.cardBody}>
+          <View style={styles.metaRow}>
+            {isLyra || isAI ? (
+              <View style={styles.metaItem}>
+                <Ionicons name="sparkles" size={14} color={theme.teal} />
+                <Text style={[styles.metaText, { color: theme.teal, fontWeight: '700' }]}>
+                  {isAI ? 'EkalGo Smart Planner' : 'Lyra Travel Architect'}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.metaItem}>
+                  <Ionicons name="people" size={14} color={theme.textSecondary} />
+                  <Text style={styles.metaText}>{item.membersCount || 1}/{item.maxTravelers} travelers</Text>
+                </View>
+                <View style={styles.metaItem}>
+                  <Ionicons name="compass" size={14} color={theme.textSecondary} />
+                  <Text style={styles.metaText}>{item.travelType}</Text>
+                </View>
+              </>
+            )}
+          </View>
+
+          {item.tags?.length > 0 && (
+            <View style={styles.tagsRow}>
+              {item.tags.slice(0, 3).map((tag: any, i: number) => {
+                const tagName = typeof tag === 'object' ? tag.name || tag.title : tag;
+                return (
+                  <View key={i} style={styles.tagChip}>
+                    <Text style={styles.tagText}>{tagName}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {item.userStatus && !isLyra && !isAI && (
+            <View style={[styles.statusBadge,
+            item.userStatus === 'accepted' ? { backgroundColor: theme.mode === 'dark' ? '#1A331E' : '#E8F5E9' } :
+              item.userStatus === 'pending' ? { backgroundColor: theme.mode === 'dark' ? '#3B2F14' : '#FFF8E1' } : { backgroundColor: theme.mode === 'dark' ? '#3D1C1C' : '#FFEBEE' }
+            ]}>
+              <Text style={[styles.statusText, { color: item.userStatus === 'accepted' ? theme.success : item.userStatus === 'pending' ? theme.warning : theme.error }]}>
+                {item.userStatus === 'accepted' ? '✅ Joined' :
+                  item.userStatus === 'pending' ? '⏳ Pending' : '❌ Rejected'}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.cardFooter}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <Text style={styles.creatorText} numberOfLines={1}>
+              {isLyra || isAI ? 'Architected by EkalGo AI' : `by ${item.creator?.firstName || 'Unknown'}`}
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {activeTab === 'myTrips' && (
+              <TouchableOpacity
+                onPress={() => handleDeleteTrip(item._id, isLyra ? 'lyra' : (isAI ? 'ai_itinerary' : 'social'))}
+                style={{ padding: 4 }}
+              >
+                <Ionicons name="trash-outline" size={18} color={theme.error} />
+              </TouchableOpacity>
+            )}
+            <Ionicons name={isLyra || isAI ? "map-outline" : "chevron-forward"} size={18} color={isLyra || isAI ? theme.teal : theme.textLight} />
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderFilterModal = () => (
     <Modal visible={showFilters} animationType="slide" transparent>
@@ -501,11 +592,52 @@ export default function TripsScreen() {
     (v: any) => v && (Array.isArray(v) ? v.length > 0 : true)
   ).length;
 
+  const renderDurationPicker = () => {
+    const DURATION_OPTIONS = [
+      { id: '1', label: '1 Day Trip', days: 1 },
+      { id: 'weekend', label: 'Weekend Escape (2 Days)', days: 2 },
+      { id: 'mini', label: 'Mini Adventure (4 Days)', days: 4 },
+      { id: 'explorer', label: 'Explorer Mode (7 Days)', days: 7 },
+    ];
+
+    return (
+      <Modal visible={showDurationPicker} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          onPress={() => setShowDurationPicker(false)}
+          activeOpacity={1}
+        >
+          <View style={styles.selectModalContent}>
+            <Text style={styles.modalTitle}>⏳ Select Duration</Text>
+            {DURATION_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.id}
+                style={[styles.selectOption, aiForm.days === opt.label && styles.selectOptionActive]}
+                onPress={() => {
+                  setAiForm(f => ({ ...f, days: opt.label, actualDays: opt.days }));
+                  setShowDurationPicker(false);
+                }}
+              >
+                <Text style={[styles.selectOptionText, aiForm.days === opt.label && styles.selectOptionTextActive]}>
+                  {opt.label}
+                </Text>
+                {aiForm.days === opt.label && <Ionicons name="checkmark-circle" size={20} color={theme.teal} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    );
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
-      <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.header}>
-        <Text style={styles.headerTitle}>✈️ Trips</Text>
+      <LinearGradient colors={['#00C9A7', '#008E7F']} style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>✈️ EkalGo</Text>
+          <Text style={styles.headerTagline}>Plan smarter. Travel deeper.</Text>
+        </View>
         <TouchableOpacity
           style={styles.filterIcon}
           onPress={() => setShowFilters(true)}
@@ -521,9 +653,9 @@ export default function TripsScreen() {
 
       {/* Tabs */}
       <View style={styles.tabsWrapper}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabsContent}
         >
           <TouchableOpacity
@@ -547,7 +679,7 @@ export default function TripsScreen() {
             onPress={() => dispatch(setActiveTab('aiPlanner'))}
           >
             <Text style={[styles.tabText, activeTab === 'aiPlanner' && styles.tabTextActive]} numberOfLines={1}>
-              🪄 AI Planner
+              🪄 Trip Wizard
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -558,7 +690,7 @@ export default function TripsScreen() {
         <FlatList
           data={data}
           renderItem={renderTripCard}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item, index) => item._id || `trip-${index}`}
           contentContainerStyle={{ padding: SPACING.md, paddingBottom: 100 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.teal} />}
           onEndReached={() => {
@@ -594,6 +726,8 @@ export default function TripsScreen() {
         renderAIPlanner()
       )}
 
+      {renderDurationPicker()}
+
       {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
@@ -623,6 +757,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.orange, borderRadius: 10, width: 18, height: 18,
     alignItems: 'center', justifyContent: 'center',
   },
+  headerTagline: { fontSize: 13, color: '#E0FFF9', fontWeight: '500', marginTop: 2 },
   filterBadgeText: { color: theme.textWhite, fontSize: 10, fontWeight: '800' },
 
   tabsWrapper: {
@@ -640,10 +775,10 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     paddingRight: 20
   },
-  tab: { 
-    paddingHorizontal: 20, 
-    paddingVertical: 10, 
-    alignItems: 'center', 
+  tab: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
     borderRadius: RADIUS.md,
     marginRight: 8,
     minWidth: 100
@@ -739,60 +874,238 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 14, borderRadius: RADIUS.lg, alignItems: 'center',
   },
   filterBtnText: { color: theme.textWhite, fontWeight: '700', fontSize: FONTS.md },
- 
-  // AI Planner Styles
-  aiCard: {
-    backgroundColor: theme.card, borderRadius: 24, padding: 0,
-    overflow: 'hidden', ...SHADOW.lg, marginBottom: 20,
+
+  glassCard: {
+    borderRadius: 30,
+    padding: 24,
+    marginBottom: 20,
+    backgroundColor: theme.mode === 'dark' ? 'rgba(30,30,30,0.92)' : 'rgba(255,255,255,0.95)',
+    borderWidth: 1.5,
+    borderColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+    ...SHADOW.lg,
   },
-  aiHeaderGrad: { padding: 24, alignItems: 'center' },
-  aiTitle: { fontSize: 24, fontWeight: '800', color: '#fff', textAlign: 'center' },
-  aiSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4, textAlign: 'center' },
-  aiFormBody: { padding: 20 },
-  aiLabel: { fontSize: 16, fontWeight: '700', color: theme.text, marginTop: 16, marginBottom: 12 },
-  aiInput: {
-    backgroundColor: theme.background, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: theme.border,
-    paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 16, color: theme.text,
+  glassTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: theme.text,
+    textAlign: 'center',
+    marginBottom: 4,
   },
-  aiChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  aiChip: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
-    borderWidth: 1.5, borderColor: theme.border, backgroundColor: theme.card,
+  glassSubtitle: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
   },
-  aiChipActive: { borderColor: theme.teal, backgroundColor: theme.tealLight },
-  aiChipText: { fontSize: 14, color: theme.textSecondary, fontWeight: '600' },
-  aiChipTextActive: { color: theme.teal, fontWeight: '700' },
-  generateBtn: { marginTop: 32, borderRadius: 16, overflow: 'hidden', ...SHADOW.md },
-  generateGrad: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 18, gap: 10,
+  glassForm: {
+    width: '100%',
   },
-  generateText: { color: '#fff', fontSize: 18, fontWeight: '800' },
- 
-  // Autocomplete Styles
-  suggestionsContainer: {
-    backgroundColor: theme.card,
-    borderRadius: RADIUS.md,
-    marginTop: 4,
+  inputSection: {
+    marginBottom: 20,
+  },
+  glassLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.text,
+    marginBottom: 10,
+  },
+  glassInput: {
+    backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+    borderRadius: 15,
+    padding: 16,
+    fontSize: 16,
+    color: theme.text,
     borderWidth: 1,
-    borderColor: theme.border,
-    maxHeight: 200,
-    zIndex: 1000,
-    ...SHADOW.md,
+    borderColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
   },
-  suggestionItem: {
+  glassSuggestions: {
+    backgroundColor: theme.card,
+    borderRadius: 15,
+    marginTop: 8,
+    position: 'absolute',
+    top: 75,
+    left: 0,
+    right: 0,
+    zIndex: 10000,
+    ...SHADOW.lg, // Use stronger shadow for overlays
+    borderWidth: 1.5,
+    borderColor: theme.border,
+    maxHeight: 220, // Increased for better selection
+    elevation: 10,
+  },
+  glassSuggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
-    gap: 10,
+    gap: 8,
   },
-  suggestionText: {
+  glassSuggestionText: {
     fontSize: 14,
     color: theme.text,
     flex: 1,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  pillChip: {
+    backgroundColor: theme.teal + '15',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: theme.teal + '30',
+  },
+  pillChipText: {
+    fontSize: 12,
+    color: theme.teal,
+    fontWeight: '700',
+  },
+  pillRow: {
+    gap: 10,
+    paddingRight: 20,
+  },
+  durationPill: {
+    backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  durationPillActive: {
+    backgroundColor: theme.teal,
+    borderColor: theme.teal,
+    ...SHADOW.md,
+  },
+  durationPillText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    fontWeight: '600',
+  },
+  durationPillTextActive: {
+    color: '#fff',
+    fontWeight: '800',
+  },
+  budgetValText: {
+    fontSize: 14,
+    color: theme.teal,
+    fontWeight: '800',
+  },
+  manualBudgetInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    borderColor: theme.teal + '30',
+  },
+  manualBudgetInput: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: theme.teal,
+    minWidth: 80,
+    textAlign: 'right',
+  },
+  rangeLimit: {
+    fontSize: 12,
+    color: theme.textLight,
+  },
+  premiumCTA: {
+    marginTop: 20,
+    ...Platform.select({
+      ios: { ...SHADOW.lg, shadowColor: theme.teal },
+      android: { elevation: 8 }
+    })
+  },
+  premiumCTAGrad: {
+    paddingVertical: 18,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumCTAText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: theme.text,
+    marginBottom: 16,
+    marginTop: 10,
+  },
+  trendingRow: {
+    gap: 15,
+    paddingRight: 20,
+  },
+  trendingCard: {
+    width: 120,
+    height: 140,
+    borderRadius: 25,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    ...SHADOW.sm,
+  },
+  trendingEmoji: {
+    fontSize: 32,
+    marginBottom: 10,
+  },
+  trendingName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: theme.text,
+  },
+  glassSelect: {
+    backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+    borderRadius: 15,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+  },
+  glassSelectText: {
+    fontSize: 16,
+    color: theme.text,
+    fontWeight: '500',
+  },
+  selectModalContent: {
+    backgroundColor: theme.card,
+    width: '90%',
+    borderRadius: 25,
+    padding: 24,
+    ...SHADOW.lg,
+  },
+  selectOption: {
+    paddingVertical: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  selectOptionActive: {
+    backgroundColor: theme.tealLight + '10',
+  },
+  selectOptionText: {
+    fontSize: 16,
+    color: theme.text,
+    fontWeight: '600',
+  },
+  selectOptionTextActive: {
+    color: theme.teal,
+    fontWeight: '800',
   },
 });

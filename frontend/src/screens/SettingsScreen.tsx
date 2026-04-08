@@ -58,10 +58,6 @@ export default function SettingsScreen() {
               await AsyncStorage.removeItem('@last_fetch_time');
               dispatch(logout());
               dispatch(clearSaved());
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Landing' }],
-              });
             } catch (e) {
               Alert.alert('Error', 'Failed to logout');
             }
@@ -82,20 +78,20 @@ export default function SettingsScreen() {
       onPress: () => dispatch(toggleTheme()), color: theme.gold,
     },
     {
-      icon: 'notifications-outline', label: 'Notifications',
-      onPress: () => Alert.alert('Coming soon'), color: theme.orange,
-    },
-    {
       icon: 'shield-checkmark-outline', label: 'Privacy & Safety',
-      onPress: () => Alert.alert('Coming soon'), color: theme.gold,
+      onPress: () => navigation.navigate('PrivacySafety'), color: theme.gold,
     },
     {
       icon: 'help-circle-outline', label: 'Help & Support',
-      onPress: () => Alert.alert('Coming soon'), color: theme.info,
+      onPress: () => navigation.navigate('HelpSupport'), color: theme.info,
     },
     {
       icon: 'information-circle-outline', label: 'About EkalGo',
-      onPress: () => Alert.alert('EkalGo v1.0.0', 'From Solo Trips to Shared Memories. ✈️'), color: theme.textSecondary,
+      onPress: () => navigation.navigate('About'), color: theme.textSecondary,
+    },
+    {
+      icon: 'trash-outline', label: 'Delete Account',
+      onPress: () => navigation.navigate('DeleteAccount'), color: theme.error,
     },
     {
       icon: 'log-out-outline', label: 'Logout',

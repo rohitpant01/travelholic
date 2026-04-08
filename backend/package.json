@@ -1,7 +1,7 @@
 {
-  "name": "travelholic-backend",
+  "name": "ekalgo-backend",
   "version": "1.0.0",
-  "description": "TravelHolic Backend API",
+  "description": "EkalGo Backend API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@emailjs/nodejs": "^5.0.2",
+    "@google/generative-ai": "^0.24.1",
     "aws-sdk": "^2.1693.0",
     "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",
@@ -20,6 +21,7 @@
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1",
     "google-auth-library": "^10.6.1",
+    "groq-sdk": "^1.1.2",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
@@ -27,6 +29,7 @@
     "multer": "^1.4.5-lts.1",
     "multer-storage-cloudinary": "^4.0.0",
     "node-fetch": "^2.7.0",
+    "openai": "^6.33.0",
     "socket.io": "^4.6.1",
     "twilio": "^4.19.3"
   },

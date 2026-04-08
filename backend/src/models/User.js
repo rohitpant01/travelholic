@@ -137,6 +137,10 @@ const userSchema = new mongoose.Schema({
     enum: ['Online', 'Planning Trip', 'Exploring', 'Traveling'],
     default: 'Online'
   },
+  
+  // Deletion tracking
+  isDeleted: { type: Boolean, default: false },
+  deletionScheduledAt: { type: Date },
 
   // Push notifications
   pushToken: String,
@@ -162,6 +166,38 @@ const userSchema = new mongoose.Schema({
   // Social
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+ 
+  // Saved Content
+  savedDestinations: [{
+    id: String,
+    title: String,
+    image: String,
+    location: String,
+    description: String,
+    rating: { type: Number, default: 0 },
+    budget: String,
+    bestTime: String,
+    tags: [String],
+    whyLoveThis: [String],
+    nearestAirport: String,
+    nearestCity: String,
+    travelTip: String,
+    lat: Number,
+    lng: Number,
+    savedAt: { type: Date, default: Date.now }
+  }],
+
+  // 🧠 Travel Memory (Lyra Learning)
+  travelMemory: {
+    preferences: {
+      budget: { type: String, enum: ['Budget', 'Mid-range', 'Luxury', 'Any'], default: 'Any' },
+      interests: [String],
+      preferredPace: { type: String, enum: ['Relaxed', 'Balanced', 'Fast'], default: 'Balanced' }
+    },
+    savedItineraryCount: { type: Number, default: 0 },
+    lastAiPlaformUsed: { type: Date },
+    lyraGenerationTimestamps: { type: [Date], default: [] }
+  },
 
 }, {
   timestamps: true,
@@ -213,15 +249,53 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 // Method: get public profile (remove sensitive fields)
 userSchema.methods.toPublicProfile = function () {
   const obj = this.toObject();
-  delete obj.password;
-  delete obj.otp;
-  delete obj.otpExpiry;
-  delete obj.likes;
-  delete obj.likedBy;
-  delete obj.skips;
-  delete obj.blockedUsers;
-  delete obj.pushToken;
-  return obj;
+  
+  // Explicitly ensure these exist even if defaults or undefined
+  return {
+    _id: obj._id,
+    firstName: obj.firstName,
+    lastName: obj.lastName,
+    username: obj.username,
+    email: obj.email,
+    phone: obj.phone,
+    isEmailVerified: obj.isEmailVerified,
+    isPhoneVerified: obj.isPhoneVerified,
+    isPhotoVerified: obj.isPhotoVerified,
+    registrationStep: obj.registrationStep,
+    authProvider: obj.authProvider,
+    googleId: obj.googleId,
+    photos: obj.photos,
+    interests: obj.interests,
+    languages: obj.languages,
+    lookingFor: obj.lookingFor,
+    location: obj.location,
+    city: obj.city,
+    country: obj.country,
+    hometown: obj.hometown,
+    bio: obj.bio || '',
+    dob: obj.dob,
+    age: obj.age,
+    gender: obj.gender,
+    pronouns: obj.pronouns,
+    lastVisitedPlace: obj.lastVisitedPlace || '',
+    dreamDestination: obj.dreamDestination || '',
+    countriesVisited: obj.countriesVisited || [],
+    origin: obj.origin,
+    destination: obj.destination,
+    travelDate: obj.travelDate,
+    activityStatus: obj.activityStatus,
+    lastSeen: obj.lastSeen,
+    isOnline: obj.isOnline,
+    profileComplete: obj.profileComplete,
+    memberStatus: obj.memberStatus,
+    likesReceived: obj.likesReceived,
+    matchesCount: obj.matchesCount,
+    tripsCompleted: obj.tripsCompleted,
+    completedTrips: obj.completedTrips || [],
+    savedDestinations: obj.savedDestinations || [],
+    createdAt: obj.createdAt,
+    updatedAt: obj.updatedAt,
+  };
 };
 
 module.exports = mongoose.model('User', userSchema);

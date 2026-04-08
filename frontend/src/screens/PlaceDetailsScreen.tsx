@@ -195,6 +195,13 @@ export default function PlaceDetailsScreen() {
   };
 
   if (!place) return null;
+
+  const prettifyLocation = (loc: string) => {
+    if (!loc) return 'India';
+    const clean = loc.split(',').map(p => p.trim()).filter(p => !p.includes('+')).join(', ');
+    return clean || loc;
+  };
+
   const finalDescription = place.story || place.description || wikiDesc || `Discover the soul of ${saveTitle}. A journey into nature and culture.`;
 
   return (
@@ -259,11 +266,18 @@ export default function PlaceDetailsScreen() {
           <View style={styles.titleRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.titleText}>{saveTitle}</Text>
-              <Text style={styles.locationText}>📍 {place.location || place.destination || 'India'}</Text>
-            </View>
-            <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={14} color="#FFD700" />
-              <Text style={styles.ratingValue}>{place.rating || 4.8}</Text>
+              <View style={styles.locationContainer}>
+                <Ionicons name="location" size={16} color={COLORS.teal} />
+                <Text style={styles.locationText}>
+                  {prettifyLocation(place.location || place.destination || 'India')}
+                </Text>
+              </View>
+              <View style={styles.ratingInfoRow}>
+                <Ionicons name="star" size={16} color="#FFD700" />
+                <Text style={styles.ratingInfoText}>
+                  {place.rating || 4.8} <Text style={styles.reviewCount}>(120+ reviews)</Text>
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -279,7 +293,7 @@ export default function PlaceDetailsScreen() {
                <Ionicons name="calendar" size={16} color={COLORS.teal} />
                <Text style={styles.sectionLabel}>BEST TIME TO VISIT</Text>
              </View>
-             <Text style={styles.insightValue}>{place.bestTime || 'Nov – Feb'}</Text>
+             <Text style={styles.insightValue}>{place.bestTime && place.bestTime !== 'Year round' ? place.bestTime : 'Oct – Mar'}</Text>
           </View>
 
           {loadingInsights ? (
@@ -401,9 +415,11 @@ const getStyles = (theme: any) => StyleSheet.create({
   contentBody: { paddingHorizontal: 24, marginTop: -20 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
   titleText: { fontSize: 32, fontWeight: '900', color: theme.text, letterSpacing: -1 },
-  locationText: { fontSize: 14, fontWeight: '700', color: COLORS.teal, marginTop: 4 },
-  ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, ...SHADOW.sm },
-  ratingValue: { fontSize: 14, fontWeight: '800', color: theme.text, marginLeft: 4 },
+  locationContainer: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  locationText: { fontSize: 15, fontWeight: '700', color: COLORS.teal },
+  ratingInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  ratingInfoText: { fontSize: 14, fontWeight: '800', color: theme.text },
+  reviewCount: { color: theme.textLight, fontWeight: '600' },
 
   sectionLabel: { fontSize: 10, fontWeight: '800', color: COLORS.teal, letterSpacing: 1.5, marginBottom: 8 },
   storySection: { marginBottom: 30 },

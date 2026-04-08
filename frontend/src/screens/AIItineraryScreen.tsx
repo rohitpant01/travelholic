@@ -13,6 +13,7 @@ import { aiAPI, userAPI } from '../api/services';
 import { addSaved } from '../store/slices/savedSlice';
 import { placeService } from '../api/placeService';
 import { fetchPlaceImage } from '../api/imageService';
+import AILoadingView from '../components/AILoadingView';
 
 const { width: W } = Dimensions.get('window');
 
@@ -140,7 +141,7 @@ const PlanItem = ({ item, index, isLast, navigation, destination }: any) => {
         lng: item.lng,
         destination: destination,
         story: item.description,
-        bestTime: "Year round"
+        bestTime: "Oct – Mar"
       }
     });
   };
@@ -189,15 +190,15 @@ const PlanItem = ({ item, index, isLast, navigation, destination }: any) => {
               onPress={(e) => { e.stopPropagation(); handleFlip(); }}
             >
               <Ionicons name="sync-outline" size={12} color={theme.teal} />
-              <Text style={styles.metaText}>Flip</Text>
+              <Text style={styles.metaText} numberOfLines={1}>Flip</Text>
             </TouchableOpacity>
             <View style={styles.metaBadge}>
               <Ionicons name="walk-outline" size={12} color={theme.teal} />
-              <Text style={styles.metaText}>{item.travel_time || '5 mins'}</Text>
+              <Text style={styles.metaText} numberOfLines={1}>{item.travel_time || '5 mins'}</Text>
             </View>
             <View style={styles.metaBadge}>
               <Ionicons name="navigate-outline" size={12} color={theme.teal} />
-              <Text style={styles.metaText}>{item.distance || '1 km'}</Text>
+              <Text style={styles.metaText} numberOfLines={1}>{item.distance || '1 km'}</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -207,7 +208,9 @@ const PlanItem = ({ item, index, isLast, navigation, destination }: any) => {
           <TouchableOpacity activeOpacity={0.8} onPress={() => setIsFlipped(false)}>
             <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.backHeaderPremium}>
               <Text style={styles.backTitlePremium} numberOfLines={1}>{details?.title || item.place || item.activity}</Text>
-              <Text style={styles.backSubTitlePremium} numberOfLines={1}>{details?.location || destination}</Text>
+              <Text style={styles.backSubTitlePremium} numberOfLines={1}>
+                {details?.location || (typeof destination === 'object' ? destination?.city : destination)}
+              </Text>
               <Ionicons name="chevron-down" size={12} color="#FFF" style={{ marginTop: 2, opacity: 0.8 }} />
             </LinearGradient>
           </TouchableOpacity>
@@ -329,22 +332,38 @@ export default function AIItineraryScreen() {
   const theme = useAppTheme();
   const styles = getStyles(theme);
 
-  const { trip } = route.params || {};
+  const { trip, savedData } = route.params || {};
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [activeDay, setActiveDay] = useState(0);
   const [heroImg, setHeroImg] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(!!savedData);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPublished, setIsPublished] = useState(savedData?.isPublished || false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [dbId, setDbId] = useState(savedData?._id || null);
 
   useEffect(() => {
     generateItinerary();
   }, []);
 
   const generateItinerary = async () => {
+    if (savedData) {
+      setData(savedData);
+      setHeroImg(savedData.heroImg || null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const start = new Date(trip?.date || Date.now());
-      const end = new Date(trip?.endDate || Date.now() + 86400000 * 5);
-      const daysCount = Math.min(5, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      // Prioritize explicit duration (from AI Planner) over date-range calculation
+      let daysCount = Math.min(7, trip?.duration || 0);
+      
+      if (!daysCount) {
+        const start = new Date(trip?.date || Date.now());
+        const end = new Date(trip?.endDate || Date.now() + 86400000 * 5);
+        daysCount = Math.min(7, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      }
 
       // Extract from route params if trip is missing (Magic Circle flow)
       const { destination: pDest, interests: pInterests } = route.params || {};
@@ -361,7 +380,19 @@ export default function AIItineraryScreen() {
       setData(res.data);
       const img = await fetchPlaceImage(res.data.destination);
       if (img) setHeroImg(img);
-    } catch (e) {
+    } catch (e: any) {
+      if (e.response?.status === 429 && e.response?.data?.nextAvailableAt) {
+        const nextDate = new Date(e.response.data.nextAvailableAt);
+        const timeStr = nextDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateStr = nextDate.toLocaleDateString([], { day: '2-digit', month: 'short' });
+        
+        Alert.alert(
+          'Limit Reached', 
+          `You've reached your daily limit of 2 itineraries. Please try again after ${timeStr} on ${dateStr}.`,
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+        return;
+      }
       Alert.alert('Magic Failed', 'AI was unable to reach the destination. Try again!');
       navigation.goBack();
     } finally {
@@ -369,7 +400,55 @@ export default function AIItineraryScreen() {
     }
   };
 
-  if (loading) return <ShimmerLoader />;
+  const handleSavePlan = async () => {
+    if (isSaving || isSaved) return;
+    setIsSaving(true);
+    try {
+      const payload = {
+        destination: data.destination,
+        coordinates: data.coordinates,
+        days: data.itinerary.length,
+        budget: trip?.budget || 'Moderate',
+        interests: trip?.interests?.join(', ') || 'General',
+        travelType: trip?.travelType || 'Solo',
+        startLocation: trip?.source?.city || 'Local',
+        roadmap: data.roadmap,
+        estimated_total_cost: data.estimated_total_cost,
+        itinerary: data.itinerary,
+        stay_recommendations: data.stay_recommendations,
+        how_to_reach: data.how_to_reach,
+        best_time_to_visit: data.best_time_to_visit,
+        travel_tips: data.travel_tips,
+        why_to_visit: data.why_to_visit
+      };
+      
+      const res = await aiAPI.saveItinerary(payload);
+      setDbId(res.data._id);
+      setIsSaved(true);
+      Alert.alert("Success ✨", "Itinerary saved to My Trips!");
+    } catch (e) {
+      Alert.alert("Error", "Failed to save itinerary.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePublishPlan = async () => {
+    if (isPublishing || isPublished || !dbId) return;
+    setIsPublishing(true);
+    try {
+      await aiAPI.publishItinerary(dbId);
+      setIsPublished(true);
+      Alert.alert("Published! 🌍", "Your trip is now live on the feed.");
+    } catch (e) {
+      Alert.alert("Error", "Failed to publish itinerary.");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  if (loading) return <AILoadingView />;
+  if (!data) return null; // Prevent crash if data is null after error
 
   const currentDayPlan = data?.itinerary[activeDay];
   const roadmapSteps = data?.roadmap?.split('->').map((s: string) => s.trim());
@@ -385,9 +464,21 @@ export default function AIItineraryScreen() {
           <TouchableOpacity style={styles.absBack} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.absShare} onPress={() => Share.share({ message: `Plan for ${data.destination}` })}>
-            <Ionicons name="share-social-outline" size={22} color="#fff" />
-          </TouchableOpacity>
+          
+          <View style={styles.absActionRow}>
+            {!isSaved ? (
+              <TouchableOpacity style={styles.absActionBtn} onPress={handleSavePlan} disabled={isSaving}>
+                {isSaving ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="bookmark-outline" size={22} color="#fff" />}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={[styles.absActionBtn, isPublished && { backgroundColor: theme.teal }]} onPress={handlePublishPlan} disabled={isPublishing || isPublished}>
+                {isPublishing ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name={isPublished ? "cloud-done" : "share-social"} size={22} color="#fff" />}
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.absActionBtn} onPress={() => Share.share({ message: `Check out my ${data.destination} trip plan on EkalGo! ✨` })}>
+               <Ionicons name="share-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.heroContent}>
             <Text style={styles.heroDest}>{data.destination}</Text>
@@ -520,28 +611,58 @@ export default function AIItineraryScreen() {
           {currentDayPlan?.plan.map((item: any, idx: number) => (
             <PlanItem key={idx} item={item} index={idx} isLast={idx === currentDayPlan.plan.length-1} navigation={navigation} destination={data.destination} />
           ))}
-        </View>
 
-        {/* HIDDEN GEMS REMOVED: Now at Place Details Screen natively */}
-
-        {/* PREMIUM STAYS (ADDED BACK AT BOTTOM) */}
-        {data?.stay_recommendations?.length > 0 && (
-          <View style={styles.staySection}>
-            <Text style={[styles.sectionTitle, { marginLeft: 20, marginTop: 10 }]}>Premium Stays</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10 }}>
-              {data.stay_recommendations.map((stay: any, idx: number) => (
-                <View key={idx} style={styles.stayCard}>
-                  <Image source={{ uri: `https://images.unsplash.com/photo-1566073771259-6a8506099945` }} style={styles.stayBanner} />
-                  <View style={styles.stayDetails}>
-                    <Text style={styles.stayName} numberOfLines={1}>{stay.name}</Text>
-                    <Text style={styles.stayPrice}>{stay.price_per_night} / night</Text>
-                    <Text style={styles.stayArea}>📍 {stay.area}</Text>
-                  </View>
+          {/* DAILY STAY RECOMMENDATIONS */}
+          {currentDayPlan?.stay_recommendations?.length > 0 && (
+            <View style={{ marginTop: 20 }}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitleSmall}>Boutique Stays</Text>
+                <View style={styles.stayBadge}>
+                  <Text style={styles.stayBadgeText}>Nearby Day {activeDay + 1} spots</Text>
                 </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20, paddingTop: 10 }}>
+                {currentDayPlan.stay_recommendations.map((stay: any, idx: number) => (
+                  <TouchableOpacity 
+                    key={idx} 
+                    style={styles.stayCard}
+                    onPress={() => {
+                      const url = `https://www.google.com/maps/search/?api=1&query=${stay.lat},${stay.lng}`;
+                      Linking.openURL(url).catch(err => console.error("Couldn't load page", err));
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <Image 
+                      source={{ uri: stay.image || `https://images.unsplash.com/photo-1566073771259-6a8506099945` }} 
+                      style={styles.stayBanner} 
+                    />
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.6)']}
+                      style={styles.stayBadgeOverlay}
+                    >
+                      <View style={styles.stayMapBadge}>
+                        <Ionicons name="map-outline" size={12} color="#fff" />
+                        <Text style={styles.stayMapBadgeText}>View on Map</Text>
+                      </View>
+                    </LinearGradient>
+
+                    <View style={styles.stayDetails}>
+                      <Text style={styles.stayName} numberOfLines={1}>{stay.name}</Text>
+                      <View style={styles.stayMetaRow}>
+                        <Text style={styles.stayPrice}>{stay.price_per_night} / night</Text>
+                        <View style={styles.ratingBox}>
+                          <Ionicons name="star" size={10} color="#FFD700" />
+                          <Text style={styles.ratingText}>{stay.rating || 4.5}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.stayArea}>📍 {stay.area}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -556,46 +677,36 @@ const getStyles = (theme: any) => StyleSheet.create({
   heroImg: { width: '100%', height: '100%' },
   heroOverlay: { ...StyleSheet.absoluteFillObject },
   absBack: { position: 'absolute', top: 50, left: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
-  absShare: { position: 'absolute', top: 50, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
+  absActionRow: { position: 'absolute', top: 50, right: 20, flexDirection: 'row', gap: 10 },
+  absActionBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
   heroContent: { position: 'absolute', bottom: 30, left: 20, right: 20 },
   heroDest: { fontSize: 32, fontWeight: '900', color: '#fff', marginBottom: 12, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 2 } },
   statsRow: { flexDirection: 'row', gap: 10 },
   statChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   statText: { fontSize: 13, fontWeight: '700', color: '#fff' },
-
   stickyTabs: { backgroundColor: theme.background, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.borderLight },
   dayTabs: { maxHeight: 50 },
-  dayTabsContent: { 
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    paddingRight: 40 
-  },
-  dayTab: { 
-    paddingHorizontal: 24, 
-    paddingVertical: 10, 
-    borderRadius: RADIUS.full, 
-    backgroundColor: theme.card, 
-    marginRight: 12, 
-    ...SHADOW.sm,
-    minWidth: 80,
-    alignItems: 'center'
-  },
+  dayTabsContent: { paddingHorizontal: 20, alignItems: 'center', paddingRight: 40 },
+  dayTab: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: RADIUS.full, backgroundColor: theme.card, marginRight: 12, ...SHADOW.sm, minWidth: 80, alignItems: 'center' },
   dayTabActive: { backgroundColor: theme.teal, ...SHADOW.card },
   dayTabText: { fontSize: 14, fontWeight: '800', color: theme.textLight },
   dayTabTextActive: { color: '#fff' },
-
   roadmapSection: { paddingVertical: 15 },
   pathChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: RADIUS.sm, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border },
   pathText: { fontSize: 12, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase' },
-
   staySection: { marginBottom: 30 },
   stayCard: { width: 280, backgroundColor: theme.card, borderRadius: RADIUS.lg, marginRight: 15, overflow: 'hidden', ...SHADOW.sm },
   stayBanner: { width: '100%', height: 140 },
   stayDetails: { padding: 15 },
   stayName: { fontSize: 16, fontWeight: '800', color: theme.text, marginBottom: 5 },
-  stayPrice: { fontSize: 14, fontWeight: '900', color: theme.success, marginBottom: 5 },
-  stayArea: { fontSize: 12, color: theme.textSecondary, fontWeight: '600' },
-
+  stayArea: { fontSize: 13, color: theme.textSecondary, marginTop: 4 },
+  stayPrice: { fontSize: 14, fontWeight: '700', color: theme.teal },
+  stayBadgeOverlay: { position: 'absolute', top: 0, left: 0, right: 0, height: 140, justifyContent: 'flex-end', padding: 10 },
+  stayMapBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.sm, alignSelf: 'flex-start' },
+  stayMapBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  stayMetaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  ratingBox: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: theme.background, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  ratingText: { fontSize: 10, fontWeight: '800', color: theme.text },
   gemSection: { marginBottom: 30 },
   gemFlip: { width: 220, height: 280, marginRight: 15 },
   gemFace: { flex: 1, borderRadius: 20, overflow: 'hidden', ...SHADOW.md },
@@ -605,27 +716,30 @@ const getStyles = (theme: any) => StyleSheet.create({
   gemName: { color: '#fff', fontSize: 18, fontWeight: '800' },
   gemRating: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   gemRatingText: { color: '#FFD700', fontWeight: '800', fontSize: 12 },
-  
   gemBack: { flex: 1, backgroundColor: theme.card, borderRadius: 20, padding: 15, justifyContent: 'center', borderWidth: 1, borderColor: theme.border },
   gemStoryTitle: { fontSize: 14, fontWeight: '900', color: theme.teal, marginBottom: 8, textTransform: 'uppercase' },
   gemStory: { fontSize: 13, color: theme.text, lineHeight: 20, marginBottom: 15 },
   gemMapBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.teal, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, alignSelf: 'flex-start' },
   gemMapText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-
   pageContent: { padding: 20 },
   sectionTitle: { fontSize: 22, fontWeight: '900', color: theme.text, marginBottom: 20 },
-  
+  sectionTitleSmall: { fontSize: 18, fontWeight: '800', color: theme.text, marginBottom: 8 },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  stayBadge: { backgroundColor: theme.tealLight + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.sm },
+  stayBadgeText: { fontSize: 10, fontWeight: '700', color: theme.teal },
   insightCard: { flexDirection: 'row', gap: 15, padding: 16, backgroundColor: theme.card, borderRadius: RADIUS.lg, ...SHADOW.md, marginBottom: 25, borderLeftWidth: 4, borderLeftColor: theme.teal },
   insightIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   insightLabel: { fontSize: 10, fontWeight: '900', color: theme.teal, letterSpacing: 1 },
   insightText: { fontSize: 14, color: theme.text, fontWeight: '600', marginTop: 2, lineHeight: 20 },
-
   stepCard: { flexDirection: 'row' },
   stepTimeline: { width: 24, alignItems: 'center' },
   timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.teal, marginTop: 8 },
   timelineLine: { flex: 1, width: 2, backgroundColor: theme.border, marginTop: 2, marginBottom: -2 },
   stepBody: { flex: 1, backgroundColor: theme.card, padding: 18, borderRadius: RADIUS.xl, marginLeft: 12, marginBottom: 25, ...SHADOW.sm },
   stepHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  stepFooter: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 15 },
+  metaBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, maxWidth: '48%', flexShrink: 1 },
+  metaText: { fontSize: 11, color: theme.teal, fontWeight: '700' },
   timeBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: theme.teal, paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
   timeBadgeText: { fontSize: 11, fontWeight: '800', color: '#fff', textTransform: 'uppercase' },
   stepCost: { fontSize: 15, fontWeight: '900', color: theme.success },
@@ -633,11 +747,6 @@ const getStyles = (theme: any) => StyleSheet.create({
   stepDesc: { fontSize: 14, color: theme.textSecondary, lineHeight: 22, marginBottom: 15 },
   stepContentRow: { flexDirection: 'row', gap: 15 },
   stepThumb: { width: 85, height: 85, borderRadius: RADIUS.md },
-  stepFooter: { flexDirection: 'row', gap: 12, marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: theme.borderLight },
-  metaBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.background, paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.md },
-  metaText: { fontSize: 11, fontWeight: '700', color: theme.textSecondary },
-
-  // --- NEW FLIP STYLES ---
   stepFlip: { marginBottom: 25 },
   itineraryBack: { minHeight: 180, overflow: 'hidden' },
   backHeaderPremium: { paddingVertical: 12, paddingHorizontal: 15, alignItems: 'center', justifyContent: 'center', height: 60 },
@@ -655,6 +764,5 @@ const getStyles = (theme: any) => StyleSheet.create({
   itineraryActionRow: { flexDirection: 'row', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
   miniBtn: { flex: 1, height: 36, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   miniBtnText: { fontSize: 11, fontWeight: '900', color: '#fff' },
-
   heroHeader: { height: 320, width: W }
 });

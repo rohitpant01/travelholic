@@ -55,7 +55,7 @@ export default function MapScreen() {
         if (loc) {
           setLocation(loc);
           const { latitude, longitude } = loc.coords;
-          const res = await discoverAPI.getProfiles(latitude, longitude);
+          const res = await discoverAPI.getProfiles(latitude, longitude, 'map');
           
           if (res.data && res.data.profiles) {
             const validProfiles = res.data.profiles.filter(

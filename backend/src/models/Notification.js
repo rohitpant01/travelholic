@@ -14,7 +14,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['like', 'match', 'trip_join_request', 'trip_accepted', 'trip_member_joined', 'nearby_travelers', 'trending_trip'],
+    enum: ['like', 'comment', 'match', 'trip_join_request', 'trip_accepted', 'trip_member_joined', 'nearby_travelers', 'trending_trip'],
     required: true,
   },
   title: String,
@@ -23,6 +23,7 @@ const notificationSchema = new mongoose.Schema({
     required: true,
   },
   data: {
+    postId: mongoose.Schema.Types.ObjectId,
     tripId: mongoose.Schema.Types.ObjectId,
     matchId: mongoose.Schema.Types.ObjectId,
   },

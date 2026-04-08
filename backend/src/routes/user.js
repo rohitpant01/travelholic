@@ -21,12 +21,15 @@ const {
   updateCompletedTrip,
   deleteCompletedTrip,
   getCompletedTrips,
+  deleteSavedDestination,
+  saveDestination,
+  syncSavedDestinations,
+  requestAccountDeletion,
+  cancelAccountDeletion,
 } = require('../controllers/userController');
 const multer = require('multer');
 
 const upload = multer({ dest: 'uploads/' });
-
-router.use(protect); // All user routes require auth
 
 // ── Debug ────────────────────────────────────────────────────
 router.post('/test-upload', upload.array('photos', 6), (req, res) => {
@@ -35,43 +38,45 @@ router.post('/test-upload', upload.array('photos', 6), (req, res) => {
 });
 
 // ── Own profile ───────────────────────────────────────────────
-router.get('/profile', getProfile);
-router.put('/update', updateProfile);
+router.get('/profile', protect, getProfile);
+router.put('/update', protect, updateProfile);
 
 // ── ✅ NEW: Who liked me ──────────────────────────────────────
-// IMPORTANT: must be declared BEFORE router.get('/:userId')
-// Express matches routes top-to-bottom; if /:userId came first,
-// a request to GET /who-liked-me would treat "who-liked-me" as a userId.
 router.get('/who-liked-me', protect, getWhoLikedMe);
 router.post('/follow/:userId', protect, followUser);
 router.post('/block', protect, blockUser);
 
 // ── Photos ───────────────────────────────────────────────────
-router.post('/photos', uploadPhoto.array('photos', 6), uploadPhotos);
-router.delete('/photos/:photoId', deletePhoto);
-router.put('/photos/:photoId/profile', setProfilePhoto);
+router.post('/photos', protect, uploadPhoto.array('photos', 6), uploadPhotos);
+router.delete('/photos/:photoId', protect, deletePhoto);
+router.put('/photos/:photoId/profile', protect, setProfilePhoto);
 
 // ── Verification ─────────────────────────────────────────────
-router.post('/verify-selfie', uploadSelfie.single('selfie'), verifySelfie);
+router.post('/verify-selfie', protect, uploadSelfie.single('selfie'), verifySelfie);
 
 // ── Location / Distance ───────────────────────────────────────
-router.put('/location', updateLocation);
-router.put('/distance', updateDistance);
+router.put('/location', protect, updateLocation);
+router.put('/distance', protect, updateDistance);
 
 // ── Account actions ───────────────────────────────────────────
-router.post('/block', blockUser);
-router.post('/report', reportUser);
-router.delete('/account', deactivateAccount);
+router.post('/report', protect, reportUser);
+router.delete('/account', protect, requestAccountDeletion);
+router.post('/cancel-deletion', protect, cancelAccountDeletion);
+router.post('/deactivate', protect, deactivateAccount);
 
 // Completed Trips
-router.post('/completed-trips', addCompletedTrip);
-router.put('/completed-trips/:tripId', updateCompletedTrip);
-router.delete('/completed-trips/:tripId', deleteCompletedTrip);
+router.post('/completed-trips', protect, addCompletedTrip);
+router.put('/completed-trips/:tripId', protect, updateCompletedTrip);
+router.delete('/completed-trips/:tripId', protect, deleteCompletedTrip);
 router.get('/:userId/completed-trips', getCompletedTrips);
 
-// ── View another user ─────────────────────────────────────────
-// ⚠️  Keep this LAST among GET routes — the wildcard /:userId
-//     will match ANY unrecognised path segment if placed higher up.
+// Saved Destinations
+router.post('/saved-destinations', protect, saveDestination);
+router.delete('/saved-destinations/:destinationId', protect, deleteSavedDestination);
+router.post('/sync-saved-destinations', protect, syncSavedDestinations);
+
+// ── View another user (PUBLIC) ────────────────────────────────
+// ⚠️ Keep this LAST. Matches any ID or string like "profile" if not matched above.
 router.get('/:userId', getUserById);
 
 module.exports = router;

@@ -87,23 +87,25 @@ export default function MatchesScreen() {
       ]);
       
       const privateMatches = matchRes.data.matches.map((m: any) => ({ ...m, type: 'private' }));
-      const groupTrips = tripRes.data.trips.map((t: any) => ({
-        matchId: t._id,
-        type: 'group',
-        user: {
-          _id: t._id,
-          firstName: t.groupName || t.name || `${t.source?.city} → ${t.destination?.city}`,
-          profilePhoto: t.groupIcon || null,
-          isOnline: false,
-        },
-        lastMessage: t.lastMessage,
-        matchedAt: t.createdAt,
-        isTrip: true,
-        tripData: t,
-        unreadCount: t.unreadCount || 0,
-        pinned: t.isPinned || false,
-        muted: t.isMuted || false
-      }));
+      const groupTrips = tripRes.data.trips
+        .filter((t: any) => t.tripType === 'social')
+        .map((t: any) => ({
+          matchId: t._id,
+          type: 'group',
+          user: {
+            _id: t._id,
+            firstName: t.groupName || t.name || `${t.source?.city} → ${t.destination?.city}`,
+            profilePhoto: t.groupIcon || null,
+            isOnline: false,
+          },
+          lastMessage: t.lastMessage,
+          matchedAt: t.createdAt,
+          isTrip: true,
+          tripData: t,
+          unreadCount: t.unreadCount || 0,
+          pinned: t.isPinned || false,
+          muted: t.isMuted || false
+        }));
 
       const combined = [...privateMatches, ...groupTrips];
       dispatch(setMatches(combined));

@@ -34,88 +34,25 @@ export interface Profile {
 
 interface TravelerDiscoveryCardProps {
   profile: Profile;
-  onLike: () => void;
-  onSkip: () => void;
-  onSuperLike: () => void;
-  isTop: boolean;
   onPressProfile?: (profile: Profile) => void;
 }
 
 export default function TravelerDiscoveryCard({ 
   profile, 
-  onLike, 
-  onSkip, 
-  onSuperLike, 
-  isTop,
   onPressProfile
 }: TravelerDiscoveryCardProps) {
-      const theme = useAppTheme();
+  const theme = useAppTheme();
   const styles = getStyles(theme);
-  const pan = useRef(new Animated.ValueXY()).current;
+
+  if (!profile) return null; // Safety guard against empty cards
+
   const [photoIndex, setPhotoIndex] = useState(0);
   const profilePhoto = profile.photos?.find(p => p.isProfile)?.url || profile.photos?.[0]?.url;
-
-  const rotate = pan.x.interpolate({
-    inputRange: [-W / 2, 0, W / 2],
-    outputRange: ['-10deg', '0deg', '10deg'],
-    extrapolate: 'clamp',
-  });
-
-  const likeOpacity = pan.x.interpolate({
-    inputRange: [0, W * 0.25],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  const skipOpacity = pan.x.interpolate({
-    inputRange: [-W * 0.25, 0],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gesture) => {
-        return isTop && (Math.abs(gesture.dx) > 10 || Math.abs(gesture.dy) > 10);
-      },
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dx > SWIPE_THRESHOLD) {
-          Animated.timing(pan, {
-            toValue: { x: W * 1.5, y: gesture.dy },
-            duration: 250, useNativeDriver: false,
-          }).start(onLike);
-        } else if (gesture.dx < -SWIPE_THRESHOLD) {
-          Animated.timing(pan, {
-            toValue: { x: -W * 1.5, y: gesture.dy },
-            duration: 250, useNativeDriver: false,
-          }).start(onSkip);
-        } else if (gesture.dy < -SWIPE_THRESHOLD * 0.8) {
-          Animated.timing(pan, {
-            toValue: { x: gesture.dx, y: -H },
-            duration: 250, useNativeDriver: false,
-          }).start(onSuperLike);
-        } else {
-          Animated.spring(pan, {
-            toValue: { x: 0, y: 0 }, friction: 5, useNativeDriver: false,
-          }).start();
-        }
-      },
-    })
-  ).current;
 
   const photos = profile.photos || [];
 
   return (
-    <Animated.View
-      style={[
-        styles.card,
-        isTop && {
-          transform: [{ translateX: pan.x }, { translateY: pan.y }, { rotate }],
-        },
-      ]}
-      {...(isTop ? panResponder.panHandlers : {})}
-    >
+    <View style={styles.card}>
       <View style={styles.photoContainer}>
         {profilePhoto ? (
           <Image source={{ uri: photos[photoIndex]?.url || profilePhoto }} style={styles.photo} />
@@ -124,13 +61,6 @@ export default function TravelerDiscoveryCard({
             <Text style={{ fontSize: 64 }}>✈️</Text>
           </View>
         )}
-
-        {/* Swipe indicators */}
-        <View style={styles.photoNav}>
-          {photos.map((_, idx) => (
-            <View key={idx} style={[styles.photoDot, idx === photoIndex && styles.photoDotActive]} />
-          ))}
-        </View>
 
         {/* Tap areas for photo navigation */}
         <View style={StyleSheet.absoluteFill}>
@@ -145,18 +75,6 @@ export default function TravelerDiscoveryCard({
             activeOpacity={1} 
           />
         </View>
-
-        {/* Action Labels */}
-        {isTop && (
-          <>
-            <Animated.View style={[styles.label, styles.likeLabel, { opacity: likeOpacity }]}>
-              <Text style={styles.labelText}>LIKE</Text>
-            </Animated.View>
-            <Animated.View style={[styles.label, styles.nopeLabel, { opacity: skipOpacity }]}>
-              <Text style={styles.labelText}>NOPE</Text>
-            </Animated.View>
-          </>
-        )}
 
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.85)']}
@@ -203,7 +121,7 @@ export default function TravelerDiscoveryCard({
           </View>
         </TouchableOpacity>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -222,41 +140,10 @@ const getStyles = (theme: any) => StyleSheet.create({
   noPhoto: { backgroundColor: theme.tealLight, alignItems: 'center', justifyContent: 'center' },
   gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%' },
   
-  photoNav: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    gap: 4,
-  },
-  photoDot: {
-    flex: 1,
-    height: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 2,
-  },
-  photoDotActive: {
-    backgroundColor: '#fff',
-  },
-  
   prevPhotoZone: { position: 'absolute', left: 0, top: 0, width: '35%', height: '80%' },
   nextPhotoZone: { position: 'absolute', right: 0, top: 0, width: '65%', height: '80%' },
   
-  label: { 
-    position: 'absolute', 
-    top: 50, 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderWidth: 4, 
-    borderRadius: 8, 
-    zIndex: 10 
-  },
-  likeLabel: { left: 40, borderColor: theme.teal, transform: [{ rotate: '-20deg' }] },
-  nopeLabel: { right: 40, borderColor: theme.error, transform: [{ rotate: '20deg' }] },
-  labelText: { fontSize: 32, fontWeight: '900', color: theme.textWhite, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 },
-
-  info: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20 },
+  info: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, paddingTop: 60 },
   mainInfo: { marginBottom: 12 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   name: { fontSize: 28, fontWeight: '900', color: '#fff' },

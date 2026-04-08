@@ -69,6 +69,7 @@ const messageSchema = new mongoose.Schema({
     emoji: String,
   }],
   replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
+  tempId: { type: String, default: null }, // For de-duplication
   readAt: Date,
 }, {
   timestamps: true,

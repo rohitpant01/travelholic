@@ -11,6 +11,7 @@ const {
   togglePinMatch,
   toggleMuteMatch,
   resetUnreadCount,
+  clearMessages,
 } = require('../controllers/chatController');
 const { uploadChatMedia } = require('../config/cloudinary');
 
@@ -30,5 +31,6 @@ router.post('/message/:messageId/react', reactToMessage);
 router.post('/:matchId/pin', togglePinMatch);
 router.post('/:matchId/mute', toggleMuteMatch);
 router.put('/:matchId/read', resetUnreadCount);  // Reset unread when opening chat
+router.delete('/:matchId/messages', clearMessages); // Clear chat history
 
 module.exports = router;

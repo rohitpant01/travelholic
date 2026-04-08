@@ -1,17 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, ActivityIndicator, Dimensions, Platform, Modal, Alert
+  Image, ActivityIndicator, Dimensions, Platform, Modal, Alert, Share
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../store';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { 
+  fetchUserPosts, 
+  clearUserPosts,
+  Post 
+} from '../store/slices/feedSlice';
 import { userAPI, discoverAPI, matchAPI } from '../api/services';
-import { RootState } from '../store';
 import { useAppTheme, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
+import TravelPostCard from '../components/TravelPostCard';
+import PostCommentsModal from '../components/PostCommentsModal';
+import PostLikesModal from '../components/PostLikesModal';
+import WebDownloadBanner from '../components/WebDownloadBanner';
 
 const { width: W } = Dimensions.get('window');
+
+
 
 const formatLastSeen = (dateStr: string | null) => {
   if (!dateStr) return '';
@@ -25,23 +37,45 @@ const formatLastSeen = (dateStr: string | null) => {
   return `Last seen on ${d.toLocaleDateString()}`;
 };
 
+const INTEREST_EMOJIS: Record<string, string> = {
+  'Adventure': '🧗', 'Nature': '🏔️', 'Culture': '🕌', 'Foodie': '🍜',
+  'Nightlife': '🎉', 'Photography': '📸', 'Sustainable': '🌿', 'Luxury': '✨',
+  'Budget': '🎒', 'Solo': '🚶', 'History': '🏰', 'Beach': '🏖️',
+  'Mountains': '⛰️', 'Road Trips': '🚗', 'Hiking': '👣', 'Shopping': '🛍️',
+  'Wellness': '🧘', 'Festivals': '🎭', 'Art': '🎨', 'Cities': '🏙️',
+  'Sports': '⚽', 'Music': '🎸', 'Backpacking': '🎒'
+};
+
 export default function UserDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const theme = useAppTheme();
   const styles = getStyles(theme);
+  const insets = useSafeAreaInsets();
   const { userId } = route.params || {};
   
+  const { user: currentUser, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { userPosts, loading: loadingPosts } = useSelector((state: RootState) => state.feed);
   const matches = useSelector((s: RootState) => s.chat.matches);
+  const dispatch = useDispatch<AppDispatch>();
   const [profile, setProfile] = useState<any>(route.params?.profile || null);
   const [loading, setLoading] = useState(!route.params?.profile);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [showTrips, setShowTrips] = useState(false);
 
+  // Post Interaction States
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const commentsModalRef = React.useRef<any>(null);
+  const likesModalRef = React.useRef<any>(null);
+
   useEffect(() => {
     if (userId) {
       loadProfile();
+      dispatch(fetchUserPosts({ userId, page: 1 }));
     }
+    return () => {
+      dispatch(clearUserPosts());
+    };
   }, [userId]);
 
   const loadProfile = async () => {
@@ -56,6 +90,7 @@ export default function UserDetailScreen() {
   };
 
   const isMatched = matches.some(m => String(m.user?._id) === String(userId));
+  const isMe = String(userId) === String(currentUser?._id);
 
   const handleMessage = () => {
     const existingMatch = matches.find(m => String(m.user?._id) === String(userId));
@@ -111,6 +146,55 @@ export default function UserDetailScreen() {
     'Adventure Sports': '🪂', Backpacking: '🎒', 'Solo Travel': '🧍', Cruises: '🚢',
   };
 
+  const renderFooter = () => {
+    if (isMe || !isAuthenticated) return null;
+
+    return (
+      <View style={styles.footer}>
+        <LinearGradient 
+          colors={['transparent', theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255,255,255,0.95)', theme.background]} 
+          style={styles.footerGradient} 
+        />
+        <View style={styles.actionRow}>
+          {isMatched ? (
+            <TouchableOpacity style={styles.messageBtn} onPress={handleMessage}>
+              <LinearGradient 
+                colors={[theme.teal, theme.tealDark]} 
+                start={{ x: 0, y: 0 }} 
+                end={{ x: 1, y: 1 }} 
+                style={styles.messageBtnGradient}
+              >
+                <Ionicons name="chatbubble-ellipses" size={22} color={theme.textWhite} />
+                <Text style={styles.messageBtnText}>Message Traveler</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity 
+                style={[styles.secondaryActionBtn, { backgroundColor: theme.error }]} 
+                onPress={handlePass}
+              >
+                <Ionicons name="close" size={28} color={theme.textWhite} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.messageBtn} onPress={handleLike}>
+                <LinearGradient 
+                  colors={[theme.teal, theme.tealDark]} 
+                  start={{ x: 0, y: 0 }} 
+                  end={{ x: 1, y: 1 }} 
+                  style={styles.messageBtnGradient}
+                >
+                  <Ionicons name="heart" size={24} color={theme.textWhite} />
+                  <Text style={styles.messageBtnText}>Connect</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   if (loading) return (
     <View style={styles.loader}>
       <ActivityIndicator size="large" color={theme.teal} />
@@ -130,7 +214,7 @@ export default function UserDetailScreen() {
     <View style={styles.mainWrapper}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false} bounces={false}>
         {/* Hero */}
-        <View style={styles.hero}>
+        <View style={[styles.hero, { height: 500 + insets.top }]}>
           {profilePhoto ? (
             <Image source={{ uri: photos[photoIndex]?.url || profilePhoto }} style={styles.heroPhoto} />
           ) : (
@@ -156,12 +240,28 @@ export default function UserDetailScreen() {
             />
           </View>
 
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={[styles.backBtn, { top: insets.top + 12 }]} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={26} color={theme.textWhite} />
           </TouchableOpacity>
 
+          <TouchableOpacity 
+            style={[styles.shareBtn, { top: insets.top + 12 }]} 
+            onPress={async () => {
+              const shareUrl = `https://ekalgo.com/user/${userId}`;
+              try {
+                await Share.share({
+                  title: `EkalGo: ${profile.firstName}'s Profile`,
+                  message: `Check out ${profile.firstName} on EkalGo! 🌍✨ They are a traveler from ${profile.location?.city || 'the world'}.\n\nView Profile: ${shareUrl}`,
+                  url: shareUrl,
+                });
+              } catch (e) {}
+            }}
+          >
+            <Ionicons name="share-outline" size={24} color={theme.textWhite} />
+          </TouchableOpacity>
+
           {photos.length > 1 && (
-            <View style={styles.dots}>
+            <View style={[styles.dots, { top: insets.top + 20 }]}>
               {photos.map((_: any, i: number) => (
                 <View key={i} style={[styles.dot, photoIndex === i && styles.dotActive]} />
               ))}
@@ -195,6 +295,9 @@ export default function UserDetailScreen() {
         </View>
 
         <View style={styles.content}>
+          {/* ✨ Web Nudge Banner */}
+          <WebDownloadBanner id={userId} type="user" />
+
           {/* Social Stats */}
           <View style={styles.statsRow}>
             <TouchableOpacity style={styles.statItem} onPress={() => setShowTrips(true)}>
@@ -280,7 +383,38 @@ export default function UserDetailScreen() {
             </View>
           )}
 
-          {/* Details Grid */}
+        {/* ── Traveler's Moments Section ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Traveler's Moments</Text>
+          {loadingPosts && userPosts.length === 0 ? (
+            <ActivityIndicator color={theme.teal} style={{ marginTop: 20 }} />
+          ) : userPosts.length > 0 ? (
+            <View style={{ gap: 20 }}>
+              {userPosts.map((post) => (
+                <TravelPostCard
+                  key={post._id}
+                  post={post}
+                  onPressProfile={() => {}} // Already on user profile
+                  onPressComment={(id) => {
+                    setSelectedPostId(id);
+                    commentsModalRef.current?.present();
+                  }}
+                  onPressLikes={(id) => {
+                    setSelectedPostId(id);
+                    likesModalRef.current?.present();
+                  }}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center', paddingVertical: 40, backgroundColor: theme.card, borderRadius: 20 }}>
+              <Ionicons name="images-outline" size={40} color={theme.textSecondary + '40'} />
+              <Text style={{ marginTop: 10, color: theme.textSecondary }}>No moments shared yet</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Details Grid */}
           <View style={styles.detailsGrid}>
             {profile.languages?.length > 0 && (
               <View style={[styles.detailCard, { flex: 1.5 }]}>
@@ -304,9 +438,24 @@ export default function UserDetailScreen() {
             )}
           </View>
 
-          <View style={{ height: 120 }} />
-        </View>
-      </ScrollView>
+        {!isAuthenticated && (
+          <View style={styles.guestCta}>
+             <Ionicons name="lock-closed" size={32} color={theme.teal} style={{ marginBottom: 12 }} />
+             <Text style={styles.guestTitle}>Connect with {profile.firstName}</Text>
+             <Text style={styles.guestSubtitle}>Sign in to message, match, and plan trips with travelers like {profile.firstName}.</Text>
+             <TouchableOpacity 
+               style={styles.guestBtn}
+               onPress={() => navigation.navigate('Auth')}
+             >
+               <Text style={styles.guestBtnText}>Login to Connect</Text>
+             </TouchableOpacity>
+          </View>
+        )}
+        <View style={{ height: 120 }} />
+      </View>
+    </ScrollView>
+
+      {renderFooter()}
 
       <Modal
         visible={showTrips}
@@ -358,50 +507,15 @@ export default function UserDetailScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Action Buttons Footer */}
-      <View style={styles.footer}>
-        <LinearGradient 
-          colors={['transparent', theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255,255,255,0.95)', theme.background]} 
-          style={styles.footerGradient} 
-        />
-        <View style={styles.actionRow}>
-          {isMatched ? (
-            <TouchableOpacity style={styles.messageBtn} onPress={handleMessage}>
-              <LinearGradient 
-                colors={[theme.teal, theme.tealDark]} 
-                start={{ x: 0, y: 0 }} 
-                end={{ x: 1, y: 1 }} 
-                style={styles.messageBtnGradient}
-              >
-                <Ionicons name="chatbubble-ellipses" size={22} color={theme.textWhite} />
-                <Text style={styles.messageBtnText}>Message Traveler</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          ) : (
-            <>
-              <TouchableOpacity 
-                style={[styles.secondaryActionBtn, { backgroundColor: theme.error }]} 
-                onPress={handlePass}
-              >
-                <Ionicons name="close" size={28} color={theme.textWhite} />
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.messageBtn} onPress={handleLike}>
-                <LinearGradient 
-                  colors={[theme.teal, theme.tealDark]} 
-                  start={{ x: 0, y: 0 }} 
-                  end={{ x: 1, y: 1 }} 
-                  style={styles.messageBtnGradient}
-                >
-                  <Ionicons name="heart" size={24} color={theme.textWhite} />
-                  <Text style={styles.messageBtnText}>Connect</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </View>
+      {/* Modals */}
+      <PostCommentsModal 
+        ref={commentsModalRef} 
+        postId={selectedPostId || ''} 
+      />
+      <PostLikesModal 
+        ref={likesModalRef} 
+        postId={selectedPostId || ''} 
+      />
     </View>
   );
 }
@@ -415,13 +529,21 @@ const getStyles = (theme: any) => StyleSheet.create({
   tapZones: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
   tapZone: { flex: 1 },
   backBtn: {
-    position: 'absolute', top: 52, left: 20,
+    position: 'absolute', left: 20,
     backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 22,
     width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    zIndex: 10,
+  },
+  shareBtn: {
+    position: 'absolute', right: 20,
+    backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 22,
+    width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    zIndex: 10,
   },
   dots: {
-    position: 'absolute', top: 60, left: 60, right: 60,
+    position: 'absolute', left: 60, right: 60,
     flexDirection: 'row', justifyContent: 'center', gap: 6,
   },
   dot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)' },
@@ -504,4 +626,40 @@ const getStyles = (theme: any) => StyleSheet.create({
   tripMetaText: { fontSize: 13, color: theme.textSecondary, fontWeight: '600', marginLeft: 4 },
   metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textSecondary, marginHorizontal: 8 },
   tripDetailsText: { fontSize: 14, color: theme.textSecondary, marginTop: 10, lineHeight: 20, fontStyle: 'italic' },
+  guestCta: {
+    marginTop: 20,
+    padding: 30,
+    borderRadius: 24,
+    backgroundColor: theme.card,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.teal + '30',
+    ...SHADOW.md,
+  },
+  guestTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: theme.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  guestSubtitle: {
+    fontSize: 15,
+    color: theme.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  guestBtn: {
+    backgroundColor: theme.teal,
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 18,
+    ...SHADOW.lg,
+  },
+  guestBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  }
 });

@@ -20,11 +20,26 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    if (!user.isActive) {
-      return res.status(401).json({ error: 'Account has been deactivated' });
-    }
+    // 🔥 Allow restoration requests to pass through even if account is inactive/deleted
+    const isRestorationRequest = req.path.includes('/cancel-deletion') || req.originalUrl.includes('/cancel-deletion');
+    console.log(`[AUTH] Request Path: ${req.path}, isRestoration: ${isRestorationRequest}, userDeleted: ${user?.isDeleted}`);
 
     req.user = user;
+
+    if (!isRestorationRequest) {
+      if (!user.isActive) {
+        console.warn(`[AUTH] Blocking inactive user: ${user._id}`);
+        return res.status(401).json({ error: 'Account has been deactivated' });
+      }
+
+      if (user.isDeleted) {
+        console.warn(`[AUTH] Blocking deleted user: ${user._id}`);
+        return res.status(401).json({ error: 'Account is scheduled for deletion. Please restore it to continue.' });
+      }
+    } else {
+      console.log(`[AUTH] Permitting restoration request for user: ${user._id}`);
+    }
+
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {

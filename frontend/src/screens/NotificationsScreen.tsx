@@ -29,6 +29,60 @@ const NotificationsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const { socket } = useSocket();
 
+  // 🛡️ RE-RENDER STABILIZER: Move navigation params logic here
+  const handleNotificationPress = (item: any) => {
+    console.log('[DEBUG] NOTIFICATION CLICKED:', { id: item._id, type: item.type, data: item.data });
+    
+    // Optimistically mark this one as read
+    dispatch(markSingleRead(item._id));
+    
+    const type = item.type;
+    const data = item.data || {};
+
+    // 🎯 PRIORITY 1: Post Interactions (Like/Comment)
+    if (type === 'like' || type === 'comment') {
+      const postId = data.postId || data.id; // Handle both potential naming conventions
+      if (postId) {
+        console.log('[DEBUG] Navigating to PostDetail with postId:', postId);
+        navigation.navigate('PostDetail', { postId: String(postId) });
+        return;
+      } else {
+        console.warn('[DEBUG] Notification missing postId in data:', data);
+      }
+    } 
+    
+    // 🎯 PRIORITY 2: Trip-related
+    if (type === 'trip_join_request' || type === 'trip_accepted' || type === 'trip_member_joined') {
+      if (data.tripId) {
+        navigation.navigate('TripDetail', { tripId: data.tripId });
+        return;
+      }
+    } 
+    
+    // 🎯 PRIORITY 3: Discover/Feed fallbacks
+    if (type === 'nearby_travelers' || type === 'trending_trip') {
+      navigation.navigate('MainTabs', { screen: 'Travelers' } as any); // Use 'Travelers' which is the tab name for DiscoverScreen
+      return;
+    } 
+    
+    // 🎯 PRIORITY 4: Direct Chat/Matches
+    if (data.tripId) {
+      navigation.navigate('Chat', { 
+        type: 'group',
+        chatId: data.tripId,
+        userName: item.title || 'Trip Chat' 
+      });
+      return;
+    } 
+    
+    if (data.matchId) {
+      navigation.navigate('MainTabs', { screen: 'Matches' } as any);
+      return;
+    }
+
+    console.warn('[DEBUG] Notification fallthrough or unhandled type! Type:', type, 'Data:', data);
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       loadNotifications();
@@ -39,13 +93,10 @@ const NotificationsScreen = () => {
     setRefreshing(true);
     
     // 🔑 KEY FIX: Mark as read in DB FIRST (before fetching)
-    // This ensures when we fetch, the backend returns unreadCount: 0
     dispatch(markAllRead()); // optimistic UI update
-    await dispatch(markNotificationsRead()); // REST API → persists to DB
+    await dispatch(markNotificationsRead()); 
     
-    // Now fetch — unreadCount returned from server will be 0
     await dispatch(fetchNotifications());
-    
     setRefreshing(false);
   };
 
@@ -53,6 +104,8 @@ const NotificationsScreen = () => {
     switch (type) {
       case 'like':
         return { name: 'heart', color: '#ef4444' };
+      case 'comment':
+        return { name: 'chatbubble', color: theme.teal };
       case 'match':
         return { name: 'flash', color: '#f59e0b' };
       case 'trip_join_request':
@@ -77,25 +130,7 @@ const NotificationsScreen = () => {
     return (
       <TouchableOpacity 
         style={[styles.notificationItem, !item.isRead && styles.unreadItem]}
-        onPress={() => {
-            // Optimistically mark this one as read
-            dispatch(markSingleRead(item._id));
-            
-            // Navigate based on type
-            if (item.type === 'trip_join_request' || item.type === 'trip_accepted' || item.type === 'trip_member_joined') {
-              navigation.navigate('TripDetail', { tripId: item.data.tripId });
-            } else if (item.type === 'nearby_travelers' || item.type === 'trending_trip') {
-              navigation.navigate('MainTabs', { screen: 'Discover' } as any);
-            } else if (item.data?.tripId) {
-              navigation.navigate('Chat', { 
-                type: 'group',
-                chatId: item.data.tripId,
-                userName: item.title || 'Trip Chat' 
-              });
-            } else if (item.data?.matchId) {
-              navigation.navigate('MainTabs', { screen: 'Matches' } as any);
-            }
-        }}
+        onPress={() => handleNotificationPress(item)}
       >
         <View style={styles.iconContainer}>
           {profilePhoto ? (

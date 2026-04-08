@@ -13,6 +13,7 @@ import {
   StyleSheet, Platform, AppState, KeyboardAvoidingView, 
   TouchableWithoutFeedback, Keyboard 
 } from 'react-native';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import store, { RootState, AppDispatch } from './src/store';
@@ -61,6 +62,8 @@ import CreateTripScreen from './src/screens/CreateTripScreen';
 import TripDetailScreen from './src/screens/TripDetailScreen';
 import MyMatchesScreen from './src/screens/MyMatchesScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import TripHistoryScreen from './src/screens/TripHistoryScreen';
+import PostDetailScreen from './src/screens/PostDetailScreen';
 import AIItineraryScreen from './src/screens/AIItineraryScreen';
 import PlaceDetailsScreen from './src/screens/PlaceDetailsScreen';
 import AllDestinationsScreen from './src/screens/AllDestinationsScreen';
@@ -68,46 +71,17 @@ import SavedDestinationsScreen from './src/screens/SavedDestinationsScreen';
 import TermsScreen from './src/screens/TermsScreen';
 import PrivacyScreen from './src/screens/PrivacyScreen';
 import CategoryDetailsScreen from './src/screens/CategoryDetailsScreen';
+import LocationPickerScreen from './src/screens/LocationPickerScreen';
+import LyraItineraryScreen from './src/screens/LyraItineraryScreen';
+import DeleteAccountScreen from './src/screens/DeleteAccountScreen';
+import PrivacySafetyScreen from './src/screens/PrivacySafetyScreen';
+import HelpSupportScreen from './src/screens/HelpSupportScreen';
+import AboutScreen from './src/screens/AboutScreen';
 
 import apiClient from './src/api/client';
 
-export type RootStackParamList = {
-  Splash: undefined;
-  Landing: undefined;
-  Login: undefined;
-  ForgotPassword: undefined;
-  Register_Step1: undefined;
-  Register_EmailVerify: { email: string; userId: string };
-  Register_Step2: { phone: string; userId: string };
-  Register_Step3: undefined;
-  Register_Step4: undefined;
-  Register_Step5: undefined;
-  Register_Step6: undefined;
-  Register_Step7: undefined;
-  Verification: undefined;
-  Onboarding: undefined;
-  Auth: undefined;
-  MainTabs: undefined;
-  Chat: { type: 'individual' | 'group'; chatId: string; userName: string; userPhoto?: string; userId?: string };
-  GroupDetails: { tripId: string };
-  UserDetail: { userId: string };
-  EditProfile: undefined;
-  Settings: undefined;
-  WhoLikedMe: undefined;
-  CreateTrip: undefined;
-  TripDetail: { tripId: string };
-  Notifications: undefined;
-  MyMatches: undefined;
-  AIItinerary: { trip: any };
-  PlaceDetails: { place: any };
-  AllDestinations: undefined;
-  SavedDestinations: undefined;
-  TermsScreen: undefined;
-  PrivacyScreen: undefined;
-  PlaceDiscovery: undefined;
-  DayPlanner: { query: string; moods?: string[] };
-  CategoryDetails: { title: string, places: any[], excludeIds?: string[] };
-};
+import { RootStackParamList } from './src/types/navigation';
+export type { RootStackParamList };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -137,8 +111,41 @@ function RaisedTripButton({ onPress }: { onPress: () => void }) {
   );
 }
 
+const linking: any = {
+  prefixes: ['ekalgo://', 'https://ekalgo.com', 'https://www.ekalgo.com'],
+  config: {
+    screens: {
+      MainTabs: {
+        screens: {
+          Travelers: 'discover',
+          Profile: 'profile',
+        }
+      },
+      LyraItinerary: 'trip/:id',
+      PostDetail: 'post/:postId',
+      UserDetail: 'user/:userId',
+    },
+  },
+};
+
+// Handle redirects for empty paths like /post/ or /trip/
+const fixedLinking: any = {
+  ...linking,
+  config: {
+    ...linking.config,
+    screens: {
+      ...linking.config.screens,
+      // Add a fallback for /post/ and /trip/ with no ID
+      PostDetailRedirect: 'post/',
+      LyraRedirect: 'trip/',
+    }
+  }
+};
+
+
 function MainTabs() {
   const totalUnread = useSelector((s: RootState) => s.chat.totalUnread);
+  const unreadCount = useSelector((s: RootState) => s.notification.unreadCount);
   const chatsWithUnread = useSelector((s: RootState) => s.chat.chatsWithUnread);
   const insets = useSafeAreaInsets();
   const TAB_BAR_HEIGHT = Platform.OS === 'android' ? 62 + insets.bottom : 66;
@@ -165,10 +172,10 @@ function MainTabs() {
           if (route.name === 'Explorer') iconName = focused ? 'compass' : 'compass-outline';
           else if (route.name === 'Travelers') iconName = focused ? 'people' : 'people-outline';
           else if (route.name === 'Map') iconName = focused ? 'map' : 'map-outline';
-          else if (route.name === 'Trips') return null; // Custom button
+          else if (route.name === 'Notifications') iconName = focused ? 'notifications' : 'notifications-outline';
           else if (route.name === 'Matches') iconName = focused ? 'chatbubble' : 'chatbubble-outline';
           else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
- 
+
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
@@ -238,12 +245,19 @@ function AppNavigator() {
         const token = await AsyncStorage.getItem('token');
         const userData = await AsyncStorage.getItem('user');
 
-        if (token && userData) {
+        if (token && userData && userData !== 'undefined' && userData !== 'null') {
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           dispatch(setToken(token));
 
           // Show cached user immediately so UI is not blocked
-          dispatch(setUser(JSON.parse(userData)));
+          try {
+            const parsedUser = JSON.parse(userData);
+            if (parsedUser) {
+              dispatch(setUser(parsedUser));
+            }
+          } catch (e) {
+            console.warn('[bootstrapAuth] Failed to parse cached user:', e);
+          }
 
           // ✅ FIX: Extract .data.user from the Axios response
           // Previously: dispatch(updateUser(freshUser))  ← was passing the whole Axios response object
@@ -284,7 +298,9 @@ function AppNavigator() {
             ]);
 
             const privateMatches = matchesRes.data.matches.map((m: any) => ({ ...m, type: 'private' }));
-            const groupTrips = tripRes.data.trips.map((t: any) => ({
+            const groupTrips = tripRes.data.trips
+              .filter((t: any) => t.tripType === 'social')
+              .map((t: any) => ({
               matchId: t._id,
               type: 'group',
               user: {
@@ -523,14 +539,15 @@ function AppNavigator() {
     );
   }
 
-    const isNewUser = (user?.registrationStep || 0) < 9;
+    const effectiveRegStep = user?.registrationStep ?? 0;
+    const isNewUser = effectiveRegStep < 9;
     const isGoogleUser = user?.authProvider === 'google' || !!user?.googleId;
     const needsEmailVerify = !user?.isEmailVerified && !isGoogleUser;
 
     // 🔍 DEBUG LOGS (Watch terminal for these)
     if (isAuthenticated) {
-      console.log(`[NAVIGATOR] Auth state: AUTHENTICATED. User: ${user?.email}`);
-      console.log(`[NAVIGATOR] isNewUser: ${isNewUser}, registrationStep: ${user?.registrationStep}`);
+      console.log(`[NAVIGATOR] Auth state: AUTHENTICATED. User ID: ${user?._id}, Email: ${user?.email}`);
+      console.log(`[NAVIGATOR] isNewUser: ${isNewUser}, registrationStep: ${effectiveRegStep}`);
       console.log(`[NAVIGATOR] isEmailVerified: ${user?.isEmailVerified}, isGoogleUser: ${isGoogleUser}`);
       console.log(`[NAVIGATOR] isPhoneVerified: ${user?.isPhoneVerified}, needsEmailVerify: ${needsEmailVerify}`);
     }
@@ -580,17 +597,31 @@ function AppNavigator() {
               options={{ animation: 'slide_from_right' }}
             />
             <Stack.Screen name="MyMatches" component={MyMatchesScreen} options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="UserDetail" component={UserDetailScreen} options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="CreateTrip" component={CreateTripScreen} options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="TripDetail" component={TripDetailScreen} options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="AIItinerary" component={AIItineraryScreen} options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="WhoLikedMe" component={WhoLikedMeScreen} options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right', headerShown: false }} />
             <Stack.Screen name="Verification" component={VerificationScreen} options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="TripHistory" component={TripHistoryScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="PrivacySafety" component={PrivacySafetyScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="About" component={AboutScreen} options={{ animation: 'slide_from_right' }} />
           </>
         )}
+
+        {/* 🌎 PUBLIC & SHARED SCREENS (Accessible from Universal Links) */}
+        <Stack.Screen name="PostDetail" component={PostDetailScreen} options={{ animation: 'slide_from_right', headerShown: false }} />
+        <Stack.Screen name="UserDetail" component={UserDetailScreen} options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="AIItinerary" component={AIItineraryScreen} options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="LyraItinerary" component={LyraItineraryScreen} options={{ animation: 'slide_from_bottom', headerShown: false }} />
+        
+        {/* Support Redirects for empty paths */}
+        <Stack.Screen name="PostDetailRedirect" component={DiscoverScreen} initialParams={{ initialTab: 'feed' }} options={{ headerShown: false }} />
+        <Stack.Screen name="LyraRedirect" component={PlaceDiscoveryScreen} options={{ headerShown: false }} />
+
         <Stack.Screen name="DayPlanner" component={DayPlannerScreen} options={{ animation: 'slide_from_bottom', headerShown: false }} />
         <Stack.Screen name="CategoryDetails" component={CategoryDetailsScreen} options={{ animation: 'slide_from_right', headerShown: false }} />
         <Stack.Screen name="PlaceDetails" component={PlaceDetailsScreen} options={{ animation: 'slide_from_right', headerShown: false }} />
@@ -598,6 +629,7 @@ function AppNavigator() {
         <Stack.Screen name="SavedDestinations" component={SavedDestinationsScreen} options={{ animation: 'slide_from_right', headerShown: false }} />
         <Stack.Screen name="TermsScreen" component={TermsScreen} options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="PrivacyScreen" component={PrivacyScreen} options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="LocationPicker" component={LocationPickerScreen} options={{ animation: 'slide_from_bottom', headerShown: false }} />
       </Stack.Navigator>
 
       <MessageToast message={activeToast} onDismiss={() => setActiveToast(null)} />
@@ -612,11 +644,13 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <SocketProvider socketUrl={SOCKET_URL}>
             <ToastProvider>
-              <NavigationContainer>
-                <StatusBar style="dark" translucent={false} />
-                <AppNavigator />
-                <ActionToast />
-              </NavigationContainer>
+              <BottomSheetModalProvider>
+                <NavigationContainer linking={fixedLinking}>
+                  <StatusBar style="dark" translucent={false} />
+                  <AppNavigator />
+                  <ActionToast />
+                </NavigationContainer>
+              </BottomSheetModalProvider>
             </ToastProvider>
           </SocketProvider>
         </GestureHandlerRootView>

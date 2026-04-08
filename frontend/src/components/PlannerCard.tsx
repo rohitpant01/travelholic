@@ -154,7 +154,7 @@ const PlannerCard: React.FC<PlannerCardProps> = ({
                   <Ionicons name="time-outline" size={16} color="#00B4B4" />
                   <View style={styles.infoTextContainer}>
                     <Text style={styles.infoLabel}>Best Time</Text>
-                    <Text style={styles.infoValue}>{item.info?.bestTime || 'Morning'}</Text>
+                    <Text style={styles.infoValue}>{item.info?.bestTime && item.info.bestTime !== 'Morning' ? item.info.bestTime : 'Oct – Mar'}</Text>
                   </View>
                 </View>
                 <View style={styles.infoChip}>

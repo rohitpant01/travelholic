@@ -4,7 +4,7 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authAPI } from '../api/services';
+import { authAPI, userAPI } from '../api/services';
 import { setUser, setToken } from '../store/slices/authSlice';
 import { setSavedDestinations } from '../store/slices/savedSlice';
 import { useAppTheme, FONTS, RADIUS } from '../utils/theme';
@@ -76,21 +76,57 @@ export default function GoogleSignInButton({ title = "Continue with Google" }: {
         return;
       }
 
-      const { token, user } = res.data;
-
-      await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-      dispatch(setToken(token));
-      dispatch(setUser(user));
-      if (user.savedDestinations) {
-        dispatch(setSavedDestinations(user.savedDestinations));
+      const { token, user, isDeletionPending } = res.data;
+      
+      if (isDeletionPending) {
+        setLoading(false);
+        Alert.alert(
+          'Restore Account?',
+          'Your account is scheduled for deletion. Would you like to cancel the deletion and restore your account?',
+          [
+            {
+              text: 'Keep Scheduled',
+              style: 'destructive',
+              onPress: () => {
+                // Do not finish login. Keep user on login screen to prevent 401 glitch.
+                Alert.alert('Notice', 'You must restore your account to log in. It will be permanently deleted after 7 days.');
+              }
+            },
+            {
+              text: 'Restore Now',
+              onPress: async () => {
+                try {
+                  apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                  const restoreRes = await userAPI.restoreAccount();
+                  const restoredUser = restoreRes.data.user;
+                  await finishGoogleLogin(token, restoredUser);
+                  Alert.alert('Success', 'Your account has been fully restored! ✨');
+                } catch (e) {
+                  Alert.alert('Error', 'Failed to restore account. Please try again later.');
+                }
+              }
+            }
+          ]
+        );
+        return;
       }
 
+      await finishGoogleLogin(token, user);
     } catch (error: any) {
       console.error('Google login error', error);
       Alert.alert('Google Sign-In Failed', error.response?.data?.error || 'Could not verify Google account');
+    }
+  };
+
+  const finishGoogleLogin = async (token: string, user: any) => {
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('user', JSON.stringify(user));
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+    dispatch(setToken(token));
+    dispatch(setUser(user));
+    if (user.savedDestinations) {
+      dispatch(setSavedDestinations(user.savedDestinations));
     }
   };
 

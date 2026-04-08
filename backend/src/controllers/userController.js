@@ -24,11 +24,16 @@ const getUserById = async (req, res) => {
     const targetUser = await User.findById(req.params.userId)
       .select('firstName lastName username age gender bio city country photos interests languages lookingFor isPhotoVerified countriesVisited dreamDestination completedTrips memberStatus location isOnline lastSeen origin destination travelDate followers following');
 
-    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+    if (!targetUser || targetUser.isDeleted) return res.status(404).json({ error: 'User not found' });
 
-    const isFollowing = targetUser.followers?.includes(req.user._id);
-    const followersCount = targetUser.followers?.length || 0;
-    const followingCount = targetUser.following?.length || 0;
+    const isFollowing = req.user?._id ? targetUser.followers?.includes(req.user._id) : false;
+    
+    // 🔥 Global Stealth: Exclude deleted users from follower/following counts
+    const activeFollowers = await User.countDocuments({ _id: { $in: targetUser.followers || [] }, isDeleted: { $ne: true } });
+    const activeFollowing = await User.countDocuments({ _id: { $in: targetUser.following || [] }, isDeleted: { $ne: true } });
+
+    const followersCount = activeFollowers;
+    const followingCount = activeFollowing;
     
     // Dynamically calculate matches count from Match collection
     const actualMatchesCount = await Match.countDocuments({
@@ -36,24 +41,25 @@ const getUserById = async (req, res) => {
       isActive: true
     });
 
-    const currentUser = await User.findById(req.user._id).select('location');
     let distanceKm = null;
+    if (req.user?._id) {
+      const currentUser = await User.findById(req.user._id).select('location');
+      if (currentUser?.location?.coordinates && targetUser.location?.coordinates) {
+        const lat1 = currentUser.location.coordinates[1];
+        const lon1 = currentUser.location.coordinates[0];
+        const lat2 = targetUser.location.coordinates[1];
+        const lon2 = targetUser.location.coordinates[0];
 
-    if (currentUser?.location?.coordinates && targetUser.location?.coordinates) {
-      const lat1 = currentUser.location.coordinates[1];
-      const lon1 = currentUser.location.coordinates[0];
-      const lat2 = targetUser.location.coordinates[1];
-      const lon2 = targetUser.location.coordinates[0];
-
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      distanceKm = Math.round(R * c);
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        distanceKm = Math.round(R * c);
+      }
     }
 
     const userObj = targetUser.toObject();
@@ -83,7 +89,7 @@ const getUserById = async (req, res) => {
 // ============================================================
 const getWhoLikedMe = async (req, res) => {
   try {
-    const currentUser = await User.findById(req.user._id).select('likedBy matches blockedUsers');
+    const currentUser = await User.findById(req.user._id).select('likedBy matches blockedUsers skips likesReceived');
     if (!currentUser) return res.status(404).json({ error: 'User not found' });
 
     // Convert to string arrays for easy comparison
@@ -98,8 +104,11 @@ const getWhoLikedMe = async (req, res) => {
       .map(id => id.toString())
       .filter(id => !matchedIds.includes(id) && !blockedIds.includes(id) && !skippedIds.includes(id));
 
-    // Fetch their profiles (only safe public fields)
-    const likers = await User.find({ _id: { $in: pendingLikerIds } })
+    // Fetch their profiles (only safe public fields, excluding deleted users)
+    const likers = await User.find({ 
+      _id: { $in: pendingLikerIds },
+      isDeleted: { $ne: true }
+    })
       .select('firstName lastName age gender city country photos bio interests isPhotoVerified origin destination travelDate')
       .lean();
 
@@ -162,6 +171,21 @@ const updateProfile = async (req, res) => {
       const city = req.body.city !== undefined ? req.body.city : (user.city || user.location?.city || '');
       const country = req.body.country !== undefined ? req.body.country : (user.country || user.location?.country || '');
       
+      let coords = req.body.coordinates || user.location?.coordinates || [0, 0];
+
+      // 📍 FALLBACK: If coordinates are [0,0] but we have City/Country, Geocode it!
+      if ((!coords || coords[0] === 0) && (city || country)) {
+        try {
+          const { geocodeAddress } = require('../utils/geocodingService');
+          const result = await geocodeAddress(`${city}, ${country}`);
+          if (result) {
+            coords = [result.lng, result.lat]; // GeoJSON format: [longitude, latitude]
+          }
+        } catch (e) {
+          console.error('[AUTO-GEOCODE ERROR]', e.message);
+        }
+      }
+
       // Validation: only error if explicitly trying to set to empty string
       if (req.body.city === '' || req.body.country === '') {
         return res.status(400).json({ error: 'City and Country cannot be empty' });
@@ -171,7 +195,7 @@ const updateProfile = async (req, res) => {
       updates.country = country;
       updates.location = {
         type: 'Point',
-        coordinates: req.body.coordinates || user.location?.coordinates || [0, 0],
+        coordinates: coords,
         city: city,
         country: country,
         formattedAddress: req.body.formattedAddress || `${city}, ${country}` || user.location?.formattedAddress || '',
@@ -349,8 +373,81 @@ const updateDistance = async (req, res) => {
   }
 };
 
-// @desc    Deactivate account
+// @desc    Request account deletion (7-day recovery window)
 // @route   DELETE /api/user/account
+// @access  Private
+const requestAccountDeletion = async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Password confirmation required for account deletion' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Verify password
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Incorrect password. Deletion denied for security.' });
+    }
+
+    // Set deletion schedule (7 days from now)
+    user.isDeleted = true;
+    user.isActive = false;
+    user.isOnline = false;
+    await user.save({ validateBeforeSave: false });
+
+    // 🚀 Global Stealth: Deactivate all trips created by this user
+    try {
+      const Trip = require('../models/Trip');
+      await Trip.updateMany({ creator: user._id }, { isActive: false });
+    } catch (tripErr) {
+      console.error('[DELETION] Failed to deactivate trips:', tripErr.message);
+    }
+
+    // TODO: Send goodbye email/notification if possible
+
+    res.json({
+      success: true,
+      message: 'Account scheduled for deletion. You will be logged out. You can restore your account within 7 days by logging in again.',
+      deletionDate: user.deletionScheduledAt
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Cancel account deletion
+// @route   POST /api/user/cancel-deletion
+// @access  Private
+const cancelAccountDeletion = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!user.isDeleted) {
+      return res.status(400).json({ error: 'No deletion request pending for this account.' });
+    }
+
+    user.isDeleted = false;
+    user.deletionScheduledAt = undefined;
+    user.isActive = true;
+
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      success: true,
+      message: 'Account restoration successful! Welcome back ✨',
+      user: user.toPublicProfile()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Deactivate account (classic simple soft-disable)
+// @route   POST /api/user/deactivate
 // @access  Private
 const deactivateAccount = async (req, res) => {
   try {
@@ -535,19 +632,184 @@ const getCompletedTrips = async (req, res) => {
   }
 };
 
+const Report = require('../models/Report');
+
 // @desc    Report a user
 // @route   POST /api/user/report
 // @access  Private
 const reportUser = async (req, res) => {
   try {
-    const { targetUserId, reason, details } = req.body;
+    const { targetUserId, reason, details, matchId } = req.body;
     if (!targetUserId || !reason) {
       return res.status(400).json({ error: 'Target user and reason are required' });
     }
-    // For now, we log it and return success. 
-    // In production, this would save to a Reports collection.
+
+    // 1. Save Report in DB
+    await Report.create({
+      reportedBy: req.user._id,
+      targetId: targetUserId,
+      type: 'user',
+      reason,
+      details: details || ''
+    });
+
     console.log(`[REPORT] User ${req.user._id} reported ${targetUserId}. Reason: ${reason}. Details: ${details}`);
-    res.json({ message: 'User reported. Our safety team will investigate.' });
+
+    // 2. AUTO ACTION: Block the User
+    // Reuse logic from blockUser controller safely
+    await User.findByIdAndUpdate(req.user._id, {
+      $addToSet: { blockedUsers: targetUserId }
+    });
+
+    // Delete matches from DB
+    await Match.deleteMany({ users: { $all: [req.user._id, targetUserId] } });
+
+    // Update user states
+    const userBeforeBlock = await User.findById(req.user._id).select('likedBy');
+    const wasLiker = userBeforeBlock.likedBy?.some(id => id.toString() === targetUserId);
+
+    await User.findByIdAndUpdate(req.user._id, {
+      $pull: { 
+        matches: targetUserId, 
+        likes: targetUserId, 
+        superLikes: targetUserId,
+        likedBy: targetUserId 
+      },
+      ...(wasLiker ? { $inc: { likesReceived: -1 } } : {})
+    });
+
+    await User.findByIdAndUpdate(targetUserId, {
+      $pull: { matches: req.user._id, likedBy: req.user._id }
+    });
+
+    // 3. Emit Socket removal to BOTH users
+    try {
+      const { getIO } = require('../socket/socketHandler');
+      const io = getIO();
+      // Emit 'match_removed' so frontend can dispatch removeMatch instantly
+      io.to(req.user._id.toString()).emit('match_removed', { matchId: matchId || targetUserId, targetUserId });
+      io.to(targetUserId.toString()).emit('match_removed', { matchId: matchId || req.user._id.toString(), targetUserId: req.user._id });
+    } catch (socketErr) {
+      console.warn('[REPORT SOCKET ERROR]', socketErr.message);
+    }
+
+    res.json({ 
+      success: true,
+      message: 'Report submitted. For your safety, this user has been blocked and removed from your chats.' 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Save a destination to bucket list
+// @route   POST /api/user/saved-destinations
+// @access  Private
+const saveDestination = async (req, res) => {
+  try {
+    const { id, title, image, location, description, rating, budget, bestTime, tags, whyLoveThis, nearestAirport, nearestCity, travelTip, lat, lng } = req.body;
+    
+    const cleanId = (id || '').toString().trim();
+    const cleanTitle = (title || '').trim() || 'Untitled Destination';
+    const finalImage = image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=1000&auto=format&fit=crop';
+    
+    if (!cleanTitle || !finalImage) {
+      return res.status(400).json({ error: 'Title and image are required' });
+    }
+
+    const user = await User.findById(req.user._id);
+    
+    // Strict Case-Insensitive check for title or id
+    const exists = user.savedDestinations.some(d => 
+      (cleanId && d.id === cleanId) || 
+      (d.title && d.title.toLowerCase() === cleanTitle.toLowerCase())
+    );
+
+    if (exists) {
+      return res.status(200).json({ message: 'Destination already in bucket list', savedDestinations: user.savedDestinations });
+    }
+
+    user.savedDestinations.unshift({
+      id: cleanId || `local-${Date.now()}`,
+      title: cleanTitle,
+      image,
+      location,
+      description,
+      rating: rating || 0,
+      budget: budget || 'Flexible',
+      bestTime,
+      tags,
+      whyLoveThis,
+      nearestAirport,
+      nearestCity,
+      travelTip,
+      lat,
+      lng,
+      savedAt: new Date()
+    });
+
+    await user.save({ validateBeforeSave: false });
+    res.json({ message: 'Added to bucket list', savedDestinations: user.savedDestinations });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Sync local bucket list to DB
+// @route   POST /api/user/sync-saved-destinations
+// @access  Private
+const syncSavedDestinations = async (req, res) => {
+  try {
+    const { localItems } = req.body;
+    if (!Array.isArray(localItems)) {
+      return res.status(400).json({ error: 'localItems array required' });
+    }
+
+    const user = await User.findById(req.user._id);
+    let addedCount = 0;
+
+    localItems.forEach(item => {
+      const exists = user.savedDestinations.some(d => 
+        (item.id && d.id === item.id) || d.title === item.title
+      );
+
+      if (!exists) {
+        user.savedDestinations.unshift({
+          ...item,
+          savedAt: item.savedAt || new Date()
+        });
+        addedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      await user.save({ validateBeforeSave: false });
+    }
+
+    res.json({ 
+      message: `Synced ${addedCount} new items`, 
+      savedDestinations: user.savedDestinations 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Delete a saved destination
+// @route   DELETE /api/user/saved-destinations/:destinationId
+// @access  Private
+const deleteSavedDestination = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    // Robust deletion: try by _id first (standard), then fallback to custom id or title
+    user.savedDestinations = user.savedDestinations.filter(d => 
+      (d._id && d._id.toString() !== req.params.destinationId) && 
+      (d.id !== req.params.destinationId) &&
+      (d.title !== req.params.destinationId)
+    );
+
+    await user.save({ validateBeforeSave: false });
+    res.json({ message: 'Destination removed', savedDestinations: user.savedDestinations });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -560,4 +822,6 @@ module.exports = {
   deactivateAccount, blockUser, reportUser,
   getWhoLikedMe, followUser,
   addCompletedTrip, updateCompletedTrip, deleteCompletedTrip, getCompletedTrips,
+  saveDestination, deleteSavedDestination, syncSavedDestinations,
+  requestAccountDeletion, cancelAccountDeletion,
 };

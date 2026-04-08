@@ -14,7 +14,7 @@ import { COLORS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import { aiAPI, userAPI } from '../api/services';
 import { setSavedDestinations, addSaved, removeSaved } from '../store/slices/savedSlice';
 import { updateUser } from '../store/slices/authSlice';
-import { getRichDestinations } from '../api/imageService';
+import { fetchPlaceImage, getRichDestinations } from '../api/imageService';
 import Animated, { 
   FadeInDown, 
   Layout, 
@@ -120,10 +120,14 @@ const FlipDestinationCard = ({ item, theme, onSave, index, isSaved }: any) => {
             <Image source={{ uri: item.image }} style={styles.image} />
             <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.frontGradient}>
               <View style={styles.frontTextContainer}>
-                <Text style={styles.frontName}>{item.name || item.title}</Text>
+                <Text style={styles.frontName}>
+                  {item.name || item.title || 'Exploring...'}
+                </Text>
                 <View style={styles.locationRow}>
                     <Ionicons name="location" size={12} color="rgba(255,255,255,0.8)" />
-                    <Text style={styles.frontLocation}>{item.location}</Text>
+                    <Text style={styles.frontLocation}>
+                      {item.location || 'Incredible India'}
+                    </Text>
                 </View>
               </View>
             </LinearGradient>
@@ -161,8 +165,19 @@ const FlipDestinationCard = ({ item, theme, onSave, index, isSaved }: any) => {
              nestedScrollEnabled={true}
           >
             <View style={styles.backHeader}>
-              <Text style={[styles.backTitle, { color: theme.text }]}>{item.name}</Text>
-              <Text style={[styles.backLocation, { color: COLORS.teal }]}>📍 {item.location}</Text>
+              <Text style={[styles.backTitle, { color: theme.text }]}>{item.name || item.title}</Text>
+              <View style={styles.locationRowBack}>
+                <Ionicons name="location" size={14} color={COLORS.teal} />
+                <Text style={[styles.backLocationLabel, { color: COLORS.teal }]}>
+                  {item.location || 'Incredible India'}
+                </Text>
+              </View>
+              <View style={styles.ratingRowBack}>
+                <Ionicons name="star" size={14} color="#FFD700" />
+                <Text style={[styles.ratingTextBack, { color: theme.text }]}>
+                  {item.rating || 4.8} <Text style={{ color: theme.textLight }}>(120+ reviews)</Text>
+                </Text>
+              </View>
             </View>
 
             <View style={styles.descContainer}>
@@ -249,7 +264,64 @@ const FlipDestinationCard = ({ item, theme, onSave, index, isSaved }: any) => {
   );
 };
 
+const TopDestinationItem = ({ place, theme, navigation }: any) => {
+  const [img, setImg] = useState(place.image);
+
+  useEffect(() => {
+    const enrich = async () => {
+      // If image is missing, a placeholder, or from the old unsplash source redirect
+      const isPlaceholder = !place.image || 
+        place.image.includes('source.unsplash.com') || 
+        place.image.includes('photo-1488646953014-85cb44e25828') ||
+        place.image.includes('undefined');
+
+      if (isPlaceholder) {
+        const url = await fetchPlaceImage(place.name || place.title);
+        if (url && !url.includes('undefined')) setImg(url);
+      }
+    };
+    enrich();
+  }, [place]);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={() => navigation.navigate('PlaceDetails' as never, { 
+        place: { 
+          ...place, 
+          name: place.name, 
+          title: place.title || place.name, 
+          image: img, 
+          location: place.location, 
+          description: place.description, 
+          tags: [], 
+          bestTime: place.duration, 
+          lat: place.coordinates?.latitude, 
+          lng: place.coordinates?.longitude 
+        } 
+      } as never)}
+      style={[styles.topCard, { backgroundColor: theme.card }]}
+    >
+      <Image source={{ uri: img }} style={styles.topCardImage} />
+      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={styles.topCardGradient}>
+        <Text style={styles.topCardName} numberOfLines={1}>{place.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="location" size={10} color="rgba(255,255,255,0.7)" />
+          <Text style={styles.topCardLocation} numberOfLines={1}>
+            {place.location || 'India'}
+          </Text>
+        </View>
+      </LinearGradient>
+      <View style={styles.topCardRating}>
+        <Ionicons name="star" size={10} color="#FFD700" />
+        <Text style={styles.topCardRatingText}>{place.rating || 4.8}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
 const DEST_KEY = '@explore_destinations';
+
 
 const AllDestinationsScreen = () => {
   const theme = useAppTheme();
@@ -262,44 +334,68 @@ const AllDestinationsScreen = () => {
   
   const [destinations, setDestinations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const topDestinations = getRichDestinations();
+  const [topDestinations, setTopDestinations] = useState<any[]>([]);
+  const [topLoading, setTopLoading] = useState(true);
 
 
   useEffect(() => {
     loadDestinations();
+    loadTopDestinations();
   }, []);
 
-  // ⚡ Show cached data instantly, then sync with backend
+  const loadTopDestinations = async () => {
+    setTopLoading(true);
+    try {
+      const res = await aiAPI.getTopDestinations();
+      if (res.data.destinations) {
+        // Randomize the order for a fresh landing feel every time
+        const shuffled = [...res.data.destinations].sort(() => Math.random() - 0.5);
+        setTopDestinations(shuffled);
+        console.log(res.data.cached ? "📡 [TOP DEST] Loaded from DB (Randomized Order)" : "✨ [TOP DEST] Fresh AI Refresh");
+      }
+    } catch (err) {
+      console.error('Failed to load top destinations:', err);
+    } finally {
+      setTopLoading(false);
+    }
+  };
+
+  // ⚡ Show cached data instantly (Wait for fix if bad)
   const loadDestinations = async () => {
     try {
-      // Show cached data instantly (no loading spinner)
       const stored = await AsyncStorage.getItem(DEST_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed?.length > 0) {
+        const isCorrupt = parsed?.some((d: any) => 
+          String(d.title || d.name).toLowerCase().includes('undefined') || 
+          String(d.location).toLowerCase().includes('undefined')
+        );
+        
+        if (parsed?.length > 0 && !isCorrupt) {
           setDestinations(parsed);
           setLoading(false);
+          // Only sync in background if it's been a while? 
+          // For now, return for speed.
+          return;
         }
       }
     } catch (e) {}
 
-    // Always sync with backend (backend handles 12h/24h rotation)
+    setLoading(true);
     try {
       const res = await aiAPI.generateDestinations();
       const apiData = res.data.destinations || [];
+      console.log(res.data.cached ? "📡 [HIDDEN GEMS] Loaded from DB (12h Cache)" : "🚀 [HIDDEN GEMS] Loaded from Gemini AI Magic");
+      
       if (apiData.length > 0) {
         setDestinations(apiData);
         await AsyncStorage.setItem(DEST_KEY, JSON.stringify(apiData));
       }
     } catch (err) {
       console.error('Failed to fetch destinations:', err);
-      // If we have no cached data either, show error
-      if (destinations.length === 0) {
-        Alert.alert("Connection Error", "Couldn't load destinations.", [
-          { text: "Retry", onPress: loadDestinations },
-          { text: "OK" }
-        ]);
-      }
+      // If we have no data, we can try to show stale data as a last resort
+      const stored = await AsyncStorage.getItem(DEST_KEY);
+      if (stored) setDestinations(JSON.parse(stored));
     } finally {
       setLoading(false);
     }
@@ -395,34 +491,33 @@ const AllDestinationsScreen = () => {
 
       <FlatList
         data={loading ? [1,2,3,4,5,6] : destinations}
-        keyExtractor={(item, index) => loading ? `skel-${index}` : item.name || item.title}
+        keyExtractor={(item, index) => {
+          if (loading) return `skel-${index}`;
+          const baseKey = item.id || item._id || item.name || item.title || 'dest';
+          return `${baseKey}-${index}`;
+        }}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={{ marginBottom: 20 }}>
             <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 12 }]}>🏛️ Top Indian Destinations</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 12 }}>
-              {topDestinations.map((place, idx) => (
-                <TouchableOpacity
-                  key={place.id}
-                  activeOpacity={0.9}
-                  onPress={() => navigation.navigate('PlaceDetails' as never, { place: { ...place, name: place.name, title: place.title, image: place.image, location: place.location, description: place.description, tags: [], bestTime: place.duration, lat: place.coordinates?.latitude, lng: place.coordinates?.longitude } } as never)}
-                  style={[styles.topCard, { backgroundColor: theme.card }]}
-                >
-                  <Image source={{ uri: place.image }} style={styles.topCardImage} />
-                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={styles.topCardGradient}>
-                    <Text style={styles.topCardName} numberOfLines={1}>{place.name}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name="location" size={10} color="rgba(255,255,255,0.7)" />
-                      <Text style={styles.topCardLocation} numberOfLines={1}>{place.location}</Text>
-                    </View>
-                  </LinearGradient>
-                  <View style={styles.topCardRating}>
-                    <Ionicons name="star" size={10} color="#FFD700" />
-                    <Text style={styles.topCardRatingText}>{place.rating}</Text>
+              {topLoading ? (
+                [1,2,3,4].map((_, i) => (
+                  <View key={i} style={[styles.topCard, { backgroundColor: theme.card, opacity: 0.5, alignItems: 'center', justifyContent: 'center' }]}>
+                    <Ionicons name="image" size={30} color={theme.border} />
                   </View>
-                </TouchableOpacity>
-              ))}
+                ))
+              ) : (
+                topDestinations.map((place, idx) => (
+                  <TopDestinationItem 
+                    key={place.id || `top-${idx}`}
+                    place={place}
+                    theme={theme}
+                    navigation={navigation}
+                  />
+                ))
+              )}
             </ScrollView>
             <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>🌿 AI-Curated Hidden Gems</Text>
           </View>
@@ -440,7 +535,19 @@ const AllDestinationsScreen = () => {
             />
           )
         }
-        ListFooterComponent={<View style={{ height: 40 }} />}
+        ListFooterComponent={
+          !loading && destinations.length > 0 ? (
+            <TouchableOpacity 
+              style={[styles.refreshBtn, { backgroundColor: theme.tealLight + '20' }]}
+              onPress={shuffleDestinations}
+            >
+              <Ionicons name="sparkles" size={20} color={theme.teal} />
+              <Text style={[styles.refreshBtnText, { color: theme.teal }]}>Magic Shuffle Gems ✨</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ height: 40 }} />
+          )
+        }
       />
     </SafeAreaView>
   );
@@ -491,9 +598,12 @@ const styles = StyleSheet.create({
   // Back Side Styles
   backScrollContent: { padding: 20, paddingBottom: 80 },
   closeBtn: { position: 'absolute', top: 16, right: 16, zIndex: 10 },
-  backHeader: { marginBottom: 20 },
+  backHeader: { marginBottom: 15 },
   backTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5, marginBottom: 4 },
-  backLocation: { fontSize: 13, fontWeight: '700' },
+  locationRowBack: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  backLocationLabel: { fontSize: 13, fontWeight: '700' },
+  ratingRowBack: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ratingTextBack: { fontSize: 13, fontWeight: '800' },
   divider: { height: 1, backgroundColor: 'rgba(150,150,150,0.1)', marginVertical: 16 },
   sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginBottom: 8, color: COLORS.teal },
   descContainer: { marginBottom: 24 },

@@ -45,10 +45,12 @@ export const userAPI = {
   updateDistance: (maxDiscoveryDistance: number) =>
     apiClient.put('/user/distance', { maxDiscoveryDistance }),
   followUser: (userId: string) => apiClient.post(`/user/follow/${userId}`),
-  deactivateAccount: () => apiClient.delete('/user/account'),
+  deactivateAccount: () => apiClient.post('/user/deactivate'),
   blockUser: (targetUserId: string) => apiClient.post('/user/block', { targetUserId }),
   reportUser: (data: { targetUserId: string; reason: string; details?: string; matchId?: string }) => 
     apiClient.post('/user/report', data),
+  deleteAccount: (password: string) => apiClient.delete('/user/account', { data: { password } }),
+  restoreAccount: () => apiClient.post('/user/cancel-deletion'),
 
   // ✅ NEW: Who liked me — returns { likedBy: User[], totalCount: number }
   whoLikedMe: () => apiClient.get('/user/who-liked-me'),
@@ -69,8 +71,11 @@ export const userAPI = {
 // DISCOVER API
 // ============================================================
 export const discoverAPI = {
-  getProfiles: (lat?: number, lng?: number) => {
-    const params = lat && lng ? `?lat=${lat}&lng=${lng}` : '';
+  getProfiles: (lat?: number, lng?: number, mode?: string) => {
+    let params = lat && lng ? `?lat=${lat}&lng=${lng}` : '';
+    if (mode) {
+      params += params ? `&mode=${mode}` : `?mode=${mode}`;
+    }
     return apiClient.get(`/nearby-users${params}`);
   },
   like: (targetUserId: string) => apiClient.post('/discover/like', { targetUserId }),
@@ -221,4 +226,62 @@ export const aiAPI = {
   getPlaceInsights: (data: { placeName: string; lat?: number; lng?: number; }) => apiClient.post('/ai/place-insights', data),
   generateQuote: (destination?: string) => apiClient.post('/ai/quote', { destination }),
   generateDestinations: () => apiClient.get('/ai/destinations'),
+  getTopDestinations: () => apiClient.get('/ai/top-destinations'),
+  saveItinerary: (data: any) => apiClient.post('/ai/itinerary/save', data),
+  getMyItineraries: () => apiClient.get('/ai/itinerary/my'),
+  publishItinerary: (id: string) => apiClient.post(`/ai/itinerary/${id}/publish`),
+  deleteItinerary: (id: string) => apiClient.delete(`/ai/itinerary/${id}`),
+};
+
+// ============================================================
+// LYRA AI ITINERARY API
+// ============================================================
+export const lyraAPI = {
+  generate: (data: { caption: string; location?: any; tags?: string[] }) =>
+    apiClient.post('/itinerary/lyra', data),
+  save: (data: any) => apiClient.post('/itinerary/lyra/save', data),
+  share: (id: string) => apiClient.post(`/itinerary/lyra/${id}/share`),
+  clone: (id: string) => apiClient.post(`/itinerary/lyra/${id}/clone`),
+  getMyItineraries: () => apiClient.get('/itinerary/my'),
+  getLyraById: (id: string) => apiClient.get(`/itinerary/lyra/${id}`),
+  delete: (id: string) => apiClient.delete(`/itinerary/lyra/${id}`),
+};
+
+// ============================================================
+// FEED API
+// ============================================================
+export const feedAPI = {
+  getFeed: (mode: string = 'global', page: number = 1) => 
+    apiClient.get(`/feed?mode=${mode}&page=${page}`),
+  getPost: (postId: string) => apiClient.get(`/feed/${postId}`),
+  createPost: (formData: FormData, onUploadProgress?: (progressEvent: any) => void) => 
+    apiClient.post('/feed/create', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: (data) => data,
+      onUploadProgress,
+    }),
+  toggleLike: (postId: string) => apiClient.post(`/feed/${postId}/like`),
+  deletePost: (postId: string) => apiClient.delete(`/feed/${postId}`),
+  editPost: (postId: string, data: { content?: string; placeName?: string }) => apiClient.put(`/feed/${postId}`, data),
+  getPostLikes: (postId: string) => apiClient.get(`/feed/${postId}/likes`),
+  getUserPosts: (userId: string, page: number = 1) => apiClient.get(`/feed/user/${userId}?page=${page}`),
+};
+
+export const commentAPI = {
+  getComments: (postId: string) => apiClient.get(`/comments/${postId}`),
+  addComment: (postId: string, text: string) => apiClient.post(`/comments/${postId}`, { text }),
+  editComment: (commentId: string, text: string) => apiClient.put(`/comments/${commentId}`, { text }),
+  deleteComment: (commentId: string) => apiClient.delete(`/comments/${commentId}`),
+};
+
+export const storyAPI = {
+  getStories: () => apiClient.get('/stories'),
+  createStory: (formData: FormData) => 
+    apiClient.post('/stories', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: (data) => data,
+    }),
+  deleteStory: (storyId: string) => apiClient.delete(`/stories/${storyId}`),
+  addView: (storyId: string) => apiClient.post(`/stories/${storyId}/view`),
+  getViewers: (storyId: string) => apiClient.get(`/stories/${storyId}/views`),
 };

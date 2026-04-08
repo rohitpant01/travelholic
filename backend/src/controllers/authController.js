@@ -37,6 +37,7 @@ const register = async (req, res) => {
     // Create user
     console.log(`[AUTH] Creating user for ${email}...`);
     const isGoogle = !!req.body.googleId || req.body.authProvider === 'google';
+    console.log(`[DEBUG] isGoogle: ${isGoogle} (googleId: ${req.body.googleId}, authProvider: ${req.body.authProvider})`);
     
     const userPayload = {
       firstName,
@@ -45,8 +46,11 @@ const register = async (req, res) => {
       email: email.toLowerCase(),
       phone,
       password: password || `google_${Date.now()}_${Math.random().toString(36).slice(-8)}`,
-      registrationStep: 2, // New users start at Step 2 (Email Verification)
-      isPhoneVerified: false, // New users must verify phone
+      // Google users: skip all OTP, go straight to onboarding (step 4)
+      // Email users: start at step 2 (Email Verification)
+      registrationStep: isGoogle ? 4 : 2,
+      isPhoneVerified: true, // Phone OTP is disabled — phone collected but not verified
+      isEmailVerified: isGoogle ? true : false, // Google users are auto-verified
       authProvider: authProvider || (isGoogle ? 'google' : 'local')
     };
     if (req.body.googleId) userPayload.googleId = req.body.googleId;
@@ -54,44 +58,41 @@ const register = async (req, res) => {
       userPayload.photos = [{ url: req.body.picture, publicId: `google_${req.body.googleId}`, isProfile: true }];
     }
 
+    console.log(`[DEBUG] Final userPayload to be created:`, JSON.stringify(userPayload, null, 2));
+
     const user = await User.create(userPayload);
+    console.log(`[DEBUG] Created user from DB: id=${user._id}, isEmailVerified=${user.isEmailVerified}, step=${user.registrationStep}`);
 
-    // Initial Verification Flow for ALL users (including Google)
-    // Step 2: Email Verification is next
-    userPayload.registrationStep = 2;
-    
-    console.log(`[AUTH] Sending Email OTP to ${email}...`);
-    const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log('=========================================');
-    console.log(`📧  VERIFICATION CODE FOR ${email}: ${emailOtp}`);
-    console.log('=========================================');
-    user.emailOtp = emailOtp;
-    user.emailOtpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
-    user.isEmailVerified = false; // Ensure it's false
-    await user.save({ validateBeforeSave: false });
+    // Send Email OTP only for non-Google users
+    if (!isGoogle) {
+      console.log(`[AUTH] Sending Email OTP to ${email}...`);
+      const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      console.log('=========================================');
+      console.log(`📧  VERIFICATION CODE FOR ${email}: ${emailOtp}`);
+      console.log('=========================================');
+      user.emailOtp = emailOtp;
+      user.emailOtpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+      await user.save({ validateBeforeSave: false });
 
-    try {
-      await sendEmailOTP(email, emailOtp);
-    } catch (emailError) {
-      console.error('[AUTH] Email OTP send failed:', emailError.message);
+      try {
+        await sendEmailOTP(email, emailOtp);
+      } catch (emailError) {
+        console.error('[AUTH] Email OTP send failed:', emailError.message);
+      }
+    } else {
+      console.log(`[AUTH] Google user ${email} — skipping email OTP, auto-verified.`);
     }
 
     const token = generateToken(user._id);
     console.log(`[AUTH] Registration successful for ${email}. Token generated.`);
 
+    const publicUser = user.toPublicProfile();
+    console.log(`[DEBUG] Final response user object for ${email}:`, JSON.stringify(publicUser, null, 2));
+
     res.status(201).json({
-      message: 'Account created. Please verify your phone number.',
+      message: 'Account created successfully.',
       token,
-      user: {
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        username: user.username,
-        email: user.email,
-        phone: user.phone,
-        registrationStep: user.registrationStep,
-        isPhoneVerified: user.isPhoneVerified,
-      },
+      user: publicUser,
     });
   } catch (error) {
     console.error('[AUTH] Register error:', error);
@@ -141,9 +142,11 @@ const login = async (req, res) => {
     console.log(`[AUTH] Login successful for ${emailOrPhone}`);
 
     res.json({
-      message: 'Login successful',
+      message: user.isDeleted ? 'Account scheduled for deletion' : 'Login successful',
       token,
       user: user.toPublicProfile(),
+      isDeletionPending: user.isDeleted || false,
+      deletionScheduledAt: user.deletionScheduledAt || null
     });
   } catch (error) {
     console.error('[AUTH] Login error:', error);
@@ -229,13 +232,28 @@ const verifyOTPHandler = async (req, res) => {
 // @access  Public
 const forgotPassword = async (req, res) => {
   try {
-    const { phone } = req.body;
-    const user = await User.findOne({ phone });
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
 
-    if (!user) return res.status(404).json({ error: 'No account with this phone number' });
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) return res.status(404).json({ error: 'No account with this email address' });
 
-    await sendOTP(phone);
-    res.json({ message: 'Password reset OTP sent to your phone' });
+    const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.emailOtp = emailOtp;
+    user.emailOtpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    await user.save({ validateBeforeSave: false });
+
+    console.log('=========================================');
+    console.log(`📧  FORGOT PASSWORD OTP FOR ${email}: ${emailOtp}`);
+    console.log('=========================================');
+
+    try {
+      await sendEmailOTP(email, emailOtp);
+      res.json({ message: 'Password reset OTP sent to your email' });
+    } catch (emailError) {
+      console.error('[AUTH] Forgot password email send failed:', emailError.message);
+      res.status(500).json({ error: 'Failed to send reset email. Try again.' });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -246,19 +264,34 @@ const forgotPassword = async (req, res) => {
 // @access  Public
 const resetPassword = async (req, res) => {
   try {
-    const { phone, code, newPassword } = req.body;
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ error: 'Email, code, and new password required' });
+    }
 
-    const result = await verifyOTP(phone, code);
-    if (!result.success) return res.status(400).json({ error: 'Invalid or expired OTP' });
-
-    const user = await User.findOne({ phone });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    // Check OTP
+    if (!user.emailOtp || user.emailOtp !== code) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    // Check expiry
+    if (user.emailOtpExpiry && user.emailOtpExpiry < new Date()) {
+      return res.status(400).json({ error: 'Verification code has expired' });
+    }
+
+    // Success
     user.password = newPassword;
+    user.emailOtp = undefined;
+    user.emailOtpExpiry = undefined;
     await user.save({ validateBeforeSave: false });
 
+    console.log(`[AUTH] Password reset successful for ${email}`);
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
+    console.error('[AUTH] Reset Password error:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -312,44 +345,28 @@ const googleLogin = async (req, res) => {
       await user.save({ validateBeforeSave: false });
     }
 
-    // Trigger Email OTP for existing users if not verified
+    // Google users are auto-verified — no email OTP needed
     if (!user.isEmailVerified) {
-      console.log(`[AUTH] Existing user ${user.email} not verified. Sending OTP...`);
-      const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      user.emailOtp = emailOtp;
-      user.emailOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-      if (user.registrationStep < 2) user.registrationStep = 2;
+      console.log(`[AUTH] Google login: auto-verifying email for ${user.email}`);
+      user.isEmailVerified = true;
+      user.isPhoneVerified = true; // Phone OTP disabled
+      if (user.registrationStep < 4) user.registrationStep = 4;
       await user.save({ validateBeforeSave: false });
-
-      console.log('=========================================');
-      console.log(`📧  VERIFICATION CODE (LOGIN) FOR ${user.email}: ${emailOtp}`);
-      console.log('=========================================');
-
-      try {
-        await sendEmailOTP(user.email, emailOtp);
-      } catch (emailError) {
-        console.error('[AUTH] Login Email OTP failed:', emailError.message);
-      }
     }
 
     // Generate token
     const token = generateToken(user._id);
     
     // Determine current effective step
-    let effectiveStep = user.registrationStep || 2;
-    if (!user.isEmailVerified) effectiveStep = 2;
-    else if (!user.isPhoneVerified && effectiveStep < 3) effectiveStep = 3;
-
-    const step = user.registrationStep;
+    let effectiveStep = user.registrationStep || 4;
     
     res.status(200).json({
-      message: 'Google Sign-In successful',
+      message: user.isDeleted ? 'Account scheduled for deletion' : 'Google Sign-In successful',
       token,
-      user: {
-        ...user.toObject(),
-        registrationStep: effectiveStep,
-      },
+      user: user.toPublicProfile(),
       isNewUser: false,
+      isDeletionPending: user.isDeleted || false,
+      deletionScheduledAt: user.deletionScheduledAt || null
     });
   } catch (error) {
     console.error('[AUTH] Google Sign-In error:', error.message);
@@ -418,23 +435,14 @@ const verifyEmailOTPHandler = async (req, res) => {
 
     // Success
     user.isEmailVerified = true;
+    user.isPhoneVerified = true; // Phone OTP is disabled — auto-mark verified
     user.emailOtp = undefined;
     user.emailOtpExpiry = undefined;
     
-    // Auto-advance to next step (Phone OTP)
-    if (user.registrationStep < 3) {
-      user.registrationStep = 3;
-      
-      // OPTIONAL: Send Phone OTP immediately upon successful email verification
-      console.log(`[AUTH] Email verified. Triggering Phone OTP for ${user.phone}`);
-      try {
-        await sendOTP(user.phone);
-        console.log('=========================================');
-        console.log(`📱  AUTO-SENT PHONE OTP FOR ${user.phone}`);
-        console.log('=========================================');
-      } catch (otpError) {
-        console.error('[AUTH] Phone OTP auto-send failed:', otpError.message);
-      }
+    // Skip phone OTP — advance directly to onboarding (step 4)
+    if (user.registrationStep < 4) {
+      user.registrationStep = 4;
+      console.log(`[AUTH] Email verified for ${user.email}. Phone OTP disabled — advancing to step 4.`);
     }
 
     await user.save({ validateBeforeSave: false });

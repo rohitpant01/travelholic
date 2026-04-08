@@ -35,10 +35,12 @@ export default function CreateTripScreen() {
   const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
   const [form, setForm] = useState({
     sourceCity: '', destCity: '',
     date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    endDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
     mode: 'other',
     budget: 'Budget',
     travelType: 'Group',
@@ -63,12 +65,18 @@ export default function CreateTripScreen() {
       return;
     }
 
+    if (!form.endDate || form.endDate <= form.date) {
+      Alert.alert('Invalid Date', 'Return date must be after the travel date');
+      return;
+    }
+
     try {
       setSubmitting(true);
       await tripAPI.createTrip({
         source: { city: form.sourceCity.trim() },
         destination: { city: form.destCity.trim() },
         date: form.date.toISOString(),
+        endDate: form.endDate.toISOString(),
         mode: form.mode,
         budget: form.budget,
         travelType: form.travelType,
@@ -133,7 +141,33 @@ export default function CreateTripScreen() {
             minimumDate={new Date()}
             onChange={(e, date) => {
               setShowDatePicker(Platform.OS === 'ios');
-              if (date) setForm(f => ({ ...f, date }));
+              if (date) {
+                setForm(f => {
+                  const newDate = date;
+                  // Auto-bump endDate if it's now before new startDate
+                  const newEnd = f.endDate <= newDate ? new Date(newDate.getTime() + 24*60*60*1000) : f.endDate;
+                  return { ...f, date: newDate, endDate: newEnd };
+                });
+              }
+            }}
+          />
+        )}
+
+        {/* Return Date */}
+        <Text style={styles.label}>📅 Return Date</Text>
+        <TouchableOpacity style={styles.input} onPress={() => setShowEndDatePicker(true)}>
+          <Text style={{ color: COLORS.text, fontSize: FONTS.md }}>
+            {form.endDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+          </Text>
+        </TouchableOpacity>
+        {showEndDatePicker && (
+          <DateTimePicker
+            value={form.endDate}
+            mode="date"
+            minimumDate={new Date(form.date.getTime() + 24*60*60*1000)}
+            onChange={(e, date) => {
+              setShowEndDatePicker(Platform.OS === 'ios');
+              if (date) setForm(f => ({ ...f, endDate: date }));
             }}
           />
         )}

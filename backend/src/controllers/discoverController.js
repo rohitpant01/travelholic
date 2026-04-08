@@ -158,11 +158,16 @@ const getDiscoverProfiles = async (req, res) => {
     let reqLat = parseFloat(req.query.lat);
     let reqLng = parseFloat(req.query.lng);
 
-    // Build exclusion list: self, swiped, blocked, matches
+    const isMapMode = req.query.mode === 'map';
     const swipedUsers = await Swipe.find({ swiper: req.user._id }).select('swiped');
     const swipedIds = swipedUsers.map(s => s.swiped);
 
-    const excludeIds = [
+    // 📍 STRATEGY: In map mode, we want to see EVERYONE nearly, even matched/swiped users,
+    // to make the community feel alive. We only exclude self and blocked.
+    const excludeIds = isMapMode ? [
+      req.user._id,
+      ...(currentUser.blockedUsers || []),
+    ] : [
       req.user._id,
       ...swipedIds,
       ...(currentUser.blockedUsers || []),
@@ -178,16 +183,21 @@ const getDiscoverProfiles = async (req, res) => {
       return res.json({ profiles: [], count: 0, message: 'Location required' });
     }
 
+    // 📍 RADIUS: Relax for map mode to show more people (up to 100km)
+    const discoveryRadiusMet = (isMapMode ? Math.max(maxDistance, 100) : maxDistance) * 1000;
+
     const pipeline = [
       {
         $geoNear: {
           near: { type: 'Point', coordinates: [activeLng, activeLat] },
           distanceField: 'distanceMet',
-          maxDistance: maxDistance * 1000,
+          maxDistance: discoveryRadiusMet,
           query: {
             _id: { $nin: excludeIds },
             isActive: { $ne: false },
-            'photos.0': { $exists: true },
+            isDeleted: { $ne: true },
+            // In map mode, allow users with NO photos to appear (with placeholder)
+            ...(isMapMode ? {} : { 'photos.0': { $exists: true } }),
           },
           spherical: true,
         },
@@ -383,11 +393,12 @@ const likeUser = async (req, res) => {
       // Socket may not be active, non-fatal
     }
 
-    res.json({ matched: false, message: 'Liked!' });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ error: 'Already swiped on this user' });
+      // Gracefully handle "Already liked/swiped" — return success for UX
+      return res.json({ matched: false, message: 'Already liked!' });
     }
+    console.error('[LIKE ERROR]', error);
     res.status(500).json({ error: error.message });
   }
 };

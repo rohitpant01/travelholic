@@ -1,6 +1,9 @@
 const { Trip, TripMember, TripMessage } = require('../models/Trip');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const Report = require('../models/Report');
+const LyraItinerary = require('../models/LyraItinerary');
+const AIItinerary = require('../models/AIItinerary');
 
 // ============================================================
 // CREATE TRIP
@@ -13,8 +16,8 @@ const createTrip = async (req, res) => {
       description, genderPreference, name
     } = req.body;
 
-    if (!source?.city || !destination?.city || !date) {
-      return res.status(400).json({ error: 'Source city, destination city, and date are required' });
+    if (!source?.city || !destination?.city || !date || !endDate) {
+      return res.status(400).json({ error: 'Source, destination, start date, and return date are all required' });
     }
 
     const trip = await Trip.create({
@@ -65,7 +68,17 @@ const getTrips = async (req, res) => {
     const limit = 20;
     const skip = (parseInt(page) - 1) * limit;
 
-    const filter = { isActive: true, date: { $gte: new Date() } };
+    const deletedUsers = await User.find({ isDeleted: true }).select('_id');
+    const deletedUserIds = deletedUsers.map(u => u._id);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const filter = { 
+      isActive: true, 
+      date: { $gte: today },
+      creator: { $nin: deletedUserIds }
+    };
 
     if (budget) filter.budget = budget;
     if (travelType) filter.travelType = travelType;
@@ -140,6 +153,7 @@ const getMyTrips = async (req, res) => {
 
       return {
         ...trip.toObject(),
+        tripType: 'social',
         membersCount: memberCount,
         unreadCount: membership?.unreadCount || 0,
         isPinned: membership?.isPinned || false,
@@ -155,7 +169,50 @@ const getMyTrips = async (req, res) => {
       };
     }));
 
-    res.json({ trips: tripsWithMeta });
+    // [LYRA] Fetch user's saved AI itineraries
+    const lyraPlans = await LyraItinerary.find({ userId: userId, isSaved: true })
+      .sort({ createdAt: -1 });
+
+    const lyraFormatted = lyraPlans.map(plan => {
+      const pObj = plan.toObject();
+      return {
+        ...pObj,
+        tripType: 'lyra',
+        displayDestination: pObj.location?.name || 'Unknown Location',
+        date: pObj.createdAt,
+        budget: pObj.estimated_cost?.stay || 'Budget',
+        travelType: pObj.travel_type,
+        creator: { firstName: 'Lyra AI' },
+        membersCount: 1,
+        maxTravelers: 1
+      };
+    });
+
+    // [AI] Fetch user's saved standard AI itineraries
+    const aiPlans = await AIItinerary.find({ userId: userId, isSaved: true })
+      .sort({ createdAt: -1 });
+
+    const aiFormatted = aiPlans.map(plan => {
+      const pObj = plan.toObject();
+      return {
+        ...pObj,
+        tripType: 'ai_itinerary',
+        displayDestination: pObj.destination || 'Unknown Location',
+        date: pObj.createdAt,
+        budget: pObj.budget || 'Budget',
+        travelType: pObj.travelType,
+        creator: { firstName: 'EkalGo AI' },
+        membersCount: 1,
+        maxTravelers: 1
+      };
+    });
+
+    // Combine and sort by date descending
+    const combined = [...tripsWithMeta, ...lyraFormatted, ...aiFormatted].sort((a, b) => 
+      new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)
+    );
+
+    res.json({ trips: combined });
   } catch (error) {
     console.error('[getMyTrips]', error);
     res.status(500).json({ error: error.message });
@@ -176,15 +233,17 @@ const getTripDetail = async (req, res) => {
       .populate('user', 'firstName lastName photos profilePhoto age gender');
 
     const userId = req.user._id;
-    const acceptedMembers = members.filter(m => m.status === 'accepted');
+    const acceptedMembers = members.filter(m => m.status === 'accepted' && m.user && !m.user.isDeleted);
     const userMembership = members.find(m => m.user._id.toString() === userId.toString());
 
     res.json({
       trip: trip.toObject(),
-      members: members.map(m => ({
-        ...m.toObject(),
-        user: m.user,
-      })),
+      members: members
+        .filter(m => m.user && !m.user.isDeleted)
+        .map(m => ({
+          ...m.toObject(),
+          user: m.user,
+        })),
       acceptedMembers: acceptedMembers.map(m => ({
         ...m.toObject(),
         user: m.user,
@@ -968,6 +1027,66 @@ const toggleMuteTrip = async (req, res) => {
   }
 };
 
+const reportTrip = async (req, res) => {
+  try {
+    const tripId = req.params.id;
+    const { reason, details } = req.body;
+    const userId = req.user._id;
+
+    if (!reason) {
+      return res.status(400).json({ error: 'Reason is required' });
+    }
+
+    // 1. Save Report
+    await Report.create({
+      reportedBy: userId,
+      targetId: tripId,
+      type: 'group',
+      reason,
+      details: details || ''
+    });
+
+    // 2. AUTO ACTION: Remove from Group
+    const trip = await Trip.findById(tripId);
+    if (trip) {
+      await TripMember.findOneAndDelete({ trip: tripId, user: userId });
+      
+      // Update counts
+      const count = await TripMember.countDocuments({ trip: tripId, status: 'accepted' });
+      trip.membersCount = count;
+      await trip.save();
+
+      // System message
+      try {
+        const reporter = await User.findById(userId).select('firstName');
+        const sysMsg = await TripMessage.create({
+          trip: tripId,
+          sender: userId,
+          text: `${reporter.firstName} reported and left the group`,
+          type: 'system',
+        });
+        const { getIO } = require('../socket/socketHandler');
+        const io = getIO();
+        if (io) {
+          io.to(`trip_${tripId}`).emit('receive_message', { ...sysMsg.toObject(), chatId: tripId });
+          io.to(`trip_${tripId}`).emit('member_removed', { userId, tripId });
+          
+          // Emit match_removed to the reporter so the UI clears immediately
+          io.to(userId.toString()).emit('match_removed', { matchId: tripId, type: 'group' });
+        }
+      } catch (e) {}
+    }
+
+    res.json({ 
+      success: true,
+      message: 'Report submitted. You have been removed from this group for your safety.' 
+    });
+  } catch (error) {
+    console.error('[reportTrip]', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createTrip,
   getTrips,
@@ -988,5 +1107,6 @@ module.exports = {
   updateGroupInfo,
   getPendingRequests,
   togglePinTrip,
-  toggleMuteTrip
+  toggleMuteTrip,
+  reportTrip
 };

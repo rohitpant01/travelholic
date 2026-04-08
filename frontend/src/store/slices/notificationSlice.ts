@@ -10,10 +10,11 @@ export interface Notification {
     lastName: string;
     photos: any[];
   };
-  type: 'like' | 'match' | 'trip_join_request' | 'trip_accepted' | 'trip_message';
+  type: 'like' | 'comment' | 'match' | 'trip_join_request' | 'trip_accepted' | 'trip_message';
   title?: string;
   message: string;
   data?: {
+    postId?: string;
     tripId?: string;
     matchId?: string;
   };

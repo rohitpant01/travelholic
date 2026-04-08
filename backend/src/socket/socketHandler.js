@@ -112,6 +112,24 @@ const initSocket = (server) => {
         if (imageUrl) lastMsgText = '📷 Photo';
         if (voiceUrl) lastMsgText = '🎤 Voice message';
         if (latitude && longitude) lastMsgText = '📍 Location';
+        
+        // De-duplication check using tempId
+        if (tempId) {
+          if (chatType === 'group') {
+             const { TripMessage } = require('../models/Trip');
+             const existing = await TripMessage.findOne({ trip: chatId, tempId, sender: socket.userId });
+             if (existing) {
+               console.log(`[SOCKET DEBUG] DUPLICATE Group Message rejected (tempId: ${tempId})`);
+               return;
+             }
+          } else {
+             const existing = await Message.findOne({ matchId: chatId, tempId, sender: socket.userId });
+             if (existing) {
+               console.log(`[SOCKET DEBUG] DUPLICATE Individual Message rejected (tempId: ${tempId})`);
+               return;
+             }
+          }
+        }
 
         console.log(`[SOCKET DEBUG] Sender ID: ${socket.userId}, Chat ID: ${chatId}, Receiver: ${receiverId}`);
 
@@ -158,6 +176,7 @@ const initSocket = (server) => {
           console.log('[SOCKET DEBUG] Creating individual message in DB');
           const message = await Message.create({
             matchId: chatId,
+            tempId, // Save tempId for future deduplication
             sender: socket.userId,
             receiver: receiverId,
             text: text || '',
@@ -191,7 +210,7 @@ const initSocket = (server) => {
           });
           console.log('[SOCKET DEBUG] Match last message and unread counts updated');
 
-          // Notify both participants via their personal rooms (guaranteed delivery, no duplicates)
+          // Notify both participants via their personal rooms (guaranteed delivery, NO DUPLICATES)
           const participants = [socket.userId, receiverId];
           const senderProfilePhoto = socket.user?.photos?.find(p => p.isProfile)?.url || socket.user?.photos?.[0]?.url;
           const senderName = socket.user?.firstName || 'Match';
@@ -215,12 +234,6 @@ const initSocket = (server) => {
               unreadCount,
             });
           }
-
-          // Also emit to the match room for users actively in that chat (no extra unread++)
-          io.to(`match_${chatId}`).emit('receive_message', {
-            ...formattedMessage,
-            matchId: chatId,
-          });
 
           // Push notifications (only if receiver is offline)
           const receiverSocketRooms = io.sockets.adapter.rooms.get(receiverId);

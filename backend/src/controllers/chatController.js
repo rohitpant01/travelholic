@@ -30,13 +30,19 @@ const getMatches = async (req, res) => {
       users: req.user._id,
       isActive: true,
     })
-      .populate('users', 'firstName lastName photos isPhotoVerified isOnline activityStatus lastSeen location age city country origin destination travelDate')
+      .populate('users', 'firstName lastName photos isPhotoVerified isOnline activityStatus lastSeen location age city country origin destination travelDate isDeleted')
       .sort({ 'lastMessage.sentAt': -1, matchedAt: -1 });
 
-    const currentUser = await User.findById(req.user._id).select('location');
+    const currentUser = await User.findById(req.user._id).select('location blockedUsers');
     const userCoords = currentUser?.location?.coordinates; // [lng, lat]
+    const blockedIds = (currentUser?.blockedUsers || []).map(id => id.toString());
 
-    const enrichedPromises = matches.map(async (match) => {
+    const enrichedPromises = matches
+      .filter(match => {
+        const otherUser = match.users.find(u => u._id.toString() !== req.user._id.toString());
+        return otherUser && !otherUser.isDeleted && !blockedIds.includes(otherUser._id.toString());
+      })
+      .map(async (match) => {
       const otherUser = match.users.find(u => u._id.toString() !== req.user._id.toString());
       const profilePhoto = otherUser?.photos?.find(p => p.isProfile)?.url || otherUser?.photos?.[0]?.url;
       
@@ -437,6 +443,28 @@ const resetUnreadCount = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+// @desc    Clear messages for a match
+// @route   DELETE /api/chat/:matchId/messages
+// @access  Private
+const clearMessages = async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    // Verify user is in this match
+    const match = await Match.findOne({ _id: matchId, users: req.user._id });
+    if (!match) return res.status(403).json({ error: 'Not authorized' });
+
+    await Message.deleteMany({ matchId });
+    
+    // Update match's last message to reflet empty state
+    await Match.findByIdAndUpdate(matchId, {
+      lastMessage: null
+    });
+
+    res.json({ message: 'Chat history cleared' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
 module.exports = {
   getMatches,
@@ -450,4 +478,5 @@ module.exports = {
   togglePinMatch,
   toggleMuteMatch,
   resetUnreadCount,
+  clearMessages,
 };

@@ -63,7 +63,7 @@ export default function Step6InterestsScreen() {
   };
 
   const addCustomLanguage = () => {
-    const trimmed = customLanguage.trim();
+    const trimmed = (customLanguage || '').trim();
     if (trimmed && !selectedLanguages.includes(trimmed)) {
       setSelectedLanguages(prev => [...prev, trimmed]);
       setCustomLanguage('');
