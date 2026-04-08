@@ -55,7 +55,7 @@ export const fetchPlaceImage = async (query: string): Promise<string | null> => 
     } catch (e) {}
   }
 
-  return `https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=1000&auto=format&fit=crop`;
+  return `https://picsum.photos/id/1015/1000/1500`; // Fail-safe non-Unsplash fallback
 };
 
 /**
@@ -113,9 +113,9 @@ export const fetchPlaceImages = async (query: string, count: number = 3): Promis
   }
 
   const fallbacks = [
-    'https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=1000',
-    'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?q=80&w=1000',
-    'https://images.unsplash.com/photo-1599661046289-e31887846eac?q=80&w=1000'
+    'https://picsum.photos/id/10/1000/1000',
+    'https://picsum.photos/id/11/1000/1000',
+    'https://picsum.photos/id/12/1000/1000'
   ];
 
   while (images.length < count) {
@@ -157,18 +157,15 @@ export const fetchRandomTravelImages = async (count: number = 5): Promise<any[]>
     }
   }
 
-  // Static Fallback if all APIs fail (Production safety)
+  // Static Fallback if all APIs fail (Production safety) - Using Picsum IDs to avoid Unsplash rate limits
   const fallbacks = [
-    { name: 'Taj Mahal', image: 'https://images.unsplash.com/photo-1564507592333-c60657eaa0ae' },
-    { name: 'Kerala Backwaters', image: 'https://images.unsplash.com/photo-1602216056096-3b40cc0c9944' },
-    { name: 'Jaipur Palaces', image: 'https://images.unsplash.com/photo-1599661046289-e31887846eac' },
-    { name: 'Leh Ladakh', image: 'https://images.unsplash.com/photo-1581791534721-e599df4417f7' },
-    { name: 'Goa Beaches', image: 'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2' }
+    { name: 'Taj Mahal', image: 'https://picsum.photos/id/1018/1000/600' },
+    { name: 'Kerala Backwaters', image: 'https://picsum.photos/id/1015/1000/600' },
+    { name: 'Jaipur Palaces', image: 'https://picsum.photos/id/1016/1000/600' },
+    { name: 'Leh Ladakh', image: 'https://picsum.photos/id/1019/1000/600' },
+    { name: 'Goa Beaches', image: 'https://picsum.photos/id/1020/1000/600' }
   ];
-  return fallbacks.slice(0, count).map(f => ({
-    name: f.name,
-    image: `${f.image}?q=80&w=600&auto=format&fit=crop`
-  }));
+  return fallbacks.slice(0, count);
 };
 
 /**
