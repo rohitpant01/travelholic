@@ -13,24 +13,12 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://travelholic-zsqn.onrender.com/api",
-        "EXPO_PUBLIC_UNSPLASH_ACCESS_KEY": "3Kzju1WPQLO4PCQ3d2ArBZgOiRt_npJ4TUh0-vvrcWE",
-        "EXPO_PUBLIC_UNSPLASH_SECRET_KEY": "_B_OBNEYhIGpuLyCNR-p1vByJJ0b_t3xlGrcDos_9oo",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY",
-        "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY",
-        "EXPO_PUBLIC_PEXELS_API_KEY": "6XwgQBP5E4Qk9j0WiXfZIEkhJrtXADYCYZadUxKKnDUo8UsaKpU5CpoX",
-        "EXPO_PUBLIC_PIXABAY_API_KEY": "40328371-49c105c3fd111f111a47d33d1"
+        "EXPO_PUBLIC_API_URL": "https://travelholic-zsqn.onrender.com/api"
       }
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://travelholic-zsqn.onrender.com/api",
-        "EXPO_PUBLIC_UNSPLASH_ACCESS_KEY": "3Kzju1WPQLO4PCQ3d2ArBZgOiRt_npJ4TUh0-vvrcWE",
-        "EXPO_PUBLIC_UNSPLASH_SECRET_KEY": "_B_OBNEYhIGpuLyCNR-p1vByJJ0b_t3xlGrcDos_9oo",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY",
-        "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY": "AIzaSyCLYyVPFrMguQYp71lbDIxftCzMOF4d5JY",
-        "EXPO_PUBLIC_PEXELS_API_KEY": "6XwgQBP5E4Qk9j0WiXfZIEkhJrtXADYCYZadUxKKnDUo8UsaKpU5CpoX",
-        "EXPO_PUBLIC_PIXABAY_API_KEY": "40328371-49c105c3fd111f111a47d33d1"
+        "EXPO_PUBLIC_API_URL": "https://travelholic-zsqn.onrender.com/api"
       }
     }
   },
