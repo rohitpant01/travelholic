@@ -15,6 +15,7 @@ import {
   Post 
 } from '../store/slices/feedSlice';
 import { userAPI, discoverAPI, matchAPI } from '../api/services';
+import { updateUser } from '../store/slices/authSlice';
 import { useAppTheme, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
 import TravelPostCard from '../components/TravelPostCard';
 import PostCommentsModal from '../components/PostCommentsModal';
@@ -62,6 +63,7 @@ export default function UserDetailScreen() {
   const [loading, setLoading] = useState(!route.params?.profile);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [showTrips, setShowTrips] = useState(false);
+  const [isLiked, setIsLiked] = useState(currentUser?.likes?.includes(userId) || false);
 
   // Post Interaction States
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -72,11 +74,12 @@ export default function UserDetailScreen() {
     if (userId) {
       loadProfile();
       dispatch(fetchUserPosts({ userId, page: 1 }));
+      setIsLiked(currentUser?.likes?.includes(userId) || false);
     }
     return () => {
       dispatch(clearUserPosts());
     };
-  }, [userId]);
+  }, [userId, currentUser?.likes]);
 
   const loadProfile = async () => {
     try {
@@ -106,6 +109,13 @@ export default function UserDetailScreen() {
 
   const handleLike = async () => {
     try {
+      // 🚀 Optimistic update
+      setIsLiked(true);
+      if (currentUser) {
+        const newLikes = [...(currentUser.likes || []), userId];
+        dispatch(updateUser({ likes: newLikes }));
+      }
+
       const res = await discoverAPI.like(userId);
       // Synchronize Discovery state
       if (route.params?.onActionPerformed) {
@@ -124,6 +134,7 @@ export default function UserDetailScreen() {
       }
     } catch (e) {
       console.error('Like error:', e);
+      setIsLiked(currentUser?.likes?.includes(userId) || false);
     }
   };
 
@@ -168,6 +179,13 @@ export default function UserDetailScreen() {
                 <Text style={styles.messageBtnText}>Message Traveler</Text>
               </LinearGradient>
             </TouchableOpacity>
+          ) : isLiked ? (
+            <View style={[styles.messageBtn, { opacity: 0.8 }]}>
+              <View style={[styles.messageBtnGradient, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.teal }]}>
+                <Ionicons name="checkmark-circle" size={24} color={theme.teal} />
+                <Text style={[styles.messageBtnText, { color: theme.teal }]}>Request Sent</Text>
+              </View>
+            </View>
           ) : (
             <>
               <TouchableOpacity 

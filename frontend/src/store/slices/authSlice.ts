@@ -45,6 +45,7 @@ interface User {
   authProvider?: string;
   googleId?: string;
   savedDestinations?: any[];
+  likes?: string[];
 }
 
 interface AuthState {
