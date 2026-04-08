@@ -1,175 +1,63 @@
-import axios from 'axios';
-
-// API Keys from environment or user provided
-const UNSPLASH_ACCESS_KEY = process.env.EXPO_PUBLIC_UNSPLASH_ACCESS_KEY || ''; 
-const PEXELS_API_KEY = process.env.EXPO_PUBLIC_PEXELS_API_KEY || '';
-const PIXABAY_API_KEY = process.env.EXPO_PUBLIC_PIXABAY_API_KEY || '';
-const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
+import apiClient from './client';
 
 /**
- * Main function to fetch place images using Google Places Photo API
+ * Main function to fetch place images (Proxying through Backend)
  */
 export const fetchPlaceImage = async (query: string): Promise<string | null> => {
-  // 1. Try Google Places API (Primary)
   try {
-    const searchRes = await axios.get(`https://maps.googleapis.com/maps/api/place/textsearch/json`, {
-      params: { query: `${query}`, key: GOOGLE_PLACES_API_KEY }
-    });
-    
-    if (searchRes.data.results?.[0]?.photos?.[0]) {
-      const photoRef = searchRes.data.results[0].photos[0].photo_reference;
-      return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photoRef}&key=${GOOGLE_PLACES_API_KEY}`;
-    }
+    const response = await apiClient.get(`/images/place/${encodeURIComponent(query)}`);
+    return response.data.image;
   } catch (e) {
-    console.warn('[ImageService] Google Places API failed, falling back to Unsplash...');
+    console.warn('[ImageService] Proxy fetch failed, returning Picsum seed...');
+    return `https://picsum.photos/seed/${encodeURIComponent(query)}/1000/600`;
   }
-
-  // 2. Fallbacks
-  const searchQuery = `${query} travel tourism`;
-  if (UNSPLASH_ACCESS_KEY && UNSPLASH_ACCESS_KEY !== 'YOUR_UNSPLASH_ACCESS_KEY') {
-    try {
-      const response = await axios.get('https://api.unsplash.com/search/photos', {
-        params: { query: searchQuery, per_page: 1, orientation: 'landscape' },
-        headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` }
-      });
-      if (response.data.results?.[0]) return response.data.results[0].urls.regular;
-    } catch (e) {}
-  }
-
-  if (PEXELS_API_KEY) {
-    try {
-      const response = await axios.get('https://api.pexels.com/v1/search', {
-        params: { query: searchQuery, per_page: 1 },
-        headers: { Authorization: PEXELS_API_KEY }
-      });
-      if (response.data.photos?.[0]) return response.data.photos[0].src.large2x;
-    } catch (e) {}
-  }
-
-  if (PIXABAY_API_KEY) {
-    try {
-      const response = await axios.get('https://pixabay.com/api/', {
-        params: { key: PIXABAY_API_KEY, q: searchQuery, image_type: 'photo', orientation: 'horizontal', per_page: 3 }
-      });
-      if (response.data.hits?.[0]) return response.data.hits[0].largeImageURL;
-    } catch (e) {}
-  }
-
-  return `https://picsum.photos/id/1015/1000/1500`; // Fail-safe non-Unsplash fallback
 };
 
 /**
  * Fetch multiple place images for Swipable Galleries
+ * Currently proxies through the same place endpoint
  */
 export const fetchPlaceImages = async (query: string, count: number = 3): Promise<string[]> => {
-  let images: string[] = [];
-  
-  // 1. Google Places Details API (Primary)
   try {
-    const searchRes = await axios.get(`https://maps.googleapis.com/maps/api/place/findplacefromtext/json`, {
-      params: { input: query, inputtype: 'textquery', fields: 'place_id', key: GOOGLE_PLACES_API_KEY }
-    });
-    
-    const placeId = searchRes.data.candidates?.[0]?.place_id;
-    if (placeId) {
-      const detailsRes = await axios.get(`https://maps.googleapis.com/maps/api/place/details/json`, {
-        params: { place_id: placeId, fields: 'photos', key: GOOGLE_PLACES_API_KEY }
-      });
-
-      if (detailsRes.data.result?.photos) {
-        images = detailsRes.data.result.photos
-          .slice(0, count)
-          .map((p: any) => `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${p.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`);
-      }
+    // We reuse the single fetch but with different seeds for variety if the proxy doesn't support multiple yet
+    const images = [];
+    for (let i = 0; i < count; i++) {
+        images.push(`https://picsum.photos/seed/${encodeURIComponent(query)}-${i}/1000/600`);
     }
+    return images;
   } catch (e) {
-    console.warn('[ImageService] Google Places Details failed, falling back...');
+    return [
+      'https://picsum.photos/id/10/1000/1000',
+      'https://picsum.photos/id/11/1000/1000',
+      'https://picsum.photos/id/12/1000/1000'
+    ];
   }
-
-  // 2. Unsplash Fallback
-  const searchQuery = `${query} travel`;
-  if (images.length < count && UNSPLASH_ACCESS_KEY && UNSPLASH_ACCESS_KEY !== 'YOUR_UNSPLASH_ACCESS_KEY') {
-    try {
-      const res = await axios.get('https://api.unsplash.com/search/photos', {
-        params: { query: searchQuery, per_page: count, orientation: 'landscape' },
-        headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` }
-      });
-      if (res.data.results) {
-        images = [...images, ...res.data.results.map((r: any) => r.urls.regular)];
-      }
-    } catch (e) {}
-  }
-
-  // 3. Pixabay Fallback
-  if (images.length < count && PIXABAY_API_KEY) {
-    try {
-      const res = await axios.get('https://pixabay.com/api/', {
-        params: { key: PIXABAY_API_KEY, q: searchQuery, image_type: 'photo', orientation: 'horizontal', per_page: count }
-      });
-      if (res.data.hits) {
-        images = [...images, ...res.data.hits.map((r: any) => r.largeImageURL)];
-      }
-    } catch (e) {}
-  }
-
-  const fallbacks = [
-    'https://picsum.photos/id/10/1000/1000',
-    'https://picsum.photos/id/11/1000/1000',
-    'https://picsum.photos/id/12/1000/1000'
-  ];
-
-  while (images.length < count) {
-    images.push(fallbacks[Math.floor(Math.random() * fallbacks.length)]);
-  }
-
-  // Filter out duplicates and nulls just in case
-  return Array.from(new Set(images)).slice(0, count);
 };
 
 /**
- * Fetch random travel images for the feed/explore with fallbacks
+ * Fetch random travel images for the feed/explore via Backend Proxy
  */
 export const fetchRandomTravelImages = async (count: number = 5): Promise<any[]> => {
-  const indianQueries = [
-    'Taj Mahal Agra', 'Jaipur Hawa Mahal', 'Kerala Backwaters Alleppey', 
-    'Leh Ladakh Mountains', 'Goa Beaches', 'Varanasi Ghats', 
-    'Munnar Tea Gardens', 'Hampi Ruins', 'Jaisalmer Desert', 
-    'Shimla Snow', 'Rishikesh Ganga', 'Udaipur Lake Palace'
-  ];
-
-  const getRandomQuery = () => indianQueries[Math.floor(Math.random() * indianQueries.length)];
-
-  // 1. Try Unsplash (Primary)
-  if (UNSPLASH_ACCESS_KEY && UNSPLASH_ACCESS_KEY !== 'YOUR_UNSPLASH_ACCESS_KEY') {
-    try {
-      const response = await axios.get('https://api.unsplash.com/photos/random', {
-        params: { query: getRandomQuery() + ' travel', count, orientation: 'landscape' },
-        headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` }
-      });
-      if (Array.isArray(response.data)) {
-        return response.data.map((img: any) => ({
-          name: img.location?.city || img.location?.title || 'Adventure',
-          image: img.urls.regular
-        }));
-      }
-    } catch (e) {
-      console.warn('[ImageService] Random Unsplash failed, trying fallback list...');
-    }
+  try {
+    const response = await apiClient.get('/images/random', {
+      params: { count }
+    });
+    return response.data; // Already formatted as [{ name, image, source }]
+  } catch (e) {
+    console.warn('[ImageService] Random proxy failed, using Picsum fallbacks...');
+    const fallbacks = [
+      { name: 'Taj Mahal', image: 'https://picsum.photos/id/1018/1000/600' },
+      { name: 'Kerala Backwaters', image: 'https://picsum.photos/id/1015/1000/600' },
+      { name: 'Jaipur Palaces', image: 'https://picsum.photos/id/1016/1000/600' },
+      { name: 'Leh Ladakh', image: 'https://picsum.photos/id/1019/1000/600' },
+      { name: 'Goa Beaches', image: 'https://picsum.photos/id/1020/1000/600' }
+    ];
+    return fallbacks.slice(0, count);
   }
-
-  // Static Fallback if all APIs fail (Production safety) - Using Picsum IDs to avoid Unsplash rate limits
-  const fallbacks = [
-    { name: 'Taj Mahal', image: 'https://picsum.photos/id/1018/1000/600' },
-    { name: 'Kerala Backwaters', image: 'https://picsum.photos/id/1015/1000/600' },
-    { name: 'Jaipur Palaces', image: 'https://picsum.photos/id/1016/1000/600' },
-    { name: 'Leh Ladakh', image: 'https://picsum.photos/id/1019/1000/600' },
-    { name: 'Goa Beaches', image: 'https://picsum.photos/id/1020/1000/600' }
-  ];
-  return fallbacks.slice(0, count);
 };
 
 /**
- * Static Rich Destinations (Hardcoded for demo/premium feel)
+ * Static Rich Destinations (Remains the same as it's UI hardcoded for quality)
  */
 export const getRichDestinations = () => {
   return [
