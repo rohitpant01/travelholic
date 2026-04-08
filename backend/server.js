@@ -26,6 +26,8 @@ const itineraryRoutes = require("./src/routes/itinerary");
 const feedRoutes = require("./src/routes/feedRoutes");
 const storyRoutes = require("./src/routes/storyRoutes");
 const commentRoutes = require("./src/routes/commentRoutes");
+const imageRoutes = require("./src/routes/imageRoutes");
+
 
 const app = express();
 const server = http.createServer(app);
@@ -131,6 +133,8 @@ app.use("/api/waitlist", waitlistRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/stories", storyRoutes);
 app.use("/api/comments", commentRoutes);
+app.use("/api/images", imageRoutes);
+
 
 // 🛡️ CATCH-ALL ROUTE (MUST BE LAST)
 // Redirects any non-API web request to index.html for SPA support
