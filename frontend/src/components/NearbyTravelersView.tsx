@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../utils/theme';
+import { useAppTheme, SHADOW } from '../utils/theme';
 import ShimmerPlaceholder from 'react-native-shimmer-placeholder';
 
 const { width } = Dimensions.get('window');
@@ -76,7 +76,7 @@ const NearbyTravelersView = ({
           source={
             item.profilePhoto
               ? { uri: item.profilePhoto }
-              : require('../../assets/placeholder-profile.png')
+              : require('../../assets/placeholder.png')
           }
           style={styles.image}
         />
