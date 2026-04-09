@@ -198,7 +198,10 @@ exports.generateItinerary = async (req, res) => {
       info: p.info,
       coordinates: p.location,
       rating: p.rating,
-      photoReference: p.photoReference
+      photoReference: p.photoReference,
+      image: p.photoReference 
+        ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${p.photoReference}`
+        : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`
     }));
 
     res.json({

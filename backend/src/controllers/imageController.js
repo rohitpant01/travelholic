@@ -9,6 +9,7 @@ const axios = require('axios');
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY;
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
 /**
  * Fetch a random travel image for landing/home screens
@@ -77,9 +78,34 @@ exports.getRandomImage = async (req, res) => {
  */
 exports.getPlaceImage = async (req, res) => {
   const { query } = req.params;
+  const { photoReference } = req.query; // Optional direct reference
+  
+  // 1. If direct reference provided, proxy it immediately
+  if (photoReference && GOOGLE_PLACES_API_KEY) {
+    return res.redirect(`https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${photoReference}&key=${GOOGLE_PLACES_API_KEY}`);
+  }
+
   const searchQuery = `${query} travel`;
 
-  // Try Unsplash
+  // 2. Try Google Places Search (Fresh & High Quality)
+  if (GOOGLE_PLACES_API_KEY) {
+    try {
+      const gRes = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
+        params: { query: searchQuery, key: GOOGLE_PLACES_API_KEY }
+      });
+      const photoRef = gRes.data.results?.[0]?.photos?.[0]?.photo_reference;
+      if (photoRef) {
+        return res.json({ 
+          image: `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${photoRef}`, 
+          source: 'Google Places' 
+        });
+      }
+    } catch (e) {
+      console.error('[ImageController] Google Places search failed:', e.message);
+    }
+  }
+
+  // 3. Try Unsplash
   if (UNSPLASH_ACCESS_KEY) {
     try {
       const response = await axios.get('https://api.unsplash.com/search/photos', {
@@ -92,7 +118,7 @@ exports.getPlaceImage = async (req, res) => {
     } catch (e) {}
   }
 
-  // Try Pexels
+  // 4. Try Pexels
   if (PEXELS_API_KEY) {
     try {
       const response = await axios.get('https://api.pexels.com/v1/search', {
@@ -107,4 +133,18 @@ exports.getPlaceImage = async (req, res) => {
 
   // Final Picsum placeholder
   res.json({ image: `https://picsum.photos/seed/${encodeURIComponent(query)}/1000/600`, source: 'Picsum' });
+};
+
+/**
+ * Handle direct Google Photo redirection (Privacy Proxy)
+ */
+exports.getGooglePhoto = async (req, res) => {
+  const { ref } = req.query;
+  if (!ref || !GOOGLE_PLACES_API_KEY) {
+    return res.status(400).send('Missing photo reference or API key');
+  }
+  // Redirect to Google API (browser will follow and load the image)
+  // This keeps the key on the server side
+  const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${ref}&key=${GOOGLE_PLACES_API_KEY}`;
+  res.redirect(url);
 };

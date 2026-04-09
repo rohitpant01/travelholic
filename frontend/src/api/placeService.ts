@@ -11,6 +11,7 @@ export interface Place {
   location: { lat: number; lng: number };
   types: string[];
   photoReference?: string;
+  image?: string;
   whyThisPlace: string;
 }
 

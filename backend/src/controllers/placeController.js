@@ -188,7 +188,7 @@ exports.searchPlaces = async (req, res) => {
         let processed = spots.slice(0, limit).map(p => {
           const ref = p.photos?.[0]?.photo_reference;
           const imgUrl = ref 
-            ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${ref}&key=${apiKey}`
+            ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${ref}`
             : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`; // Fallback
 
           return {
@@ -235,7 +235,7 @@ exports.searchPlaces = async (req, res) => {
       const catchAllFormatted = uncategorizedItems.map(p => {
         const ref = p.photos?.[0]?.photo_reference;
         const imgUrl = ref 
-          ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${ref}&key=${apiKey}`
+          ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${ref}`
           : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`;
 
         return {

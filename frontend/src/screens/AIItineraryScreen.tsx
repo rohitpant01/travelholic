@@ -69,6 +69,10 @@ const PlanItem = ({ item, index, isLast, navigation, destination }: any) => {
 
   useEffect(() => {
     const load = async () => {
+      if (item.image) {
+        setImg(item.image);
+        return;
+      }
       const url = await fetchPlaceImage(item.place || item.activity);
       if (url) setImg(url);
     };

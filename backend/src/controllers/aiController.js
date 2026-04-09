@@ -154,7 +154,8 @@ const getNearbyPlaces = async (
                 distance: d,
                 rating: 4.8, 
                 place_id: `ai_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-                vicinity: destinationName
+                vicinity: destinationName,
+                photo_reference: coords.photo_reference
               });
             }
           } catch (e) {
@@ -201,6 +202,7 @@ const getNearbyPlaces = async (
         lat: p.geometry.location.lat,
         lng: p.geometry.location.lng,
         distance: parseFloat(getDistance(lat, lng, p.geometry.location.lat, p.geometry.location.lng).toFixed(1)),
+        photo_reference: p.photos?.[0]?.photo_reference
       }))
       .filter((p) => {
         const canonical = p.name.toLowerCase();
@@ -442,6 +444,9 @@ exports.generateItinerary = async (req, res) => {
             lng: p.lng,
             vicinity: p.vicinity || destination,
             rating: p.rating || null,
+            image: p.photo_reference 
+              ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${p.photo_reference}`
+              : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`,
             description: "",
             cost: "",
             travel_time: "",
@@ -455,6 +460,7 @@ exports.generateItinerary = async (req, res) => {
             lng: coords.lng,
             vicinity: destination,
             rating: null,
+            image: `https://images.unsplash.com/photo-1501785888041-af3ef285b470`,
             description: "",
             cost: "",
             travel_time: "",
@@ -581,10 +587,11 @@ OUTPUT JSON FORMAT (STRICT — no markdown, no extra text):
           const skeletonSlot = skeletonDay?.plan?.[slotIdx];
           return {
             ...aiSlot,
-            // Always use verified place name and coords from our skeleton
+            // Always use verified place name, coords, and IMAGE from our skeleton
             place: skeletonSlot?.place ?? aiSlot.place,
             lat: skeletonSlot?.lat ?? aiSlot.lat ?? coords.lat,
             lng: skeletonSlot?.lng ?? aiSlot.lng ?? coords.lng,
+            image: skeletonSlot?.image ?? aiSlot.image,
           };
         }),
       };
@@ -638,7 +645,7 @@ OUTPUT JSON FORMAT (STRICT — no markdown, no extra text):
           if (!hotel) throw new Error("Not found in Places API");
 
           const image = hotel.photos?.[0]?.photo_reference
-            ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${hotel.photos[0].photo_reference}&key=${apiKey}`
+            ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${hotel.photos[0].photo_reference}`
             : FALLBACK_HOTEL_IMAGE;
 
           enrichedStays.push({
@@ -892,7 +899,7 @@ exports.getNearbyProxy = async (req, res) => {
         lng: p.geometry?.location?.lng,
         photo_reference: ref,
         image: ref 
-          ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${ref}&key=${apiKey}`
+          ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${ref}`
           : `https://images.unsplash.com/photo-1512343879784-a960bf40e7f2`
       };
     });
@@ -1029,7 +1036,7 @@ Return ONLY the JSON array. No markdown, no extra text.
       
       let image = "https://images.unsplash.com/photo-1488646953014-85cb44e25828";
       if (coords.photo_reference) {
-        image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${coords.photo_reference}&key=${apiKeyForPhotos}`;
+        image = `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${coords.photo_reference}`;
       } else if (p.unsplash_query || p.name) {
         image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.unsplash_query || p.name)}`;
       }
@@ -1235,9 +1242,8 @@ No markdown, no extra text.
         const lng = coords.lng;
 
         // 📸 REAL IMAGE FETCH from Google Places
-        let image = "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2";
         if (coords.photo_reference) {
-          image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${coords.photo_reference}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+          image = `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${coords.photo_reference}`;
         } else if (p.name) {
           image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.name)}`;
         }
