@@ -5,7 +5,7 @@ services:
     plan: free
     region: singapore
     rootDir: backend
-    buildCommand: npm install
+    buildCommand: npm install && cd ../frontend && npm install && npx expo export --output-dir web-build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
