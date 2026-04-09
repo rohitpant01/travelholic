@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated as RNAnimated,
-  Dimensions, ActivityIndicator, Alert, Modal, Platform
+  Dimensions, ActivityIndicator, Alert, Modal, Platform, TextInput
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store';
@@ -20,6 +20,10 @@ import Swiper from 'react-native-deck-swiper';
 import DiscoveryHeader from '../components/DiscoveryHeader';
 import TravelerDiscoveryCard, { Profile } from '../components/TravelerDiscoveryCard';
 import FeedTab from '../components/FeedTab';
+import ScreenWrapper from '../components/ScreenWrapper';
+import NearbyTravelersView from '../components/NearbyTravelersView';
+import { useLocationTracker } from '../hooks/useLocationTracker';
+import Slider from '@react-native-community/slider';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -35,13 +39,31 @@ export default function DiscoverScreen() {
   const { unreadCount } = useSelector((state: RootState) => state.notification);
 
   // Discovery State
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // UI State
   const [activeTab, setActiveTab] = useState<'discover' | 'feed'>('feed');
+  const [viewMode, setViewMode] = useState<'swipe' | 'list'>('swipe');
   const [matchPopup, setMatchPopup] = useState<{ name: string; photo?: string } | null>(null);
   const [showVerifyPopup, setShowVerifyPopup] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  
+  // Filter Settings
+  const [maxDistance, setMaxDistance] = useState(user?.maxDiscoveryDistance || 50);
+  const [ghostMode, setGhostMode] = useState(user?.visibilityStatus === 'ghost');
+  const [travelModeCity, setTravelModeCity] = useState('');
+  const [manualCoords, setManualCoords] = useState<{ lat: number, lng: number } | null>(null);
+
+  const { location, refreshLocation } = useLocationTracker();
+
+  const toggleGhostMode = async () => {
+    try {
+      const newStatus = !ghostMode ? 'ghost' : 'public';
+      setGhostMode(!ghostMode);
+      await discoverAPI.updateVisibility(newStatus);
+    } catch (e) {}
+  };
 
   useEffect(() => {
     if (route.params?.initialTab === 'feed') {
@@ -60,21 +82,30 @@ export default function DiscoverScreen() {
     try {
       let lat: number | undefined;
       let lng: number | undefined;
-      let { status } = await Location.requestForegroundPermissionsAsync();
-
-      if (status === 'granted') {
-        const lastLoc = await Location.getLastKnownPositionAsync();
-        if (lastLoc) {
-          lat = lastLoc.coords.latitude;
-          lng = lastLoc.coords.longitude;
-        } else {
-          const currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          lat = currentLoc.coords.latitude;
-          lng = currentLoc.coords.longitude;
+      if (manualCoords) {
+        lat = manualCoords.lat;
+        lng = manualCoords.lng;
+      } else {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const lastLoc = await Location.getLastKnownPositionAsync();
+          if (lastLoc) {
+            lat = lastLoc.coords.latitude;
+            lng = lastLoc.coords.longitude;
+          } else {
+            const currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            lat = currentLoc.coords.latitude;
+            lng = currentLoc.coords.longitude;
+          }
         }
       }
 
-      const res = await discoverAPI.getProfiles(lat, lng, 'default');
+      const res = await discoverAPI.getProfiles(
+        lat, 
+        lng, 
+        'default', 
+        viewMode === 'list' ? 'distance' : undefined
+      );
       setProfiles(res.data.profiles || []);
     } catch (e) {
       console.error('[FETCH PROFILES ERROR]', e);
@@ -87,11 +118,17 @@ export default function DiscoverScreen() {
   useEffect(() => {
     fetchProfiles();
     dispatch(fetchNotifications());
-  }, []);
+  }, [viewMode]);
 
-  const handleLike = async (index: number) => {
-    const profile = profiles[index];
+  const handleLike = async (index: number | string) => {
+    const profile = typeof index === 'number' ? profiles[index] : profiles.find(p => p._id === index);
     if (!profile) return;
+    
+    // Optimistic remove for List View
+    if (viewMode === 'list') {
+      setProfiles(prev => prev.filter(p => p._id !== profile._id));
+    }
+
     try {
       const res = await discoverAPI.like(profile._id);
       if (res.data.matched) {
@@ -101,16 +138,32 @@ export default function DiscoverScreen() {
     } catch (e) { }
   };
 
-  const handleSkip = async (index: number) => {
-    const profile = profiles[index];
+  const handleSkip = async (index: number | string) => {
+    const profile = typeof index === 'number' ? profiles[index] : profiles.find(p => p._id === index);
     if (!profile) return;
+
+    if (viewMode === 'list') {
+      setProfiles(prev => prev.filter(p => p._id !== profile._id));
+    }
+
     try { await discoverAPI.skip(profile._id); } catch (e) { }
   };
 
-  const handleSuperLike = async (index: number) => {
-    const profile = profiles[index];
+  const handleSuperLike = async (index: number | string) => {
+    const profile = typeof index === 'number' ? profiles[index] : profiles.find(p => p._id === index);
     if (!profile) return;
-    try { await discoverAPI.superLike(profile._id); } catch (e) { }
+
+    if (viewMode === 'list') {
+      setProfiles(prev => prev.filter(p => p._id !== profile._id));
+    }
+
+    try {
+      const res = await discoverAPI.superLike(profile._id);
+      if (res.data.matched) {
+        setMatchPopup({ name: res.data.matchedUser.firstName, photo: res.data.matchedUser.profilePhoto });
+        setTimeout(() => setMatchPopup(null), 3500);
+      }
+    } catch (e) { }
   };
 
   const handleSwipedAll = () => {
@@ -129,11 +182,14 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <ScreenWrapper withTopInset={false} withBottomInset={false}>
       <DiscoveryHeader
         unreadCount={unreadCount}
         onSavedPress={() => navigation.navigate('SavedDestinations')}
         onNotificationsPress={() => navigation.navigate('Notifications')}
+        onFilterPress={() => setShowFilterModal(true)}
+        viewMode={viewMode}
+        onToggleView={() => setViewMode(v => v === 'swipe' ? 'list' : 'swipe')}
       />
 
       <View style={styles.tabSwitcherContainer}>
@@ -179,115 +235,130 @@ export default function DiscoverScreen() {
           </View>
         ) : (
           <View style={styles.listContainer}>
-            <Swiper
-              ref={swiperRef}
-              cards={profiles}
-              renderCard={(profile) => (
-                <View style={styles.cardWrapper}>
-                  <TravelerDiscoveryCard
-                    profile={profile}
-                    onPressProfile={(p) => navigation.navigate('UserDetail', {
-                      userId: p._id,
-                      profile: p,
-                    })}
-                  />
-                </View>
-              )}
-              onSwipedRight={(index) => handleLike(index)}
-              onSwipedLeft={(index) => handleSkip(index)}
-              onSwipedTop={(index) => handleSuperLike(index)}
-              onSwipedAll={handleSwipedAll}
-              cardIndex={0}
-              backgroundColor={'transparent'}
-              stackSize={3}
-              stackSeparation={15}
-              animateCardOpacity
-              cardVerticalMargin={0}
-              containerStyle={styles.swiperContainer}
-              disableBottomSwipe
-              animateOverlayLabelsOpacity
-              useViewOverflow={Platform.OS === 'ios'}
-              overlayOpacityVerticalThreshold={H * 0.1}
-              overlayOpacityHorizontalThreshold={W * 0.1}
-              verticalThreshold={H * 0.15}
-              horizontalThreshold={W * 0.15}
-              overlayLabels={{
-                left: {
-                  title: 'NOPE',
-                  style: {
-                    label: {
-                      backgroundColor: theme.error,
-                      borderColor: theme.error,
-                      color: 'white',
-                      borderWidth: 1
-                    },
-                    wrapper: {
-                      flexDirection: 'column',
-                      alignItems: 'flex-end',
-                      justifyContent: 'flex-start',
-                      marginTop: 30,
-                      marginLeft: -30
+            {viewMode === 'swipe' ? (
+              <Swiper
+                ref={swiperRef}
+                cards={profiles}
+                renderCard={(profile) => (
+                  <View style={styles.cardWrapper}>
+                    <TravelerDiscoveryCard
+                      profile={profile}
+                      onPressProfile={(p) => navigation.navigate('UserDetail', {
+                        userId: p._id,
+                        profile: p,
+                      })}
+                    />
+                  </View>
+                )}
+                onSwipedRight={(index) => handleLike(index)}
+                onSwipedLeft={(index) => handleSkip(index)}
+                onSwipedTop={(index) => handleSuperLike(index)}
+                onSwipedAll={handleSwipedAll}
+                cardIndex={0}
+                backgroundColor={'transparent'}
+                stackSize={3}
+                stackSeparation={15}
+                animateCardOpacity
+                cardVerticalMargin={0}
+                containerStyle={styles.swiperContainer}
+                disableBottomSwipe
+                animateOverlayLabelsOpacity
+                useViewOverflow={Platform.OS === 'ios'}
+                overlayOpacityVerticalThreshold={H * 0.1}
+                overlayOpacityHorizontalThreshold={W * 0.1}
+                verticalThreshold={H * 0.15}
+                horizontalThreshold={W * 0.15}
+                overlayLabels={{
+                  left: {
+                    title: 'NOPE',
+                    style: {
+                      label: {
+                        backgroundColor: theme.error,
+                        borderColor: theme.error,
+                        color: 'white',
+                        borderWidth: 1
+                      },
+                      wrapper: {
+                        flexDirection: 'column',
+                        alignItems: 'flex-end',
+                        justifyContent: 'flex-start',
+                        marginTop: 30,
+                        marginLeft: -30
+                      }
+                    }
+                  },
+                  right: {
+                    title: 'LIKE',
+                    style: {
+                      label: {
+                        backgroundColor: theme.teal,
+                        borderColor: theme.teal,
+                        color: 'white',
+                        borderWidth: 1
+                      },
+                      wrapper: {
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        justifyContent: 'flex-start',
+                        marginTop: 30,
+                        marginLeft: 30
+                      }
+                    }
+                  },
+                  top: {
+                    title: 'SUPER LIKE',
+                    style: {
+                      label: {
+                        backgroundColor: theme.gold,
+                        borderColor: theme.gold,
+                        color: 'white',
+                        borderWidth: 1
+                      },
+                      wrapper: {
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }
                     }
                   }
-                },
-                right: {
-                  title: 'LIKE',
-                  style: {
-                    label: {
-                      backgroundColor: theme.teal,
-                      borderColor: theme.teal,
-                      color: 'white',
-                      borderWidth: 1
-                    },
-                    wrapper: {
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      justifyContent: 'flex-start',
-                      marginTop: 30,
-                      marginLeft: 30
-                    }
-                  }
-                },
-                top: {
-                  title: 'SUPER LIKE',
-                  style: {
-                    label: {
-                      backgroundColor: theme.gold,
-                      borderColor: theme.gold,
-                      color: 'white',
-                      borderWidth: 1
-                    },
-                    wrapper: {
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }
-                  }
-                }
-              }}
-            />
+                }}
+              />
+            ) : (
+              <NearbyTravelersView 
+                profiles={profiles}
+                loading={loading}
+                refreshing={loading}
+                onRefresh={fetchProfiles}
+                ghostMode={ghostMode}
+                onProfilePress={(p: any) => navigation.navigate('UserDetail', { userId: p._id, profile: p })}
+                onLike={(p: any) => handleLike(p._id)}
+                onSuperLike={(p: any) => handleSuperLike(p._id)}
+              />
+            )}
 
-            {/* Floating Actions */}
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.skipBtn]}
-                onPress={() => swiperRef.current?.swipeLeft()}
-              >
-                <Ionicons name="close" size={32} color={theme.error} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.superLikeBtn]}
-                onPress={() => swiperRef.current?.swipeTop()}
-              >
-                <Ionicons name="star" size={28} color={theme.gold} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.likeBtn]}
-                onPress={() => swiperRef.current?.swipeRight()}
-              >
-                <Ionicons name="heart" size={32} color={theme.teal} />
-              </TouchableOpacity>
-            </View>
+            {/* Floating Actions - Only for Swipe Mode */}
+            {viewMode === 'swipe' && (
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.skipBtn]}
+                  onPress={() => swiperRef.current?.swipeLeft()}
+                >
+                  <Ionicons name="close" size={32} color={theme.error} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.superLikeBtn]}
+                  onPress={() => swiperRef.current?.swipeTop()}
+                >
+                  <Ionicons name="star" size={28} color={theme.gold} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.likeBtn]}
+                  onPress={() => swiperRef.current?.swipeRight()}
+                >
+                  <Ionicons name="heart" size={32} color={theme.teal} />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -305,6 +376,100 @@ export default function DiscoverScreen() {
           </LinearGradient>
         </View>
       )}
+
+      {/* Filter Modal */}
+      <Modal visible={showFilterModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.filterCard}>
+            <View style={styles.filterHeader}>
+              <Text style={styles.filterTitle}>Discovery Settings</Text>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.filterSection}>
+              <View style={styles.filterOptionLabel}>
+                <Text style={styles.filterLabel}>Maximum Distance</Text>
+                <Text style={styles.filterValue}>{maxDistance} km</Text>
+              </View>
+              <Slider
+                style={{ width: '100%', height: 40 }}
+                minimumValue={10}
+                maximumValue={100}
+                step={5}
+                value={maxDistance}
+                onValueChange={setMaxDistance}
+                minimumTrackTintColor={theme.teal}
+                maximumTrackTintColor={theme.border}
+                thumbTintColor={theme.teal}
+              />
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Travel Mode (Explore Other Cities)</Text>
+              <View style={styles.citySearchContainer}>
+                <Ionicons name="search" size={18} color={theme.textSecondary} />
+                <TextInput
+                  placeholder="Enter city name..."
+                  placeholderTextColor={theme.textLight}
+                  style={styles.cityInput}
+                  value={travelModeCity}
+                  onChangeText={setTravelModeCity}
+                  onSubmitEditing={async () => {
+                    if (!travelModeCity) {
+                      setManualCoords(null);
+                      return;
+                    }
+                    try {
+                      const geo = await Location.geocodeAsync(travelModeCity);
+                      if (geo.length > 0) {
+                        setManualCoords({ lat: geo[0].latitude, lng: geo[0].longitude });
+                        Alert.alert('Travel Mode Active', `Showing travelers near ${travelModeCity}`);
+                      }
+                    } catch (e) {
+                      Alert.alert('Error', 'City not found');
+                    }
+                  }}
+                />
+              </View>
+              {manualCoords && (
+                <TouchableOpacity onPress={() => { setManualCoords(null); setTravelModeCity(''); fetchProfiles(); }} style={styles.resetTravelMode}>
+                  <Text style={styles.resetTravelText}>Reset to My Location</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.filterToggle, ghostMode && styles.filterToggleActive]} 
+              onPress={toggleGhostMode}
+            >
+              <View style={styles.toggleTextContainer}>
+                <Ionicons name={ghostMode ? "eye-off" : "eye"} size={20} color={ghostMode ? "#fff" : theme.teal} />
+                <View>
+                  <Text style={[styles.toggleTitle, ghostMode && { color: '#fff' }]}>Ghost Mode</Text>
+                  <Text style={[styles.toggleDesc, ghostMode && { color: 'rgba(255,255,255,0.8)' }]}>
+                    {ghostMode ? "You are invisible to others" : "Everyone can see you nearby"}
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.switchTrack, ghostMode && styles.switchTrackActive]}>
+                <View style={[styles.switchThumb, ghostMode && styles.switchThumbActive]} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.applyBtn} 
+              onPress={() => {
+                setShowFilterModal(false);
+                fetchProfiles();
+              }}
+            >
+              <Text style={styles.applyBtnText}>Apply Settings</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Email Verification Pop-up */}
       <Modal visible={showVerifyPopup} transparent={true} animationType="fade">
@@ -324,7 +489,7 @@ export default function DiscoverScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScreenWrapper>
   );
 }
 
@@ -415,13 +580,67 @@ const getStyles = (theme: any) => StyleSheet.create({
   matchChatBtn: { backgroundColor: theme.white, borderRadius: RADIUS.full, paddingHorizontal: 28, paddingVertical: 12, marginTop: 8 },
   matchChatBtnText: { color: theme.teal, fontWeight: '800', fontSize: 16 },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  verifyPopupCard: { backgroundColor: theme.card, borderRadius: 24, padding: 24, width: '100%', alignItems: 'center', ...SHADOW.lg },
-  verifyIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: theme.tealLight, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' },
+  filterCard: { backgroundColor: theme.card, width: '100%', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40, ...SHADOW.lg },
+  filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  filterTitle: { fontSize: 20, fontWeight: '800', color: theme.text },
+  filterSection: { marginBottom: 24 },
+  filterOptionLabel: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  filterLabel: { fontSize: 16, fontWeight: '700', color: theme.text },
+  filterValue: { fontSize: 16, fontWeight: '800', color: theme.teal },
+  
+  filterToggle: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
+    backgroundColor: theme.backgroundSecondary, padding: 16, borderRadius: 20, marginBottom: 24,
+    borderWidth: 1, borderColor: theme.border
+  },
+  filterToggleActive: { backgroundColor: '#6366f1', borderColor: '#4f46e5' },
+  toggleTextContainer: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  toggleTitle: { fontSize: 16, fontWeight: '800', color: theme.text },
+  toggleDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  switchTrack: { width: 44, height: 24, borderRadius: 12, backgroundColor: theme.border, padding: 2 },
+  switchTrackActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
+  switchThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
+  switchThumbActive: { transform: [{ translateX: 20 }] },
+
+  applyBtn: { backgroundColor: theme.teal, paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
+  applyBtnText: { color: theme.textWhite, fontSize: 16, fontWeight: '800' },
+
+  verifyPopupCard: { backgroundColor: theme.card, borderRadius: 24, padding: 24, width: W - 40, alignItems: 'center', ...SHADOW.lg },
+  verifyIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: theme.teal + '15', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   verifyTitle: { fontSize: 20, fontWeight: '800', color: theme.text, marginBottom: 8 },
   verifyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   verifyBtn: { backgroundColor: theme.teal, width: '100%', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginBottom: 12 },
   verifyBtnText: { color: theme.textWhite, fontSize: 16, fontWeight: '700' },
   laterBtn: { paddingVertical: 8 },
-  laterBtnText: { color: theme.textLight, fontSize: 14, fontWeight: '600' },
+  laterBtnText: { color: theme.textSecondary, fontSize: 14, fontWeight: '600' },
+
+  citySearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 50,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  cityInput: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 15,
+    color: theme.text,
+    fontWeight: '600',
+  },
+  resetTravelMode: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  resetTravelText: {
+    fontSize: 13,
+    color: theme.teal,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
 });

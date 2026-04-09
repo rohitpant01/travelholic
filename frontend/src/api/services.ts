@@ -72,16 +72,23 @@ export const userAPI = {
 // DISCOVER API
 // ============================================================
 export const discoverAPI = {
-  getProfiles: (lat?: number, lng?: number, mode?: string) => {
+  getProfiles: (lat?: number, lng?: number, mode?: string, sortBy?: string) => {
     let params = lat && lng ? `?lat=${lat}&lng=${lng}` : '';
     if (mode) {
       params += params ? `&mode=${mode}` : `?mode=${mode}`;
+    }
+    if (sortBy) {
+      params += params ? `&sortBy=${sortBy}` : `?sortBy=${sortBy}`;
     }
     return apiClient.get(`/nearby-users${params}`);
   },
   like: (targetUserId: string) => apiClient.post('/discover/like', { targetUserId }),
   skip: (targetUserId: string) => apiClient.post('/discover/skip', { targetUserId }),
   superLike: (targetUserId: string) => apiClient.post('/discover/superlike', { targetUserId }),
+  updateLocation: (lat: number, lng: number, city?: string, country?: string) => 
+    apiClient.post('/discover/location', { lat, lng, city, country }),
+  updateVisibility: (status: 'public' | 'ghost') => 
+    apiClient.put('/discover/visibility', { status }),
 };
 
 // ============================================================

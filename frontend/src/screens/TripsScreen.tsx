@@ -15,6 +15,7 @@ import { tripAPI, lyraAPI, aiAPI } from '../api/services';
 import Slider from '@react-native-community/slider';
 import { setTrips, appendTrips, setMyTrips, setLoading, setActiveTab, removeTripFromList } from '../store/slices/tripSlice';
 import { RootState } from '../store';
+import ScreenWrapper from '../components/ScreenWrapper';
 
 const getBudgetLabel = (val: number) => {
   if (val < 5000) return `₹${val.toLocaleString('en-IN')} (Extreme Budget) 🎒`;
@@ -43,10 +44,10 @@ const FILTER_OPTIONS = {
 
 export default function TripsScreen() {
   const theme = useAppTheme();
-  const styles = getStyles(theme);
   const dispatch = useDispatch();
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const styles = getStyles(theme, insets);
   const { trips, myTrips, loading, activeTab } = useSelector((s: RootState) => s.trip);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
@@ -631,7 +632,8 @@ export default function TripsScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <ScreenWrapper withTopInset={false} withBottomInset={false}>
+      <View style={styles.container}>
       {/* Header */}
       <LinearGradient colors={['#00C9A7', '#008E7F']} style={styles.header}>
         <View>
@@ -740,15 +742,18 @@ export default function TripsScreen() {
       </TouchableOpacity>
 
       {renderFilterModal()}
-    </View>
+      </View>
+    </ScreenWrapper>
   );
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, insets: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 16,
+    paddingHorizontal: 20, 
+    paddingTop: Math.max(insets.top, 16),
+    paddingBottom: 16,
   },
   headerTitle: { fontSize: FONTS.xxl, fontWeight: '800', color: theme.textWhite },
   filterIcon: { position: 'relative', padding: 4 },

@@ -542,6 +542,39 @@ const initSocket = (server) => {
     socket.on('leave_trip_chat', ({ tripId }) => {
       socket.leave(`trip_${tripId}`);
     });
+    
+    // ---- REAL-TIME DISCOVERY (Movement) ----
+    socket.on('update_location', async ({ lat, lng }) => {
+      try {
+        if (!lat || !lng) return;
+        
+        // Broadcast movement to nearby users room
+        // Note: For large scale, we'd use dynamic rooms or Geo-hashes.
+        // For now, we reuse the controller logic or emit to individual nearby users.
+        const userId = socket.userId;
+        
+        const nearbyUsers = await User.find({
+          location: {
+            $near: {
+              $geometry: { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
+              $maxDistance: 50000,
+            },
+          },
+          _id: { $ne: userId },
+          isOnline: true,
+          visibilityStatus: 'public'
+        }).select('_id');
+
+        nearbyUsers.forEach(u => {
+          io.to(u._id.toString()).emit('user_moved', {
+            userId,
+            location: { type: 'Point', coordinates: [lng, lat] }
+          });
+        });
+      } catch (err) {
+        console.error('Socket location update error:', err);
+      }
+    });
 
     // ---- DISCONNECT ----
     socket.on('disconnect', async () => {

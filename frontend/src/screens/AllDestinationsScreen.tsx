@@ -4,7 +4,7 @@ import {
   TouchableOpacity, Dimensions, 
   StatusBar, Linking, Platform, ScrollView, Pressable, Alert
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector, useDispatch } from 'react-redux';
@@ -29,17 +29,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useToast } from '../context/ToastContext';
 import { useSavedSync } from '../hooks/useSavedSync';
 import ImageZoomViewer from '../components/ImageZoomViewer';
+import ScreenWrapper from '../components/ScreenWrapper';
 
 const { width } = Dimensions.get('window');
 
 // Skeleton Loader Component
-const SkeletonCard = ({ theme }: { theme: any }) => (
+const SkeletonCard = ({ theme, styles }: { theme: any, styles: any }) => (
   <View style={[styles.card, { backgroundColor: theme.card, opacity: 0.7 }]}>
     <View style={[styles.skeletonImage, { backgroundColor: theme.border }]} />
   </View>
 );
 
-const FlipDestinationCard = ({ item, theme, onSave, index, isSaved }: any) => {
+const FlipDestinationCard = ({ item, theme, onSave, index, isSaved, styles }: any) => {
   const rotate = useSharedValue(0);
   const heartScale = useSharedValue(1);
   const isFlipped = useSharedValue(false);
@@ -264,7 +265,7 @@ const FlipDestinationCard = ({ item, theme, onSave, index, isSaved }: any) => {
   );
 };
 
-const TopDestinationItem = ({ place, theme, navigation }: any) => {
+const TopDestinationItem = ({ place, theme, navigation, styles }: any) => {
   const [img, setImg] = useState(place.image);
 
   useEffect(() => {
@@ -329,9 +330,10 @@ const AllDestinationsScreen = () => {
   const dispatch = useDispatch();
   const { showToast } = useToast();
   useSavedSync(); // Activate global sync
+  const insets = useSafeAreaInsets();
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { ids: savedIds } = useSelector((state: RootState) => state.saved);
-  
+  const styles = getStyles(theme, insets);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [topDestinations, setTopDestinations] = useState<any[]>([]);
@@ -477,7 +479,8 @@ const AllDestinationsScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <ScreenWrapper withTopInset={false} withBottomInset={false}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'} />
       
       {/* Header */}
@@ -515,6 +518,7 @@ const AllDestinationsScreen = () => {
                     place={place}
                     theme={theme}
                     navigation={navigation}
+                    styles={styles}
                   />
                 ))
               )}
@@ -524,7 +528,7 @@ const AllDestinationsScreen = () => {
         }
         renderItem={({ item, index }) => 
           loading ? (
-            <SkeletonCard theme={theme} />
+            <SkeletonCard theme={theme} styles={styles} />
           ) : (
             <FlipDestinationCard 
               item={item} 
@@ -532,6 +536,7 @@ const AllDestinationsScreen = () => {
               index={index} 
               onSave={handleSaveDestination} 
               isSaved={savedIds.includes(item.name || item.title)}
+              styles={styles}
             />
           )
         }
@@ -549,15 +554,18 @@ const AllDestinationsScreen = () => {
           )
         }
       />
-    </SafeAreaView>
+    </View>
+    </ScreenWrapper>
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any, insets: any) => StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md, 
+    paddingTop: Math.max(insets.top, 16),
+    paddingBottom: SPACING.sm,
   },
   backBtn: { padding: 8 },
   title: { fontSize: 18, fontWeight: '800' },

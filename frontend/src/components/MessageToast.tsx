@@ -74,6 +74,9 @@ export default function MessageToast({ message, onDismiss }: Props) {
             userId: message.userId,
           });
         }
+      } else if (message.userId) {
+        // Fallback for profile likes/superlikes where match doesn't exist yet
+        navigation.navigate('UserDetail', { userId: message.userId });
       }
     }
   };

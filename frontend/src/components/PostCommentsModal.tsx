@@ -26,10 +26,13 @@ import { useAppTheme } from '../utils/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 // 🛡️ RE-RENDER STABILIZER: Move input logic to a separate memoized component
 // This prevents the entire BottomSheetFooter from re-mounting on every keypress
 const CommentInputArea = React.memo(({ postId }: { postId: string }) => {
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch<AppDispatch>();
   const { user: currentUser } = useSelector((state: RootState) => state.auth);
   
@@ -51,7 +54,14 @@ const CommentInputArea = React.memo(({ postId }: { postId: string }) => {
   };
 
   return (
-    <View style={[styles.inputWrapper, { borderTopColor: theme.border, backgroundColor: theme.card }]}>
+    <View style={[
+      styles.inputWrapper, 
+      { 
+        borderTopColor: theme.border, 
+        backgroundColor: theme.card,
+        paddingBottom: Math.max(insets.bottom, 12)
+      }
+    ]}>
       <Image 
         source={{ uri: currentUser?.photos?.[0]?.url || 'https://via.placeholder.com/150' }} 
         style={styles.smallAvatar} 

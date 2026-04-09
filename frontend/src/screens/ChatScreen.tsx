@@ -28,6 +28,7 @@ import { API_BASE_URL } from '../api/client';
 const SOCKET_URL = API_BASE_URL.replace('/api', '');
 
 import { useSocket } from '../context/SocketContext';
+import ScreenWrapper from '../components/ScreenWrapper';
 
 const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '🔥', '👍'];
 
@@ -95,7 +96,8 @@ const MessageItem = React.memo(({
   setPreviewImage, handleDelete, setInput, setEditingMessageId 
 }: MessageItemProps) => {
   const theme = useAppTheme();
-  const styles = getStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = getStyles(theme, insets);
   const navigation = useNavigation<any>();
   const swipeableRef = useRef<any>(null);
   const isMe = (item.sender?._id || item.sender) === user?._id;
@@ -302,7 +304,8 @@ const formatLastSeen = (dateStr: string | null) => {
 
 export default function ChatScreen() {
   const theme = useAppTheme();
-  const styles = getStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = getStyles(theme, insets);
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { 
@@ -312,7 +315,6 @@ export default function ChatScreen() {
     activityStatus: initialActivity, 
     lastSeen: initialLastSeen 
   } = route.params;
-  const insets = useSafeAreaInsets();
   const { user } = useSelector((s: RootState) => s.auth);
   const dispatch = useDispatch();
 
@@ -332,6 +334,11 @@ export default function ChatScreen() {
   const [activityStatus, setActivityStatus] = useState<string | null>(initialActivity || 'Online');
   const [lastSeen, setLastSeen] = useState<string | null>(initialLastSeen || null);
   const [isLocationLoading, setIsLocationLoading] = useState(false);
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Viewability Config for Read Detection
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
@@ -428,7 +435,7 @@ export default function ChatScreen() {
     }
   };
 
-  const loadMessages = async () => {
+  const loadMessages = async (pageNum = 1) => {
     if (!chatId || String(chatId) === 'undefined' || String(chatId) === 'null') {
       console.log('[ChatScreen] No chatId provided. Skipping loadMessages.');
       setLoading(false);
@@ -436,12 +443,31 @@ export default function ChatScreen() {
     }
 
     try {
-      console.log(`[ChatScreen] Loading messages for ${type}: ${chatId}`);
+      if (pageNum === 1) setLoading(true);
+      else setLoadingMore(true);
+
+      console.log(`[ChatScreen] Loading messages for ${type}: ${chatId} (Page ${pageNum})`);
       const res = type === 'group' 
-        ? await tripAPI.getTripMessages(chatId)
-        : await chatAPI.getMessages(chatId);
+        ? await tripAPI.getTripMessages(chatId, pageNum)
+        : await chatAPI.getMessages(chatId, pageNum);
       
-      if (type === 'group') {
+      const newMessages = res.data.messages.reverse();
+      const hasMoreFetched = res.data.hasMore;
+
+      if (pageNum === 1) {
+        setMessages(newMessages);
+      } else {
+        // Filter out any messages that might have been added via socket in real-time
+        setMessages(prev => {
+          const filteredNew = newMessages.filter(nm => !prev.some(pm => pm._id === nm._id));
+          return [...prev, ...filteredNew];
+        });
+      }
+
+      setHasMore(hasMoreFetched);
+      setPage(pageNum);
+
+      if (pageNum === 1 && type === 'group') {
         tripAPI.getTrip(chatId).then(detailsRes => {
           const trip = detailsRes.data.trip;
           const name = trip.groupName || `${trip.source?.city} → ${trip.destination?.city}`;
@@ -449,12 +475,19 @@ export default function ChatScreen() {
           setActiveUserPhoto(trip.groupIcon);
         }).catch(() => {});
       }
-      // Backend returns [oldest ... newest]. We store [newest ... oldest] for inverted FlatList.
-      setMessages(res.data.messages.reverse());
     } catch (e) {
       console.error('[ChatScreen] loadMessages error:', e);
     }
-    finally { setLoading(false); }
+    finally { 
+      setLoading(false); 
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMoreMessages = () => {
+    if (!loading && !loadingMore && hasMore) {
+      loadMessages(page + 1);
+    }
   };
 
   useEffect(() => {
@@ -1396,11 +1429,12 @@ export default function ChatScreen() {
   );
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={'padding'} 
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 100}
-    >
+    <ScreenWrapper withTopInset={false} withBottomInset={false}>
+      <KeyboardAvoidingView 
+        style={styles.container} 
+        behavior={'padding'} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 100}
+      >
 
       <FlatList 
         ref={flatListRef} 
@@ -1413,6 +1447,9 @@ export default function ChatScreen() {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         removeClippedSubviews={false}
+        onEndReached={loadMoreMessages}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 20 }} color={theme.teal} /> : null}
         onScrollToIndexFailed={(info) => {
           const wait = new Promise(resolve => setTimeout(resolve, 100));
           wait.then(() => {
@@ -1550,14 +1587,17 @@ export default function ChatScreen() {
       </Modal>
 
       {renderOptionsModal()}
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </ScreenWrapper>
   );
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, insets: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
-    flexDirection: 'row', alignItems: 'center', paddingTop: 52, paddingBottom: 12, paddingHorizontal: 16,
+    flexDirection: 'row', alignItems: 'center', 
+    paddingTop: Math.max(insets.top, 16), 
+    paddingBottom: 12, paddingHorizontal: 16,
     backgroundColor: theme.white, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 12, ...SHADOW.sm
   },
   headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -1622,7 +1662,16 @@ const getStyles = (theme: any) => StyleSheet.create({
   replyTextMe: { color: 'rgba(255,255,255,0.7)' },
   replyTextThem: { color: theme.textSecondary },
   attachBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  inputArea: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: Platform.OS === 'ios' ? 25 : 16, backgroundColor: theme.white, borderTopWidth: 1, borderTopColor: theme.border, gap: 10 },
+  inputArea: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: 12, 
+    paddingBottom: Math.max(insets.bottom, 12), 
+    backgroundColor: theme.white, 
+    borderTopWidth: 1, 
+    borderTopColor: theme.border, 
+    gap: 10 
+  },
   inputMainContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   input: { flex: 1, backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F1F5F9', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: theme.text, maxHeight: 100 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.teal, alignItems: 'center', justifyContent: 'center' },
@@ -1681,7 +1730,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingBottom: Math.max(insets.bottom, 24),
     ...SHADOW.lg,
   },
   optionsModalHandle: {

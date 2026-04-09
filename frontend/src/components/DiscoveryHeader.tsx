@@ -9,19 +9,32 @@ import Animated, {
 } from 'react-native-reanimated';
 import { COLORS, FONTS, RADIUS, SPACING, SHADOW, useAppTheme } from '../utils/theme';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 interface DiscoveryHeaderProps {
   onSavedPress: () => void;
   onNotificationsPress: () => void;
   unreadCount: number;
+  onFilterPress?: () => void;
+  viewMode?: 'swipe' | 'list';
+  onToggleView?: () => void;
+  onProfilePress?: () => void;
+  userAvatar?: string;
 }
 
 export default function DiscoveryHeader({
   onSavedPress,
   onNotificationsPress,
-  unreadCount
+  unreadCount,
+  onFilterPress,
+  viewMode,
+  onToggleView,
+  onProfilePress,
+  userAvatar
 }: DiscoveryHeaderProps) {
   const theme = useAppTheme();
-  const styles = getStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = getStyles(theme, insets);
   
   return (
     <View style={styles.header}>
@@ -43,6 +56,16 @@ export default function DiscoveryHeader({
               </View>
             )}
           </TouchableOpacity>
+          {onToggleView && (
+            <TouchableOpacity onPress={onToggleView}>
+              <Ionicons name={viewMode === 'list' ? 'apps' : 'list'} size={24} color={theme.text} />
+            </TouchableOpacity>
+          )}
+          {onFilterPress && (
+            <TouchableOpacity onPress={onFilterPress}>
+              <Ionicons name="options-outline" size={24} color={theme.text} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -50,10 +73,10 @@ export default function DiscoveryHeader({
   );
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, insets: any) => StyleSheet.create({
   header: {
     backgroundColor: theme.background,
-    paddingTop: 54,
+    paddingTop: Math.max(insets.top, 16),
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,

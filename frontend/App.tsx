@@ -456,6 +456,16 @@ function AppNavigator() {
       });
     };
 
+    const onSuperLikeReceived = (data: any) => {
+      setActiveToast({
+        senderName: data.fromUserName || 'Someone',
+        senderPhoto: data.fromUserPhoto,
+        text: `SUPER LIKED you! ⭐`,
+        matchId: '',
+        userId: data.fromUserId,
+      });
+    };
+
     const onNewMatch = (data: any) => {
       console.log('[SOCKET] new_match:', data);
       if (data.match) {
@@ -492,6 +502,7 @@ function AppNavigator() {
     socket.on('receive_message', onReceiveMessage);
     socket.on('user_online', onUserOnline);
     socket.on('like_received', onLikeReceived);
+    socket.on('superlike_received', onSuperLikeReceived);
     socket.on('new_match', onNewMatch);
     socket.on('new_notification', onNewNotification);
     socket.on('notifications_read_sync', onNotificationsReadSync);
@@ -501,6 +512,7 @@ function AppNavigator() {
       socket.off('receive_message', onReceiveMessage);
       socket.off('user_online', onUserOnline);
       socket.off('like_received', onLikeReceived);
+      socket.off('superlike_received', onSuperLikeReceived);
       socket.off('new_match', onNewMatch);
       socket.off('new_notification', onNewNotification);
       socket.off('notifications_read_sync', onNotificationsReadSync);

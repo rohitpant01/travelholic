@@ -46,6 +46,8 @@ interface User {
   googleId?: string;
   savedDestinations?: any[];
   likes?: string[];
+  visibilityStatus?: 'public' | 'ghost';
+  lastLocationUpdate?: string;
 }
 
 interface AuthState {

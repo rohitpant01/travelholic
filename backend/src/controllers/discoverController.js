@@ -202,6 +202,7 @@ const getDiscoverProfiles = async (req, res) => {
             _id: { $nin: excludeIds },
             isActive: { $ne: false },
             isDeleted: { $ne: true },
+            visibilityStatus: { $ne: 'ghost' },
             // In map mode, allow users with NO photos to appear (with placeholder)
             ...(isMapMode ? {} : { 'photos.0': { $exists: true } }),
           },
@@ -232,8 +233,12 @@ const getDiscoverProfiles = async (req, res) => {
       };
     });
 
-    // Sort by match score descending
-    enriched.sort((a, b) => b.matchScore - a.matchScore);
+    // Sort by match score descending OR distance ascending
+    if (req.query.sortBy === 'distance') {
+      enriched.sort((a, b) => a.distanceMet - b.distanceMet);
+    } else {
+      enriched.sort((a, b) => b.matchScore - a.matchScore);
+    }
 
     // 📍 NEARBY TRAVELERS NOTIFICATION (Engagement)
     // Only notify if we found a good number of users
@@ -458,6 +463,10 @@ const superLikeUser = async (req, res) => {
     const { targetUserId } = req.body;
     const currentUserId = req.user._id;
 
+    // ✅ FETCH CURRENT USER for notifications
+    const currentUser = await User.findById(currentUserId);
+    if (!currentUser) return res.status(404).json({ error: 'User not found' });
+
     // Record swipe
     await Swipe.findOneAndUpdate(
       { swiper: currentUserId, swiped: targetUserId },
@@ -495,10 +504,54 @@ const superLikeUser = async (req, res) => {
       });
     }
 
-    res.json({ message: 'Super Liked! ⭐' });
+    // Not a match — notify target via socket
+    try {
+      const { getIO } = require('../socket/socketHandler');
+      const io = getIO();
+      const profilePhoto = currentUser.photos?.find(p => p.isProfile)?.url || currentUser.photos?.[0]?.url;
+      
+      io.to(targetUserId.toString()).emit('superlike_received', {
+        fromUserId: currentUserId.toString(),
+        fromUserName: currentUser.firstName,
+        fromUserPhoto: profilePhoto,
+        message: `⭐ ${currentUser.firstName} SUPER LIKED you!`,
+      });
+
+      // Persistent Notification
+      await Notification.create({
+        recipient: targetUserId,
+        sender: currentUserId,
+        type: 'superlike', 
+        title: 'New Super Like! ⭐',
+        message: `${currentUser.firstName} super liked you!`,
+        data: { matchId: null }
+      });
+
+      // Push Notification
+      if (targetUser && targetUser.pushToken) {
+        const { sendPushNotification } = require('../utils/pushNotification');
+        sendPushNotification(
+          targetUser.pushToken,
+          "New Super Like! ⭐",
+          `${currentUser.firstName} super liked you!`,
+          { type: 'superlike', fromUserId: currentUserId.toString() }
+        );
+      }
+    } catch (e) {
+      console.error('[SUPERLIKE NOTIFICATION ERROR]', e);
+    }
+
+    res.json({ success: true, message: 'Super Liked! ⭐' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-module.exports = { getDiscoverProfiles, likeUser, skipUser, superLikeUser };
+module.exports = { 
+  getDiscoverProfiles, 
+  likeUser, 
+  skipUser, 
+  superLikeUser, 
+  updateLocation,
+  updateVisibility
+};

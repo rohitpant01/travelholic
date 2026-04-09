@@ -30,6 +30,7 @@ export interface Profile {
   destination?: { city?: string };
   travelDate?: string;
   city?: string;
+  activityStatus?: string;
 }
 
 interface TravelerDiscoveryCardProps {

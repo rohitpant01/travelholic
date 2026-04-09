@@ -14,33 +14,13 @@ import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/th
 import { Modal, Pressable, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { togglePin, toggleMute, removeMatch, clearUnreadForMatch } from '../store/slices/chatSlice';
-
-interface Match {
-  matchId: string;
-  user: {
-    _id: string;
-    firstName: string;
-    profilePhoto?: string;
-    isOnline?: boolean;
-    activityStatus?: string;
-    lastSeen?: string;
-    age?: number;
-    city?: string;
-    country?: string;
-    isPhotoVerified?: boolean;
-    origin?: { city: string };
-    destination?: { city: string };
-    travelDate?: string;
-  };
-  lastMessage?: { text: string; sentAt: string; sentBy: string };
-  unreadCount?: number;
-  distanceKm?: number | null;
-  matchedAt: string;
-}
+import ScreenWrapper from '../components/ScreenWrapper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function MatchesScreen() {
   const theme = useAppTheme();
-  const styles = getStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = getStyles(theme, insets);
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
   const currentUserId = useSelector((s: RootState) => s.auth.user?._id);
@@ -65,16 +45,13 @@ export default function MatchesScreen() {
   const [selectedMatch, setSelectedMatch] = useState<any>(null);
   const [isSheetVisible, setIsSheetVisible] = useState(false);
 
-
-
   const handleLongPress = (match: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedMatch(match);
     setIsSheetVisible(true);
   };
-  console.log(`[MatchesScreen] Current Global Total: ${totalUnread}`);
+  
   const likesReceived = useSelector((s: RootState) => s.auth.user?.likesReceived || 0);
-
   const [loading, setLoading] = useState(matches.length === 0);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -125,8 +102,6 @@ export default function MatchesScreen() {
         dispatch(updateUser({ likesReceived: res.data.totalCount || 0 }));
       }).catch(() => {});
       
-      // Throttle: only re-fetch from API if >30s since last fetch
-      // This prevents overwriting real-time socket updates every time user switches tabs
       const now = Date.now();
       if (now - lastFetchRef.current > 30000) {
         fetchAllChats(false);
@@ -135,7 +110,7 @@ export default function MatchesScreen() {
     };
 
     const unsubscribe = navigation.addListener('focus', onFocus);
-    fetchAllChats();  // Initial load
+    fetchAllChats();
     lastFetchRef.current = Date.now();
     return unsubscribe;
   }, [navigation, fetchAllChats, dispatch]);
@@ -181,7 +156,7 @@ export default function MatchesScreen() {
         </View>
       </TouchableOpacity>
     );
-  }, [likesReceived, navigation]);
+  }, [likesReceived, navigation, styles, theme]);
 
   const renderMatch = useCallback(({ item }: { item: any }) => {
     const isTrip = item.type === 'group';
@@ -193,7 +168,6 @@ export default function MatchesScreen() {
           selectedMatch?.matchId === item.matchId && { backgroundColor: theme.border }
         ]}
         onPress={() => {
-          // Clear unread locally + in DB
           dispatch(setActiveChat(item.matchId));
           if (!isTrip) chatAPI.readChat(item.matchId).catch(() => {});
 
@@ -302,7 +276,7 @@ export default function MatchesScreen() {
         </View>
       </TouchableOpacity>
     );
-  }, [navigation, selectedMatch, handleLongPress]);
+  }, [navigation, selectedMatch, handleLongPress, theme, styles, dispatch]);
 
   const handleAction = async (action: 'pin' | 'mute' | 'delete' | 'unread' | 'leave') => {
     if (!selectedMatch) return;
@@ -324,11 +298,6 @@ export default function MatchesScreen() {
       } else if (action === 'delete') {
         dispatch(removeMatch(matchId));
         if (!isTrip) await matchAPI.unmatch(matchId);
-        // Trips don't have a simple "delete" for user, they "leave" or "hide"
-      } else if (action === 'unread') {
-        // Just clear locally if we wanted to mark read, but user asked for "Mark as Unread"
-        // For simplicity, we just toggle 1
-        // dispatch(markUnread(matchId));
       } else if (action === 'leave') {
         dispatch(removeMatch(matchId));
         if (isTrip && currentUserId) {
@@ -347,7 +316,7 @@ export default function MatchesScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <ScreenWrapper withTopInset={false} withBottomInset={false}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>✈️ Matches</Text>
         <Text style={styles.headerCount}>{matches.length} connections</Text>
@@ -363,7 +332,7 @@ export default function MatchesScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => {
-               setLoading(true); // show loader for full refresh
+               setLoading(true);
                fetchAllChats(true);
             }}
             tintColor={theme.teal}
@@ -387,7 +356,6 @@ export default function MatchesScreen() {
         }
       />
 
-      {/* Custom WhatsApp-Style Bottom Sheet Modal */}
       <Modal
         visible={isSheetVisible}
         transparent={true}
@@ -404,7 +372,7 @@ export default function MatchesScreen() {
             setSelectedMatch(null);
           }}
         >
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 24) }]}>
             <View style={styles.sheetHeader}>
               <View style={styles.sheetHandle} />
               <Text style={styles.sheetTitle}>
@@ -487,16 +455,19 @@ export default function MatchesScreen() {
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </ScreenWrapper>
   );
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, insets: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
-    paddingTop: 56, paddingBottom: 16, paddingHorizontal: SPACING.lg,
-    borderBottomWidth: 1, borderBottomColor: theme.border,
+    paddingTop: Math.max(insets.top, 16), 
+    paddingBottom: 16, 
+    paddingHorizontal: SPACING.lg,
+    borderBottomWidth: 1, 
+    borderBottomColor: theme.border,
     backgroundColor: theme.white,
   },
   headerTitle: { fontSize: FONTS.xxl, fontWeight: '800', color: theme.text },
@@ -616,7 +587,6 @@ const getStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.card,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     minHeight: 300,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },

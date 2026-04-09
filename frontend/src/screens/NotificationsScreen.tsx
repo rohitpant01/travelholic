@@ -19,12 +19,15 @@ import { useAppTheme } from '../utils/theme';
 import { formatDistanceToNow } from 'date-fns';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
+import ScreenWrapper from '../components/ScreenWrapper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const NotificationsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const dispatch = useDispatch<AppDispatch>();
   const theme = useAppTheme();
-  const styles = getStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = getStyles(theme, insets);
   const { notifications, loading, unreadCount } = useSelector((state: RootState) => state.notification);
   const [refreshing, setRefreshing] = useState(false);
   const { socket } = useSocket();
@@ -50,10 +53,17 @@ const NotificationsScreen = () => {
       return;
     }
 
-    // 🎯 PRIORITY 2: Likes (Distinguish between Post and Profile)
+    // 🎯 PRIORITY 2: Super Likes
+    if (type === 'superlike' && senderId) {
+      navigation.navigate('UserDetail', { userId: String(senderId) });
+      return;
+    }
+
+    // 🎯 PRIORITY 2.1: Likes (Distinguish between Post and Profile)
     if (type === 'like') {
       const postId = data.postId || data.id; 
       if (postId) {
+        // Keep existing post like behavior
         navigation.navigate('PostDetail', { postId: String(postId) });
       } else if (senderId) {
         // This is a Profile Like
@@ -132,6 +142,8 @@ const NotificationsScreen = () => {
     switch (type) {
       case 'like':
         return { name: 'heart', color: '#ef4444' };
+      case 'superlike':
+        return { name: 'star', color: '#f59e0b' }; // Gold
       case 'comment':
         return { name: 'chatbubble', color: theme.teal };
       case 'match':
@@ -186,7 +198,7 @@ const NotificationsScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <ScreenWrapper withTopInset={false} withBottomInset={false}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
@@ -217,11 +229,11 @@ const NotificationsScreen = () => {
           }
         />
       )}
-    </View>
+    </ScreenWrapper>
   );
 };
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, insets: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.background,
@@ -231,7 +243,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 60,
+    paddingTop: Math.max(insets.top, 16),
     paddingBottom: 15,
     backgroundColor: theme.white,
     borderBottomWidth: 1,

@@ -137,6 +137,11 @@ const userSchema = new mongoose.Schema({
     enum: ['Online', 'Planning Trip', 'Exploring', 'Traveling'],
     default: 'Online'
   },
+  visibilityStatus: {
+    type: String,
+    enum: ['public', 'ghost'],
+    default: 'public'
+  },
   
   // Deletion tracking
   isDeleted: { type: Boolean, default: false },

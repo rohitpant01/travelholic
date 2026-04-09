@@ -92,8 +92,11 @@ export const usePushNotifications = (user: any) => {
         if (!data) return;
 
         // 🟢 Navigation Logic
-        if (data.type === 'like' && data.fromUserId) {
-          // Open the profile of the person who liked you
+        if (data.type === 'superlike' && data.fromUserId) {
+          navigation.navigate('UserDetail', { userId: data.fromUserId });
+        } 
+        else if (data.type === 'like' && data.fromUserId && !data.postId) {
+          // Open the profile of the person who liked you (only if not a post like)
           navigation.navigate('UserDetail', { userId: data.fromUserId });
         } 
         else if (data.type === 'match' && data.matchId) {

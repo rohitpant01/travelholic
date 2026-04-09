@@ -16,13 +16,14 @@ import { updateUser } from '../store/slices/authSlice';
 import { useSavedSync } from '../hooks/useSavedSync';
 import { useToast } from '../context/ToastContext';
 import Animated, { FadeInRight } from 'react-native-reanimated';
+import ScreenWrapper from '../components/ScreenWrapper';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SavedDestinationsScreen = () => {
-  const theme = useAppTheme();
-  const styles = getStyles(theme);
   const insets = useSafeAreaInsets();
+  const theme = useAppTheme();
+  const styles = getStyles(theme, insets);
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const { showToast } = useToast();
@@ -86,11 +87,12 @@ const SavedDestinationsScreen = () => {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <ScreenWrapper withTopInset={false} withBottomInset={false}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'} />
       
       {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={28} color={theme.text} />
         </TouchableOpacity>
@@ -119,11 +121,12 @@ const SavedDestinationsScreen = () => {
             </View>
           }
         />
-    </View>
+      </View>
+    </ScreenWrapper>
   );
 };
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any, insets: any) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -132,7 +135,8 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingTop: Math.max(insets.top, 16),
+    paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.05)',
   },
