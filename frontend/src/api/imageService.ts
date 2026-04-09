@@ -19,10 +19,13 @@ export const fetchPlaceImage = async (query: string): Promise<string | null> => 
  */
 export const fetchPlaceImages = async (query: string, count: number = 3): Promise<string[]> => {
   try {
-    // We reuse the single fetch but with different seeds for variety if the proxy doesn't support multiple yet
+    // Return a list of URLs that will be resolved by the backend proxy
+    // We add a salt (i) to ensure variety if the backend supports it, 
+    // but for now, we point to the reliable proxy endpoint
     const images = [];
     for (let i = 0; i < count; i++) {
-        images.push(`https://picsum.photos/seed/${encodeURIComponent(query)}-${i}/1000/600`);
+        // We use the query as a fallback if no direct reference is available
+        images.push(`${apiClient.defaults.baseURL}/images/place/${encodeURIComponent(query)}?v=${i}`);
     }
     return images;
   } catch (e) {

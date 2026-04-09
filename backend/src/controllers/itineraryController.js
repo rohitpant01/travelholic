@@ -200,7 +200,7 @@ exports.generateItinerary = async (req, res) => {
       rating: p.rating,
       photoReference: p.photoReference,
       image: p.photoReference 
-        ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${p.photoReference}`
+        ? `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${p.photoReference}`
         : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`
     }));
 

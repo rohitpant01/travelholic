@@ -445,7 +445,7 @@ exports.generateItinerary = async (req, res) => {
             vicinity: p.vicinity || destination,
             rating: p.rating || null,
             image: p.photo_reference 
-              ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${p.photo_reference}`
+              ? `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${p.photo_reference}`
               : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`,
             description: "",
             cost: "",
@@ -645,7 +645,7 @@ OUTPUT JSON FORMAT (STRICT — no markdown, no extra text):
           if (!hotel) throw new Error("Not found in Places API");
 
           const image = hotel.photos?.[0]?.photo_reference
-            ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${hotel.photos[0].photo_reference}`
+            ? `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${hotel.photos[0].photo_reference}`
             : FALLBACK_HOTEL_IMAGE;
 
           enrichedStays.push({
@@ -899,7 +899,7 @@ exports.getNearbyProxy = async (req, res) => {
         lng: p.geometry?.location?.lng,
         photo_reference: ref,
         image: ref 
-          ? `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${ref}`
+          ? `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${ref}`
           : `https://images.unsplash.com/photo-1512343879784-a960bf40e7f2`
       };
     });
@@ -1036,7 +1036,7 @@ Return ONLY the JSON array. No markdown, no extra text.
       
       let image = "https://images.unsplash.com/photo-1488646953014-85cb44e25828";
       if (coords.photo_reference) {
-        image = `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${coords.photo_reference}`;
+        image = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${coords.photo_reference}`;
       } else if (p.unsplash_query || p.name) {
         image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.unsplash_query || p.name)}`;
       }
@@ -1243,7 +1243,7 @@ No markdown, no extra text.
 
         // 📸 REAL IMAGE FETCH from Google Places
         if (coords.photo_reference) {
-          image = `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${coords.photo_reference}`;
+          image = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${coords.photo_reference}`;
         } else if (p.name) {
           image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.name)}`;
         }

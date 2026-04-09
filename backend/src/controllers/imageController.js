@@ -96,7 +96,7 @@ exports.getPlaceImage = async (req, res) => {
       const photoRef = gRes.data.results?.[0]?.photos?.[0]?.photo_reference;
       if (photoRef) {
         return res.json({ 
-          image: `${process.env.BACKEND_URL || 'https://ekalgo-backend.onrender.com'}/api/images/google-photo?ref=${photoRef}`, 
+          image: `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${photoRef}`, 
           source: 'Google Places' 
         });
       }

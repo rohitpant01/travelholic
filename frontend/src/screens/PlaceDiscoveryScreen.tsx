@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, RADIUS, SHADOW, SPACING } from '../utils/theme';
 import { placeService, Place, CategorizedPlaces } from '../api/placeService';
+import apiClient from '../api/client';
 import { userAPI, aiAPI } from '../api/services';
 import { useDispatch, useSelector } from 'react-redux';
 import { getDiscoveryCache, saveDiscoveryCache } from '../utils/bucketListUtils';
@@ -115,7 +116,7 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
   const photoUrl = place.image 
     ? place.image
     : place.photoReference
-    ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${place.photoReference}&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY}`
+    ? `${apiClient.defaults.baseURL}/images/google-photo?ref=${place.photoReference}`
     : 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80';
 
   const [details, setDetails] = useState<any>(null);
