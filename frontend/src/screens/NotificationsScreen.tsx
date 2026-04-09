@@ -38,34 +38,58 @@ const NotificationsScreen = () => {
     
     const type = item.type;
     const data = item.data || {};
+    const senderId = item.sender?._id || item.sender;
 
-    // 🎯 PRIORITY 1: Post Interactions (Like/Comment)
-    if (type === 'like' || type === 'comment') {
-      const postId = data.postId || data.id; // Handle both potential naming conventions
+    // 🎯 PRIORITY 1: Match/Connection (Highest Priority as per User Request)
+    if (type === 'match') {
+      if (senderId) {
+        navigation.navigate('UserDetail', { userId: String(senderId) });
+        return;
+      }
+      navigation.navigate('MainTabs', { screen: 'Matches' } as any);
+      return;
+    }
+
+    // 🎯 PRIORITY 2: Likes (Distinguish between Post and Profile)
+    if (type === 'like') {
+      const postId = data.postId || data.id; 
       if (postId) {
-        console.log('[DEBUG] Navigating to PostDetail with postId:', postId);
+        navigation.navigate('PostDetail', { postId: String(postId) });
+      } else if (senderId) {
+        // This is a Profile Like
+        navigation.navigate('UserDetail', { userId: String(senderId) });
+      }
+      return;
+    }
+
+    // 🎯 PRIORITY 3: Comments
+    if (type === 'comment') {
+      const postId = data.postId || data.id;
+      if (postId) {
         navigation.navigate('PostDetail', { postId: String(postId) });
         return;
-      } else {
-        console.warn('[DEBUG] Notification missing postId in data:', data);
       }
     } 
     
-    // 🎯 PRIORITY 2: Trip-related
+    // 🎯 PRIORITY 4: Trip-related
     if (type === 'trip_join_request' || type === 'trip_accepted' || type === 'trip_member_joined') {
       if (data.tripId) {
         navigation.navigate('TripDetail', { tripId: data.tripId });
         return;
       }
+      if (type === 'trip_member_joined' && senderId) {
+        navigation.navigate('UserDetail', { userId: String(senderId) });
+        return;
+      }
     } 
     
-    // 🎯 PRIORITY 3: Discover/Feed fallbacks
+    // 🎯 PRIORITY 5: Discover/Feed fallbacks
     if (type === 'nearby_travelers' || type === 'trending_trip') {
-      navigation.navigate('MainTabs', { screen: 'Travelers' } as any); // Use 'Travelers' which is the tab name for DiscoverScreen
+      navigation.navigate('MainTabs', { screen: 'Travelers' } as any); 
       return;
     } 
     
-    // 🎯 PRIORITY 4: Direct Chat/Matches
+    // 🎯 PRIORITY 6: Direct Chat/Matches
     if (data.tripId) {
       navigation.navigate('Chat', { 
         type: 'group',
@@ -76,6 +100,10 @@ const NotificationsScreen = () => {
     } 
     
     if (data.matchId) {
+      if (senderId && type !== 'match') {
+         // If it's a message or something else with a matchId, maybe still profile? 
+         // But usually Matches tab is better for generic matchId
+      }
       navigation.navigate('MainTabs', { screen: 'Matches' } as any);
       return;
     }

@@ -80,14 +80,14 @@ const handleMatch = async (userId1, userId2, isSuperLike = false) => {
         sender: userId2,
         type: 'match',
         message: `It's a match! You and ${user2.firstName} matched! 🎉`,
-        data: { matchId: match._id }
+        data: { matchId: match._id, userId: userId2 }
       },
       {
         recipient: userId2,
         sender: userId1,
         type: 'match',
         message: `It's a match! You and ${user1.firstName} matched! 🎉`,
-        data: { matchId: match._id }
+        data: { matchId: match._id, userId: userId1 }
       }
     ]);
 
