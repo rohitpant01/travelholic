@@ -551,7 +551,5 @@ module.exports = {
   getDiscoverProfiles, 
   likeUser, 
   skipUser, 
-  superLikeUser, 
-  updateLocation,
-  updateVisibility
+  superLikeUser
 };
