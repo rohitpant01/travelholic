@@ -1,6 +1,8 @@
 const Comment = require('../models/Comment');
 const Post = require('../models/Post');
 const { createNotification } = require('../utils/notificationService');
+const Filter = require('bad-words');
+const filter = new Filter();
 
 // @desc    Get comments for a post
 // @route   GET /api/comments/:postId
@@ -30,10 +32,12 @@ const addComment = async (req, res) => {
       return res.status(400).json({ error: 'Comment text is required' });
     }
 
+    const sanitizedText = filter.clean(text);
+
     const comment = await Comment.create({
       postId,
       userId,
-      text
+      text: sanitizedText
     });
 
     // Populate user info for the new comment
@@ -93,7 +97,7 @@ const updateComment = async (req, res) => {
       return res.status(401).json({ error: 'User not authorized to update this comment' });
     }
 
-    comment.text = text || comment.text;
+    comment.text = text ? filter.clean(text) : comment.text;
     await comment.save();
 
     const populatedComment = await comment.populate('userId', 'firstName lastName username photos');
