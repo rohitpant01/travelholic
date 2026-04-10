@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, 
   TouchableOpacity, RefreshControl, Dimensions,
-  Image 
+  Image, Platform
 } from 'react-native';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { useNavigation } from '@react-navigation/native';
@@ -20,6 +20,7 @@ import PostCommentsModal from './PostCommentsModal';
 import PostLikesModal from './PostLikesModal';
 import EditPostModal from './EditPostModal';
 import { COLORS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
+import { useCallback } from 'react';
 
 const { width: W } = Dimensions.get('window');
 
@@ -125,7 +126,7 @@ export default function FeedTab() {
     );
   };
 
-  const renderHeader = () => (
+  const renderHeader = useCallback(() => (
     <View style={styles.feedHeader}>
       {/* Sub-Tabs Switcher */}
       <View style={styles.subTabContainer}>
@@ -158,6 +159,9 @@ export default function FeedTab() {
           keyExtractor={(item: any) => item._id || item.userId}
           renderItem={renderStoryItem}
           contentContainerStyle={{ gap: 12 }}
+          maxToRenderPerBatch={5}
+          initialNumToRender={5}
+          removeClippedSubviews={true}
         />
       </View>
 
@@ -180,7 +184,34 @@ export default function FeedTab() {
       
       <View style={styles.divider} />
     </View>
-  );
+  ), [mode, groupedStories, theme, user]);
+
+  const renderPostItem = useCallback(({ item }: { item: any }) => (
+    <TravelPostCard 
+      post={item} 
+      onPressComment={(id) => {
+        setActiveCommentPostId(id);
+        commentsSheetRef.current?.present();
+      }}
+      onPressLikes={(id) => {
+        setActiveLikesPostId(id);
+        likesSheetRef.current?.present();
+      }}
+      onPressEdit={(post) => {
+        setActiveEditPost(post);
+        editSheetRef.current?.present();
+      }}
+      onPressProfile={(userId) => {
+        if (userId === user?._id) {
+          navigation.navigate('Profile');
+        } else {
+          navigation.navigate('UserDetail', { userId });
+        }
+      }}
+    />
+  ), [user, navigation]);
+
+  const keyExtractor = useCallback((item: any) => item._id, []);
 
   const commentsSheetRef = useRef<BottomSheetModal>(null);
   const likesSheetRef = useRef<BottomSheetModal>(null);
@@ -190,30 +221,8 @@ export default function FeedTab() {
     <View style={styles.container}>
       <FlatList
         data={posts}
-        renderItem={({ item }) => (
-          <TravelPostCard 
-            post={item} 
-            onPressComment={(id) => {
-              setActiveCommentPostId(id);
-              commentsSheetRef.current?.present();
-            }}
-            onPressLikes={(id) => {
-              setActiveLikesPostId(id);
-              likesSheetRef.current?.present();
-            }}
-            onPressEdit={(post) => {
-              setActiveEditPost(post);
-              editSheetRef.current?.present();
-            }}
-            onPressProfile={(userId) => {
-              if (userId === user?._id) {
-                navigation.navigate('Profile');
-              } else {
-                navigation.navigate('UserDetail', { userId });
-              }
-            }}
-          />
-        )}
+        renderItem={renderPostItem}
+        keyExtractor={keyExtractor}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
           !loading ? (
@@ -229,6 +238,9 @@ export default function FeedTab() {
         onEndReached={onLoadMore}
         onEndReachedThreshold={0.5}
         contentContainerStyle={styles.listContent}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
       />
 
       <CreatePostModal 

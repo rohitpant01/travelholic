@@ -383,4 +383,4 @@ const getStyles = (theme: any) =>
     },
   });
 
-export default NearbyTravelersView;
+export default React.memo(NearbyTravelersView);

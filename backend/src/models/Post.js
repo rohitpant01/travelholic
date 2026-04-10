@@ -30,5 +30,7 @@ const postSchema = new mongoose.Schema({
 postSchema.index({ location: '2dsphere' }); // For Nearby feed
 postSchema.index({ userId: 1 });
 postSchema.index({ createdAt: -1 }); // For Global feed
+postSchema.index({ likesCount: -1 }); // Future-proofing for "Top" posts
+postSchema.index({ commentsCount: -1 });
 
 module.exports = mongoose.model('Post', postSchema);

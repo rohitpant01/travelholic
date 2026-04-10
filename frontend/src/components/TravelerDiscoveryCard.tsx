@@ -38,10 +38,7 @@ interface TravelerDiscoveryCardProps {
   onPressProfile?: (profile: Profile) => void;
 }
 
-export default function TravelerDiscoveryCard({ 
-  profile, 
-  onPressProfile
-}: TravelerDiscoveryCardProps) {
+export default React.memo(TravelerDiscoveryCard);
   const theme = useAppTheme();
   const styles = getStyles(theme);
 

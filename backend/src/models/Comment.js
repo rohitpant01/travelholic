@@ -7,7 +7,6 @@ const commentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Optimized for feed comments fetching
-commentSchema.index({ postId: 1 });
-commentSchema.index({ createdAt: -1 });
+commentSchema.index({ postId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Comment', commentSchema);

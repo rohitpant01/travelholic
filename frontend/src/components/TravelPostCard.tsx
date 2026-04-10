@@ -254,7 +254,7 @@ export default function TravelPostCard({ post, onPressProfile, onPressComment, o
       />
     </View>
   );
-}
+export default React.memo(TravelPostCard);
 
 const getStyles = (theme: any) => StyleSheet.create({
   card: {

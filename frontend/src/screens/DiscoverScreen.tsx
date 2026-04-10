@@ -268,7 +268,7 @@ export default function DiscoverScreen() {
               <Swiper
                 ref={swiperRef}
                 cards={profiles}
-                renderCard={(profile) => (
+                renderCard={useCallback((profile: any) => (
                   <View style={styles.cardWrapper}>
                     <TravelerDiscoveryCard
                       profile={profile}
@@ -281,7 +281,7 @@ export default function DiscoverScreen() {
                       })}
                     />
                   </View>
-                )}
+                ), [navigation, theme])}
                 onSwipedRight={(index) => handleLike(index)}
                 onSwipedLeft={(index) => handleSkip(index)}
                 onSwipedTop={(index) => handleSuperLike(index)}

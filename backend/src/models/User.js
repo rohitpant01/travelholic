@@ -217,6 +217,14 @@ const userSchema = new mongoose.Schema({
 
 // Indexes
 userSchema.index({ location: '2dsphere' });
+userSchema.index({ email: 1 });
+userSchema.index({ phone: 1 });
+userSchema.index({ googleId: 1 }, { sparse: true });
+userSchema.index({ matches: 1 });
+userSchema.index({ likedBy: 1 });
+userSchema.index({ following: 1 });
+userSchema.index({ followers: 1 });
+userSchema.index({ isDeleted: 1, isActive: 1 }); // Frequent filter in feed
 
 
 // Virtual: full name

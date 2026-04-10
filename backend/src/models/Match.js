@@ -29,7 +29,7 @@ const matchSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-matchSchema.index({ users: 1 });
+matchSchema.index({ users: 1, isActive: 1 });
 
 const Match = mongoose.model('Match', matchSchema);
 
