@@ -23,7 +23,7 @@ import {
   Checklist,
   ChecklistItem
 } from '../store/slices/checklistSlice';
-import apiClient from '../../api/client';
+import apiClient from '../api/client';
 import { useAppTheme } from '../utils/theme';
 
 const CATEGORIES = ['Essentials', 'Clothing', 'Electronics', 'Documents', 'Toiletries', 'Others'];
