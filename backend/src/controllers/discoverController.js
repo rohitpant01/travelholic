@@ -19,19 +19,19 @@ const handleMatch = async (userId1, userId2, isSuperLike = false) => {
     isSuperLike,
   });
 
-  // Update both users
-  await Promise.all([
-    User.findByIdAndUpdate(userId1, {
-      $addToSet: { matches: userId2 },
-      $pull: { likedBy: userId2 },
-      $inc: { matchesCount: 1, likesReceived: -1 },
-    }),
-    User.findByIdAndUpdate(userId2, {
-      $addToSet: { matches: userId1 },
-      $pull: { likedBy: userId1 },
-      $inc: { matchesCount: 1, likesReceived: -1 },
-    })
-  ]);
+    // Update both users and fetch names
+    const [user1, user2] = await Promise.all([
+      User.findByIdAndUpdate(userId1, {
+        $addToSet: { matches: userId2 },
+        $pull: { likedBy: userId2 },
+        $inc: { matchesCount: 1, likesReceived: -1 },
+      }, { new: true }),
+      User.findByIdAndUpdate(userId2, {
+        $addToSet: { matches: userId1 },
+        $pull: { likedBy: userId1 },
+        $inc: { matchesCount: 1, likesReceived: -1 },
+      }, { new: true })
+    ]);
 
     // ✅ NEW: USE CENTRALIZED NOTIFICATION HUB
     const { createNotification } = require('../utils/notificationService');
@@ -42,7 +42,7 @@ const handleMatch = async (userId1, userId2, isSuperLike = false) => {
         sender: userId2,
         type: 'match',
         title: "It's a Match! 🎉",
-        message: `You and ${user2.firstName} matched! Start chatting!`,
+        message: `You and ${user2?.firstName || 'someone'} matched! Start chatting!`,
         data: { matchId: match._id, userId: userId2 }
       }),
       createNotification({
@@ -50,7 +50,7 @@ const handleMatch = async (userId1, userId2, isSuperLike = false) => {
         sender: userId1,
         type: 'match',
         title: "It's a Match! 🎉",
-        message: `You and ${user1.firstName} matched! Start chatting!`,
+        message: `You and ${user1?.firstName || 'someone'} matched! Start chatting!`,
         data: { matchId: match._id, userId: userId1 }
       })
     ]);

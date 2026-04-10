@@ -36,6 +36,9 @@ const server = http.createServer(app);
 // Connect MongoDB
 connectDB();
 
+// Initialize Socket.io
+initSocket(server);
+
 // Initialize Background Worker
 initNotificationWorker();
 
