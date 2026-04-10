@@ -207,6 +207,10 @@ const feedSlice = createSlice({
       .addCase(fetchFeed.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+        // If it's a server error (503/502), stop trying to load more to prevent infinite loop
+        if (state.error?.includes('503') || state.error?.includes('502')) {
+          state.hasMore = false;
+        }
       })
       .addCase(toggleLikeAction.pending, (state, action) => {
         const postId = action.meta.arg;
@@ -308,6 +312,10 @@ const feedSlice = createSlice({
       .addCase(fetchUserPosts.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+        // Prevent profile feed infinite loop on server error
+        if (state.error?.includes('503') || state.error?.includes('502')) {
+          state.hasMore = false; 
+        }
       });
   }
 });

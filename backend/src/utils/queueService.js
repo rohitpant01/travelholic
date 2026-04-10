@@ -1,60 +1,103 @@
 const { Queue, Worker } = require('bullmq');
 const IORedis = require('ioredis');
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-const connection = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
+const REDIS_URL = process.env.REDIS_URL;
+let connection = null;
+let notificationQueue = null;
+let useQueue = false;
 
-const notificationQueue = new Queue('notifications', { 
-  connection,
-  defaultJobOptions: {
-    attempts: 5,
-    backoff: {
-      type: 'exponential',
-      delay: 5000, // 5s, then 10s, 20s...
-    },
-    removeOnComplete: true,
-    removeOnFail: false,
+if (REDIS_URL) {
+  try {
+    connection = new IORedis(REDIS_URL, { 
+      maxRetriesPerRequest: null,
+      connectTimeout: 2000, 
+      reconnectOnError: (err) => {
+        console.warn('[REDIS] Reconnect error:', err.message);
+        return true;
+      }
+    });
+
+    connection.on('error', (err) => {
+      console.warn('[REDIS] Connection error:', err.message);
+      useQueue = false;
+    });
+
+    connection.on('connect', () => {
+      console.log('✅ [REDIS] Connected successfully');
+      useQueue = true;
+    });
+
+    notificationQueue = new Queue('notifications', { 
+      connection,
+      defaultJobOptions: {
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+        removeOnFail: false,
+      }
+    });
+  } catch (err) {
+    console.warn('⚠️ [QUEUE] Falling back to immediate mode (Redis missing/failed):', err.message);
+    useQueue = false;
   }
-});
+} else {
+  console.log('ℹ️ [QUEUE] REDIS_URL not found. Using immediate background delivery.');
+}
 
 /**
  * Initialize the Notification Worker
  */
 const initNotificationWorker = () => {
+    if (!useQueue || !connection) return null;
     const { deliverNotification } = require('./notificationService');
     
-    const worker = new Worker('notifications', async (job) => {
-        const { notificationId } = job.data;
-        console.log(`[QUEUE] Processing notification ${notificationId}`);
-        
-        try {
-            await deliverNotification(notificationId);
-        } catch (error) {
-            console.error(`[QUEUE] Job ${job.id} failed:`, error.message);
-            throw error;
-        }
-    }, { connection });
+    try {
+        const worker = new Worker('notifications', async (job) => {
+            const { notificationId } = job.data;
+            console.log(`[QUEUE] Processing notification ${notificationId}`);
+            try {
+                await deliverNotification(notificationId);
+            } catch (error) {
+                console.error(`[QUEUE] Job ${job.id} failed:`, error.message);
+                throw error;
+            }
+        }, { connection });
 
-    worker.on('completed', (job) => {
-        console.log(`[QUEUE] Job ${job.id} completed successfully`);
-    });
+        worker.on('completed', (job) => {
+            console.log(`[QUEUE] Job ${job.id} completed successfully`);
+        });
 
-    worker.on('failed', (job, err) => {
-        console.error(`[QUEUE] Job ${job.id} failed after retries:`, err.message);
-    });
+        worker.on('failed', (job, err) => {
+            console.error(`[QUEUE] Job ${job.id} failed after retries:`, err.message);
+        });
 
-    return worker;
+        return worker;
+    } catch (err) {
+        console.error('[QUEUE] Worker initialization failed:', err.message);
+        return null;
+    }
 };
 
 /**
  * Add a notification to the queue
  */
 const enqueueNotification = async (notificationId) => {
-    await notificationQueue.add('deliver', { notificationId }, { 
-        jobId: `notif_${notificationId}`,
-        removeOnComplete: true 
-    });
-    console.log(`[QUEUE] Enqueued notification ${notificationId}`);
+    if (useQueue && notificationQueue) {
+        try {
+            await notificationQueue.add('deliver', { notificationId }, { 
+                jobId: `notif_${notificationId}`,
+                removeOnComplete: true 
+            });
+            console.log(`[QUEUE] Enqueued notification ${notificationId}`);
+            return;
+        } catch (err) {
+            console.error('[QUEUE] Enqueue failed, falling back to immediate delivery:', err.message);
+        }
+    }
+    
+    // Fallback: Immediate delivery in background
+    const { deliverNotification } = require('./notificationService');
+    deliverNotification(notificationId).catch(err => console.error('[FALLBACK] Delivery failed:', err.message));
 };
 
 module.exports = {
