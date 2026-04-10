@@ -2,6 +2,7 @@ const { Match, Message } = require('../models/Match');
 const { TripMember } = require('../models/Trip');
 const User = require('../models/User');
 const { getIO } = require('../socket/socketHandler');
+const { encrypt, decrypt } = require('../utils/cryptoUtility');
 
 // Helper to calculate distance in KM using Haversine formula
 const getDistance = (lat1, lon1, lat2, lon2) => {
@@ -60,6 +61,8 @@ const getMatches = async (req, res) => {
         );
       }
 
+      const lastMsgText = match.lastMessage?.text ? decrypt(match.lastMessage.text) : match.lastMessage?.text;
+
       return {
         matchId: match._id,
         user: {
@@ -78,7 +81,7 @@ const getMatches = async (req, res) => {
           destination: otherUser?.destination,
           travelDate: otherUser?.travelDate,
         },
-        lastMessage: match.lastMessage,
+        lastMessage: match.lastMessage ? { ...match.lastMessage, text: lastMsgText } : null,
         unreadCount,
         distanceKm,
         matchedAt: match.matchedAt,
@@ -131,6 +134,11 @@ const getMessages = async (req, res) => {
     const formattedMessages = messages.reverse().map(msg => {
       const obj = msg.toObject();
       obj.chatId = obj.matchId;
+      // Decrypt sensitive fields
+      if (obj.text) obj.text = decrypt(obj.text);
+      if (obj.latitude) obj.latitude = decrypt(obj.latitude);
+      if (obj.longitude) obj.longitude = decrypt(obj.longitude);
+      if (obj.replyTo?.text) obj.replyTo.text = decrypt(obj.replyTo.text);
       return obj;
     });
 
@@ -177,7 +185,12 @@ const sendMessage = async (req, res) => {
       messageData.imageUrl = uploadedFile.path;
       messageData.imagePublicId = uploadedFile.filename;
     } else {
-      messageData.text = text;
+      messageData.text = text ? encrypt(text) : '';
+    }
+
+    if (req.body.latitude && req.body.longitude) {
+      messageData.latitude = encrypt(req.body.latitude.toString());
+      messageData.longitude = encrypt(req.body.longitude.toString());
     }
 
     if (replyTo) messageData.replyTo = replyTo;
@@ -197,7 +210,7 @@ const sendMessage = async (req, res) => {
 
     await Match.findByIdAndUpdate(matchId, {
       lastMessage: {
-        text: lastMsgText,
+        text: (messageData.type === 'text' && text) ? encrypt(text) : lastMsgText,
         sentAt: new Date(),
         sentBy: req.user._id,
       },
@@ -249,7 +262,7 @@ const editMessage = async (req, res) => {
     const message = await Message.findOne({ _id: messageId, sender: req.user._id });
     if (!message) return res.status(404).json({ error: 'Message not found or not authorized' });
 
-    message.text = text;
+    message.text = text ? encrypt(text) : '';
     message.edited = true;
     await message.save();
     

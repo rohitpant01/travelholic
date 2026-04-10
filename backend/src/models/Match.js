@@ -57,11 +57,26 @@ const messageSchema = new mongoose.Schema({
   imagePublicId: { type: String, default: null },
   voiceUrl: { type: String, default: null },
   voicePublicId: { type: String, default: null },
-  latitude: { type: Number, default: null },
-  longitude: { type: Number, default: null },
+  latitude: { type: String, default: null },
+  longitude: { type: String, default: null },
   type: { type: String, enum: ['text', 'image', 'voice', 'location'], default: 'text' },
   deliveredTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  status: {
+    type: String,
+    enum: ['pending', 'sent', 'delivered', 'read'],
+    default: 'pending',
+    index: true,
+  },
+  priority: {
+    type: String,
+    enum: ['normal', 'high'],
+    default: 'high', // Messages are high priority by default
+  },
+  deliveryAttempts: {
+    type: Number,
+    default: 0,
+  },
   edited: { type: Boolean, default: false },
   isDeleted: { type: Boolean, default: false },
   reactions: [{
@@ -71,6 +86,7 @@ const messageSchema = new mongoose.Schema({
   replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
   tempId: { type: String, default: null }, // For de-duplication
   readAt: Date,
+  deliveredAt: Date,
 }, {
   timestamps: true,
 });

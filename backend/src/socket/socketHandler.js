@@ -4,6 +4,8 @@ const User = require('../models/User');
 const { Message, Match } = require('../models/Match');
 const { TripMember } = require('../models/Trip');
 const Notification = require('../models/Notification');
+const { encrypt, decrypt } = require('../utils/cryptoUtility');
+const { enqueueNotification } = require('../utils/queueService');
 
 let io;
 
@@ -23,6 +25,8 @@ const joinUserToTripRooms = async (socket) => {
   }
 };
 
+const disconnectHolders = new Map();
+
 const initSocket = (server) => {
   io = socketIO(server, {
     cors: {
@@ -30,7 +34,10 @@ const initSocket = (server) => {
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    pingInterval: 25000,
     pingTimeout: 60000,
+    connectTimeout: 45000,
+    allowEIO3: true,
   });
 
   // Auth middleware for socket
@@ -69,6 +76,12 @@ const initSocket = (server) => {
 
     // Notify online status (automatic on connection if userId exists)
     if (socket.userId) {
+      if (disconnectHolders.has(socket.userId)) {
+        console.log(`🔄 User ${socket.userId} reconnected during grace period. Cancelling offline timer.`);
+        clearTimeout(disconnectHolders.get(socket.userId));
+        disconnectHolders.delete(socket.userId);
+      }
+
       await User.findByIdAndUpdate(socket.userId, { isOnline: true, lastSeen: new Date() });
       socket.join(socket.userId);
       await joinUserToTripRooms(socket);
@@ -145,11 +158,11 @@ const initSocket = (server) => {
             trip: chatId,
             sender: socket.userId,
             tempId,
-            text: text || '',
+            text: text ? encrypt(text) : '',
             imageUrl: imageUrl || null,
             voiceUrl: voiceUrl || null,
-            latitude: latitude || null,
-            longitude: longitude || null,
+            latitude: latitude ? encrypt(latitude.toString()) : null,
+            longitude: longitude ? encrypt(longitude.toString()) : null,
             type: (latitude && longitude) ? 'location' : (voiceUrl ? 'voice' : (imageUrl ? 'image' : 'text')),
             replyTo: replyTo || null,
           });
@@ -160,7 +173,7 @@ const initSocket = (server) => {
             await message.populate({ path: 'replyTo', select: 'text type imageUrl voiceUrl sender edited isDeleted', populate: { path: 'sender', select: 'firstName' }});
           }
 
-          const formattedMessage = { ...message.toObject(), chatId: message.trip };
+          const formattedMessage = { ...message.toObject(), chatId: message.trip, text: text || '' };
 
           console.log('[SOCKET DEBUG] Updating group unread counts for members');
           await TripMember.updateMany(
@@ -210,40 +223,56 @@ const initSocket = (server) => {
           });
           console.log('[SOCKET DEBUG] Match last message and unread counts updated');
 
-          // Notify both participants via their personal rooms (guaranteed delivery, NO DUPLICATES)
-          const participants = [socket.userId, receiverId];
-          const senderProfilePhoto = socket.user?.photos?.find(p => p.isProfile)?.url || socket.user?.photos?.[0]?.url;
-          const senderName = socket.user?.firstName || 'Match';
-
-          for (const pid of participants) {
-            if (!pid) continue;
-            const isReceiver = pid === receiverId;
-            // Only count unread for receiver
-            const unreadCount = isReceiver ? await Message.countDocuments({
-              matchId: chatId,
-              receiver: receiverId,
-              readBy: { $ne: receiverId },
-            }) : 0;
-
-            // Emit to personal room with matchId explicitly set for Redux
-            io.to(pid).emit('receive_message', {
-              ...formattedMessage,
-              matchId: chatId,       // ensure matchId is always present
-              senderName,
-              senderPhoto: senderProfilePhoto,
-              unreadCount,
-            });
+          // 3. Emit via Socket (Instant)
+          let deliveredToReceiver = false;
+          const receiverSocketRoom = io.sockets.adapter.rooms.get(receiverId);
+          if (receiverSocketRoom && receiverSocketRoom.size > 0) {
+             io.to(receiverId).emit('receive_message', {
+               ...formattedMessage,
+               matchId: chatId,
+               senderName,
+               senderPhoto: senderProfilePhoto,
+               status: 'delivered'
+             });
+             deliveredToReceiver = true;
           }
 
-          // Push notifications (only if receiver is offline)
-          const receiverSocketRooms = io.sockets.adapter.rooms.get(receiverId);
-          const isReceiverOnline = receiverSocketRooms && receiverSocketRooms.size > 0;
-          if (!isReceiverOnline) {
-            const receiver = await User.findById(receiverId).select('pushToken');
-            if (receiver && receiver.pushToken) {
-               const { sendPushNotification } = require('../utils/pushNotification');
-               sendPushNotification( receiver.pushToken, `New message from ${senderName}`, lastMsgText, { type: 'message', matchId: chatId } );
-            }
+          // Also emit to sender (for multi-device sync and confirmation)
+          io.to(socket.userId).emit('receive_message', {
+             ...formattedMessage,
+             matchId: chatId,
+             senderName,
+             senderPhoto: senderProfilePhoto,
+             status: deliveredToReceiver ? 'delivered' : 'sent'
+          });
+
+          // 4. Update DB status based on socket delivery
+          if (deliveredToReceiver) {
+            await Message.findByIdAndUpdate(message._id, { 
+              status: 'delivered', 
+              deliveredAt: new Date(),
+              $addToSet: { deliveredTo: receiverId } 
+            });
+          } else {
+            // Keep status as 'sent' (already set via default if not pending)
+            await Message.findByIdAndUpdate(message._id, { status: 'sent' });
+          }
+
+          // 5. Enqueue Push Notification (Using BullMQ)
+          const receiverUser = await User.findById(receiverId).select('devices');
+          if (receiverUser && (receiverUser.devices || []).length > 0) {
+             await enqueueNotification(
+               receiverId, 
+               `${senderName} sent you a message 👀`, 
+               req_text, 
+               { 
+                 type: 'message', 
+                 messageId: message._id.toString(),
+                 chatId: chatId 
+               },
+               'high',
+               `msg_${message._id}`
+             ).catch(err => console.error('[SOCKET] Queue failed:', err));
           }
         }
       } catch (error) {
@@ -389,21 +418,20 @@ const initSocket = (server) => {
           if (messageId) {
             await TripMessage.findByIdAndUpdate(
               messageId,
-              { $addToSet: { deliveredTo: socket.userId } }
+              { $addToSet: { deliveredTo: socket.userId }, status: 'delivered' }
             );
           }
         } else {
           if (messageId) {
-            const message = await Message.findOneAndUpdate(
-              { _id: messageId, receiver: socket.userId },
-              { $addToSet: { deliveredTo: socket.userId } },
+            const message = await Message.findByIdAndUpdate(
+              messageId,
+              { $addToSet: { deliveredTo: socket.userId }, status: 'delivered', deliveredAt: new Date() },
               { new: true }
             );
             if (message) {
               io.to(message.sender.toString()).emit('message_status_update', { 
                 messageId, 
                 chatId: finalChatId,
-                chatType: 'individual',
                 status: 'delivered',
                 deliveredTo: message.deliveredTo
               });
@@ -423,12 +451,16 @@ const initSocket = (server) => {
         if (finalChatType === 'group') {
           const { TripMessage, TripMember } = require('../models/Trip');
           if (messageId) {
-            const wasAlreadyRead = await TripMessage.findOne({ _id: messageId, readBy: socket.userId });
-            const message = await TripMessage.findByIdAndUpdate(
-              messageId,
-              { $addToSet: { readBy: socket.userId } },
-              { new: true }
-            );
+             const wasAlreadyRead = await TripMessage.findOne({ _id: messageId, readBy: socket.userId });
+             const message = await TripMessage.findByIdAndUpdate(
+               messageId,
+               { 
+                 $addToSet: { readBy: socket.userId },
+                 status: 'read',
+                 readAt: new Date()
+               },
+               { new: true }
+             );
             if (message && !wasAlreadyRead) {
               // Decrement unread count for this user in this trip
               await TripMember.updateOne(
@@ -465,7 +497,7 @@ const initSocket = (server) => {
           if (messageId) {
             const message = await Message.findOneAndUpdate(
               { _id: messageId, receiver: socket.userId },
-              { $addToSet: { readBy: socket.userId } },
+              { $addToSet: { readBy: socket.userId }, status: 'read', readAt: new Date() },
               { new: true }
             );
             if (message) {
@@ -474,13 +506,15 @@ const initSocket = (server) => {
                 chatId: finalChatId, 
                 chatType: 'individual',
                 status: 'read',
-                readBy: message.readBy
+                readBy: message.readBy,
+                readAt: message.readAt
               });
             }
           } else if (finalChatId) {
+            const now = new Date();
             await Message.updateMany(
               { matchId: finalChatId, receiver: socket.userId, readBy: { $ne: socket.userId } },
-              { $addToSet: { readBy: socket.userId } }
+              { $addToSet: { readBy: socket.userId }, status: 'read', readAt: now }
             );
             
             const match = await Match.findById(finalChatId).populate('users');
@@ -492,7 +526,8 @@ const initSocket = (server) => {
                 io.to(otherUserId).emit('message_status_update', { 
                   chatId: finalChatId, 
                   chatType: 'individual',
-                  status: 'read' 
+                  status: 'read',
+                  readAt: now
                 });
               }
             }
@@ -577,23 +612,31 @@ const initSocket = (server) => {
     });
 
     // ---- DISCONNECT ----
-    socket.on('disconnect', async () => {
+    socket.on('disconnect', (reason) => {
       if (socket.userId) {
-        console.log(`🔌 User disconnected: ${socket.userId}`);
-        await User.findByIdAndUpdate(socket.userId, {
-          isOnline: false,
-          lastSeen: new Date(),
-        });
-
-        // Notify matches
-        const user = await User.findById(socket.userId).select('matches');
-        user?.matches?.forEach(mid => {
-          io.to(mid.toString()).emit('user_online', {
-            userId: socket.userId,
+        console.log(`🔌 User ${socket.userId} disconnected (Reason: ${reason})`);
+        
+        // 30 second grace period for mobile fluctuations (ISP handoffs, brief tunnel, etc)
+        const timeout = setTimeout(async () => {
+          console.log(`⏰ Grace period expired for ${socket.userId}. Marking as offline.`);
+          await User.findByIdAndUpdate(socket.userId, {
             isOnline: false,
             lastSeen: new Date(),
           });
-        });
+
+          // Notify matches
+          const user = await User.findById(socket.userId).select('matches');
+          user?.matches?.forEach(mid => {
+            io.to(mid.toString()).emit('user_online', {
+              userId: socket.userId,
+              isOnline: false,
+              lastSeen: new Date(),
+            });
+          });
+          disconnectHolders.delete(socket.userId);
+        }, 30000);
+
+        disconnectHolders.set(socket.userId, timeout);
       }
     });
   });

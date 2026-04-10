@@ -77,6 +77,7 @@ import DeleteAccountScreen from './src/screens/DeleteAccountScreen';
 import PrivacySafetyScreen from './src/screens/PrivacySafetyScreen';
 import HelpSupportScreen from './src/screens/HelpSupportScreen';
 import AboutScreen from './src/screens/AboutScreen';
+import ProfileViewsScreen from './src/screens/ProfileViewsScreen';
 
 import apiClient from './src/api/client';
 
@@ -335,11 +336,77 @@ function AppNavigator() {
     }
   }, [isAuthenticated, user?._id]);
   
+  // ✅ NEW: Notification Acknowledgement & Startup Sync
+  useEffect(() => {
+    if (!isAuthenticated || !user?._id) return;
+
+    // 1. Listen for background/foreground delivery to send ACK
+    const sub = Notifications.addNotificationReceivedListener(async (notification) => {
+      const data = notification.request.content.data;
+      if (data && (data.id || data.messageId || data._id)) {
+        console.log('[PUSH] Received notification. Sending ACK to server...');
+        try {
+          await apiClient.post('/notifications/ack', {
+            notificationId: data.id,
+            messageId: data.messageId || data._id || data.chatId
+          });
+        } catch (e) {
+          console.warn('[PUSH ACK ERROR]', e);
+        }
+      }
+    });
+
+    // 2. Perform Startup "Delta Sync" for missed messages/notifications
+    const syncMissedData = async () => {
+      try {
+        const lastSync = await AsyncStorage.getItem('last_sync_time');
+        const syncTime = lastSync || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        
+        console.log(`[SYNC] Fetching missed data since ${syncTime}`);
+        const response = await apiClient.get(`/notifications/sync?lastSyncedAt=${syncTime}`);
+        
+        if (response.data.messages && response.data.messages.length > 0) {
+          console.log(`[SYNC] Recovered ${response.data.messages.length} missed messages`);
+          response.data.messages.forEach((msg: any) => {
+             // Use unified upsert logic
+             const isGroupMessage = !!msg.trip || msg.chatType === 'group' || !!msg.tripId;
+             if (isGroupMessage) {
+               dispatch(upsertTripMessage({ message: msg, currentUserId: user._id }));
+             } else {
+               dispatch(upsertMessage({ message: msg, currentUserId: user._id }));
+             }
+          });
+        }
+
+        if (response.data.notifications && response.data.notifications.length > 0) {
+          console.log(`[SYNC] Recovered ${response.data.notifications.length} missed notifications`);
+          response.data.notifications.forEach((note: any) => {
+            dispatch(addNotification(note));
+          });
+        }
+
+        await AsyncStorage.setItem('last_sync_time', response.data.serverTime || new Date().toISOString());
+      } catch (e) {
+        console.warn('[SYNC ERROR]', e);
+      }
+    };
+
+    syncMissedData();
+    return () => sub.remove();
+  }, [isAuthenticated, user?._id]);
+  
   // Handle Foregrounding (App reopen/resume)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active' && isAuthenticated && user?._id) {
-        console.log('[APP] Foregrounded. Refreshing data...');
+        console.log('[APP] Foregrounded. Refreshing data and ensuring socket connectivity...');
+        
+        // Force socket reconnection if disconnected
+        if (socket && !socket.connected) {
+          console.log('[SOCKET] Forcing reconnection on foreground transition');
+          socket.connect();
+        }
+
         dispatch(fetchNotifications());
         // Fetch updated matches to get accurate chatsWithUnread from DB
         Promise.all([
@@ -621,6 +688,7 @@ function AppNavigator() {
             <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="About" component={AboutScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ProfileViews" component={ProfileViewsScreen} options={{ animation: 'slide_from_right' }} />
           </>
         )}
 

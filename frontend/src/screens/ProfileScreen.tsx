@@ -255,10 +255,17 @@ export default function ProfileScreen() {
 
         <View style={styles.statDivider} />
 
-        <View style={styles.stat}>
-          <Text style={styles.statNumber}>{user?.countriesVisited?.length || 0}</Text>
-          <Text style={styles.statLabel}>Countries</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.stat}
+          onPress={() => navigation.navigate('ProfileViews')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.statNumber, { color: theme.orange }]}>{user?.viewsCount || 0}</Text>
+          <View style={styles.statLabelRow}>
+            <Text style={[styles.statLabel, { color: theme.orange, fontWeight: '700' }]}>Views</Text>
+            <Ionicons name="eye-outline" size={11} color={theme.orange} />
+          </View>
+        </TouchableOpacity>
       </View>
       
       {/* Content */}

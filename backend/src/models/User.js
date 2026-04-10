@@ -51,7 +51,7 @@ const userSchema = new mongoose.Schema({
   lastVisitedPlace: { type: String, default: '' },
   countriesVisited: [{ type: String }],
   dreamDestination: { type: String, default: '' },
-  maxDiscoveryDistance: { type: Number, default: 50, min: 10, max: 100 }, // km
+  maxDiscoveryDistance: { type: Number, default: 200, min: 10, max: 500 }, // km
 
   // Travel Plan
   origin: {
@@ -148,7 +148,12 @@ const userSchema = new mongoose.Schema({
   deletionScheduledAt: { type: Date },
 
   // Push notifications
-  pushToken: String,
+  devices: [{
+    token: { type: String, required: true },
+    platform: { type: String, enum: ['ios', 'android', 'web', 'other'], default: 'other' },
+    deviceId: String,
+    lastUsed: { type: Date, default: Date.now }
+  }],
 
   // Membership
   memberStatus: {

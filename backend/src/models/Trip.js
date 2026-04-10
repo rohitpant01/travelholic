@@ -141,6 +141,21 @@ const tripMessageSchema = new mongoose.Schema({
   }],
   deliveredTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  status: {
+    type: String,
+    enum: ['pending', 'sent', 'delivered', 'read'],
+    default: 'pending',
+    index: true,
+  },
+  priority: {
+    type: String,
+    enum: ['normal', 'high'],
+    default: 'high',
+  },
+  deliveryAttempts: {
+    type: Number,
+    default: 0,
+  },
   edited: { type: Boolean, default: false },
   expenseData: {
     title: String,

@@ -69,8 +69,81 @@ const clearNotifications = async (req, res) => {
   }
 };
 
+// @desc    Acknowledge notification/message delivery (via client)
+// @route   POST /api/notifications/ack
+// @access  Private
+const acknowledgeDelivery = async (req, res) => {
+  try {
+    const { notificationId, messageId } = req.body;
+    const { markDelivered } = require('../utils/notificationService');
+
+    if (notificationId) {
+      await markDelivered(notificationId);
+      console.log(`[ACK] Notification ${notificationId} marked delivered`);
+    }
+
+    if (messageId) {
+      const { Match, Message } = require('../models/Match');
+      const msg = await Message.findByIdAndUpdate(messageId, { 
+        status: 'delivered', 
+        deliveredAt: new Date(),
+        $addToSet: { deliveredTo: req.user._id } 
+      }, { new: true });
+
+      if (msg) {
+        // Broadcast "delivered" status back to sender via socket
+        const { getIO } = require('../socket/socketHandler');
+        const io = getIO();
+        if (io) {
+          io.to(msg.sender.toString()).emit('message_status_update', {
+            messageId,
+            status: 'delivered',
+            deliveredTo: msg.deliveredTo
+          });
+        }
+      }
+      console.log(`[ACK] Message ${messageId} marked delivered`);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Sync missed notifications/messages (Startup backup)
+// @route   GET /api/notifications/sync
+// @access  Private
+const syncNotifications = async (req, res) => {
+  try {
+    const { lastSyncedAt } = req.query;
+    if (!lastSyncedAt) return res.status(400).json({ error: 'lastSyncedAt required' });
+
+    const { getMissedNotifications } = require('../utils/notificationService');
+    const missed = await getMissedNotifications(req.user._id, lastSyncedAt);
+
+    // Also fetch missed chat messages
+    const { Message } = require('../models/Match');
+    const missedMessages = await Message.find({
+      receiver: req.user._id,
+      createdAt: { $gt: new Date(lastSyncedAt) },
+      status: { $ne: 'delivered' }
+    }).populate('sender', 'firstName photos');
+
+    res.json({ 
+      notifications: missed, 
+      messages: missedMessages,
+      serverTime: new Date()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getNotifications,
   markAllAsRead,
   clearNotifications,
+  acknowledgeDelivery,
+  syncNotifications
 };

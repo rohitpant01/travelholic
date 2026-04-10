@@ -24,7 +24,7 @@ const initialState: TripState = {
   tripMessages: {},
   filters: { budget: null, travelType: null, tags: [], mode: null },
   loading: false,
-  activeTab: 'explore',
+  activeTab: 'aiPlanner',
 };
 
 const tripSlice = createSlice({

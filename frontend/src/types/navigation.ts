@@ -44,4 +44,5 @@ export type RootStackParamList = {
   LyraRedirect: undefined;
   TripHistory: undefined;
   DeleteAccount: undefined;
+  ProfileViews: undefined;
 };

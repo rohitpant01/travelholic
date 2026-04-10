@@ -14,7 +14,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['like', 'comment', 'match', 'trip_join_request', 'trip_accepted', 'trip_member_joined', 'nearby_travelers', 'trending_trip'],
+    enum: ['like', 'comment', 'match', 'trip_join_request', 'trip_accepted', 'trip_member_joined', 'nearby_travelers', 'trending_trip', 'message'],
     required: true,
   },
   title: String,
@@ -22,6 +22,22 @@ const notificationSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  status: {
+    type: String,
+    enum: ['pending', 'sent', 'delivered', 'failed'],
+    default: 'pending',
+    index: true,
+  },
+  priority: {
+    type: String,
+    enum: ['normal', 'high'],
+    default: 'normal',
+  },
+  deliveryAttempts: {
+    type: Number,
+    default: 0,
+  },
+  deliveredAt: Date,
   data: {
     postId: mongoose.Schema.Types.ObjectId,
     tripId: mongoose.Schema.Types.ObjectId,
@@ -31,9 +47,17 @@ const notificationSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  idempotencyKey: {
+    type: String,
+    unique: true,
+    sparse: true,
+    index: true
+  },
+  sentAt: Date,
   createdAt: {
     type: Date,
     default: Date.now,
+    index: true,
   },
 });
 

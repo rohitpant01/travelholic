@@ -32,68 +32,27 @@ const handleMatch = async (userId1, userId2, isSuperLike = false) => {
     })
   ]);
 
-  // Notify both users via socket
-  try {
-    const { getIO } = require('../socket/socketHandler');
-    const io = getIO();
-    const [user1, user2] = await Promise.all([
-      User.findById(userId1).select('firstName photos'),
-      User.findById(userId2).select('firstName photos')
-    ]);
-
-    const user1Photo = user1.photos?.find(p => p.isProfile)?.url || user1.photos?.[0]?.url;
-    const user2Photo = user2.photos?.find(p => p.isProfile)?.url || user2.photos?.[0]?.url;
-
-    io.to(userId1.toString()).emit('new_match', {
-      matchId: match._id,
-      matchedUser: { _id: user2._id, firstName: user2.firstName, profilePhoto: user2Photo },
-    });
-
-    io.to(userId2.toString()).emit('new_match', {
-      matchId: match._id,
-      matchedUser: { _id: user1._id, firstName: user1.firstName, profilePhoto: user1Photo },
-    });
-    // Check if the other user is online before sending push
-    const otherUserSocketRooms = io.sockets.adapter.rooms.get(userId2.toString());
-    const isOtherOnline = otherUserSocketRooms && otherUserSocketRooms.size > 0;
-
-    if (!isOtherOnline && user2.pushToken) {
-      const { sendPushNotification } = require('../utils/pushNotification');
-      sendPushNotification(
-        user2.pushToken,
-        "It's a Match! 🎉",
-        `You and ${user1.firstName} matched!`,
-        { 
-          type: 'match', 
-          matchId: match._id,
-          userId: userId1.toString(),
-          fromUserName: user1.firstName,
-          fromUserPhoto: user1Photo
-        }
-      );
-    }
-
-    // ✅ PERSISTENT NOTIFICATION: Create for both
-    await Notification.insertMany([
-      {
+    // ✅ NEW: USE CENTRALIZED NOTIFICATION HUB
+    const { createNotification } = require('../utils/notificationService');
+    
+    await Promise.all([
+      createNotification({
         recipient: userId1,
         sender: userId2,
         type: 'match',
-        message: `It's a match! You and ${user2.firstName} matched! 🎉`,
+        title: "It's a Match! 🎉",
+        message: `You and ${user2.firstName} matched! Start chatting!`,
         data: { matchId: match._id, userId: userId2 }
-      },
-      {
+      }),
+      createNotification({
         recipient: userId2,
         sender: userId1,
         type: 'match',
-        message: `It's a match! You and ${user1.firstName} matched! 🎉`,
+        title: "It's a Match! 🎉",
+        message: `You and ${user1.firstName} matched! Start chatting!`,
         data: { matchId: match._id, userId: userId1 }
-      }
+      })
     ]);
-
-    // Emit live unread count update
-    io.to(userId1.toString()).emit('new_notification', { unreadCount: await Notification.countDocuments({ recipient: userId1, isRead: false }) });
-    io.to(userId2.toString()).emit('new_notification', { unreadCount: await Notification.countDocuments({ recipient: userId2, isRead: false }) });
 
   } catch (err) {
     console.error('[SOCKET MATCH NOTIFY ERROR]', err);
@@ -160,16 +119,20 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 const getDiscoverProfiles = async (req, res) => {
   try {
     const currentUser = await User.findById(req.user._id);
-    const maxDistance = currentUser.maxDiscoveryDistance || 50; // km
+    const maxDistance = currentUser.maxDiscoveryDistance || 200; // km
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
     let reqLat = parseFloat(req.query.lat);
     let reqLng = parseFloat(req.query.lng);
+    const searchCity = req.query.searchCity; // String city search
+    const isTravelBuddySearch = req.query.travelBuddy === 'true' || !!searchCity;
 
     const isMapMode = req.query.mode === 'map';
     const swipedUsers = await Swipe.find({ swiper: req.user._id }).select('swiped');
     const swipedIds = swipedUsers.map(s => s.swiped);
 
-    // 📍 STRATEGY: In map mode, we want to see EVERYONE nearly, even matched/swiped users,
-    // to make the community feel alive. We only exclude self and blocked.
     const excludeIds = isMapMode ? [
       req.user._id,
       ...(currentUser.blockedUsers || []),
@@ -181,35 +144,63 @@ const getDiscoverProfiles = async (req, res) => {
     ];
 
     // Determine center coordinates
-    const validReqCoords = !isNaN(reqLat) && !isNaN(reqLng);
-    const activeLng = validReqCoords ? reqLng : currentUser.location?.coordinates?.[0];
-    const activeLat = validReqCoords ? reqLat : currentUser.location?.coordinates?.[1];
+    const validReqCoords = !isNaN(reqLat) && !isNaN(reqLng) && reqLat !== 0;
+    
+    // 📍 FALLBACK LOGIC: If no GPS, try user's saved location coordinates
+    let activeLng = validReqCoords ? reqLng : currentUser.location?.coordinates?.[0];
+    let activeLat = validReqCoords ? reqLat : currentUser.location?.coordinates?.[1];
 
-    if (!activeLng || !activeLat || activeLng === 0) {
-      return res.json({ profiles: [], count: 0, message: 'Location required' });
-    }
+    // If still no coordinates, we can't use $geoNear, we use $match
+    const useGeo = !!(activeLng && activeLat && activeLng !== 0);
 
-    // 📍 RADIUS: Relax for map mode to show more people (up to 100km)
-    const discoveryRadiusMet = (isMapMode ? Math.max(maxDistance, 100) : maxDistance) * 1000;
+    const pipeline = [];
 
-    const pipeline = [
-      {
+    // 1. Initial Match (Common across both branches)
+    const baseMatch = {
+      _id: { $nin: excludeIds },
+      isActive: { $ne: false },
+      isDeleted: { $ne: true },
+      visibilityStatus: { $ne: 'ghost' },
+      ...(isMapMode ? {} : { 'photos.0': { $exists: true } }),
+    };
+
+    // 2. Location/Search Core
+    if (useGeo && !searchCity) {
+      // PROXIMITY MODE
+      const discoveryRadiusMet = (isMapMode ? Math.max(maxDistance, 100) : maxDistance) * 1000;
+      pipeline.push({
         $geoNear: {
           near: { type: 'Point', coordinates: [activeLng, activeLat] },
           distanceField: 'distanceMet',
           maxDistance: discoveryRadiusMet,
-          query: {
-            _id: { $nin: excludeIds },
-            isActive: { $ne: false },
-            isDeleted: { $ne: true },
-            visibilityStatus: { $ne: 'ghost' },
-            // In map mode, allow users with NO photos to appear (with placeholder)
-            ...(isMapMode ? {} : { 'photos.0': { $exists: true } }),
-          },
+          query: baseMatch,
           spherical: true,
         },
-      },
-      { $limit: 100 },
+      });
+    } else {
+      // SEARCH MODE (Travel Buddies) or FALLBACK
+      const searchMatch = { ...baseMatch };
+      
+      if (searchCity) {
+        // If searching for travel buddies, match destination city
+        searchMatch.$or = [
+            { 'destination.city': { $regex: searchCity, $options: 'i' } },
+            { 'city': { $regex: searchCity, $options: 'i' } }
+        ];
+      } else if (currentUser.city) {
+        // Fallback to hometown city if no GPS
+        searchMatch.city = { $regex: currentUser.city, $options: 'i' };
+      }
+
+      pipeline.push({ $match: searchMatch });
+      pipeline.push({ $addFields: { distanceMet: { $literal: 0 } } }); // Dummy for consistency
+    }
+
+    // 3. Sorting & Pagination
+    pipeline.push(
+      { $sort: { lastSeen: -1, _id: 1 } }, // Stable sort prevents duplicates in pagination
+      { $skip: skip },
+      { $limit: limit },
       {
         $project: {
           firstName: 1, lastName: 1, username: 1, age: 1, gender: 1,
@@ -219,10 +210,11 @@ const getDiscoverProfiles = async (req, res) => {
           origin: 1, destination: 1, travelDate: 1,
           city: 1, country: 1,
         },
-      },
-    ];
+      }
+    );
 
     const profiles = await User.aggregate(pipeline);
+    const totalCount = await User.countDocuments(pipeline[0]?.$geoNear ? pipeline[0].$geoNear.query : (pipeline[0]?.$match || {}));
 
     const enriched = profiles.map(p => {
       const matchScore = calculateMatchingScore(p, currentUser);
@@ -241,6 +233,14 @@ const getDiscoverProfiles = async (req, res) => {
     } else {
       enriched.sort((a, b) => b.matchScore - a.matchScore);
     }
+
+    res.json({ 
+        profiles: enriched, 
+        count: enriched.length, 
+        total: totalCount,
+        page,
+        hasMore: enriched.length === limit 
+    });
 
     // 📍 NEARBY TRAVELERS NOTIFICATION (Engagement)
     // Only notify if we found a good number of users
@@ -364,51 +364,19 @@ const likeUser = async (req, res) => {
       });
     }
 
-    // Not a match — notify target they received a like via socket
+    // ✅ NEW: USE CENTRALIZED NOTIFICATION HUB
     try {
-      const { getIO } = require('../socket/socketHandler');
-      const io = getIO();
-      const profilePhoto = currentUser.photos?.find(p => p.isProfile)?.url || currentUser.photos?.[0]?.url;
-      io.to(targetUserId.toString()).emit('like_received', {
-        fromUserId: currentUserId.toString(),
-        fromUserName: currentUser.firstName,
-        fromUserPhoto: profilePhoto,
-        message: `${currentUser.firstName} liked your profile! 👍`,
-      });
-
-      // Send Push Notification if target is offline
-      const targetSocketRooms = io.sockets.adapter.rooms.get(targetUserId.toString());
-      const isTargetOnline = targetSocketRooms && targetSocketRooms.size > 0;
-      
-      if (!isTargetOnline && targetUser && targetUser.pushToken) {
-        const { sendPushNotification } = require('../utils/pushNotification');
-        sendPushNotification(
-          targetUser.pushToken,
-          "New Like! 👍",
-          `${currentUser.firstName} liked your profile!`,
-          { 
-            type: 'like', 
-            fromUserId: currentUserId.toString(),
-            fromUserName: currentUser.firstName,
-            fromUserPhoto: profilePhoto
-          }
-        );
-      }
-
-      // ✅ PERSISTENT NOTIFICATION: Create in DB
-      await Notification.create({
+      const { createNotification } = require('../utils/notificationService');
+      await createNotification({
         recipient: targetUserId,
         sender: currentUserId,
         type: 'like',
-        message: `${currentUser.firstName} liked your profile! 👍`
+        title: 'New Like! 👍',
+        message: `${currentUser.firstName} liked your profile!`,
+        data: { fromUserId: currentUserId.toString() }
       });
-
-      // Emit live unread count update
-      const unreadCount = await Notification.countDocuments({ recipient: targetUserId, isRead: false });
-      io.to(targetUserId.toString()).emit('new_notification', { unreadCount });
-
     } catch (socketErr) {
-      // Socket may not be active, non-fatal
+      console.error('[LIKE NOTIFICATION HUB ERROR]', socketErr);
     }
 
     // ✅ ADDED: Send final response to client so app doesn't hang!
@@ -506,41 +474,19 @@ const superLikeUser = async (req, res) => {
       });
     }
 
-    // Not a match — notify target via socket
+    // ✅ NEW: USE CENTRALIZED NOTIFICATION HUB
     try {
-      const { getIO } = require('../socket/socketHandler');
-      const io = getIO();
-      const profilePhoto = currentUser.photos?.find(p => p.isProfile)?.url || currentUser.photos?.[0]?.url;
-      
-      io.to(targetUserId.toString()).emit('superlike_received', {
-        fromUserId: currentUserId.toString(),
-        fromUserName: currentUser.firstName,
-        fromUserPhoto: profilePhoto,
-        message: `⭐ ${currentUser.firstName} SUPER LIKED you!`,
-      });
-
-      // Persistent Notification
-      await Notification.create({
+      const { createNotification } = require('../utils/notificationService');
+      await createNotification({
         recipient: targetUserId,
         sender: currentUserId,
-        type: 'superlike', 
+        type: 'superlike',
         title: 'New Super Like! ⭐',
         message: `${currentUser.firstName} super liked you!`,
         data: { matchId: null }
       });
-
-      // Push Notification
-      if (targetUser && targetUser.pushToken) {
-        const { sendPushNotification } = require('../utils/pushNotification');
-        sendPushNotification(
-          targetUser.pushToken,
-          "New Super Like! ⭐",
-          `${currentUser.firstName} super liked you!`,
-          { type: 'superlike', fromUserId: currentUserId.toString() }
-        );
-      }
     } catch (e) {
-      console.error('[SUPERLIKE NOTIFICATION ERROR]', e);
+      console.error('[SUPERLIKE NOTIFICATION HUB ERROR]', e);
     }
 
     res.json({ success: true, message: 'Super Liked! ⭐' });

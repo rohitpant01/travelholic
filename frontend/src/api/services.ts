@@ -55,6 +55,9 @@ export const userAPI = {
   // ✅ NEW: Who liked me — returns { likedBy: User[], totalCount: number }
   whoLikedMe: () => apiClient.get('/user/who-liked-me'),
 
+  // ✅ NEW: Who viewed my profile
+  getProfileViews: () => apiClient.get('/user/views'),
+
   // ✅ NEW: Like back a user who liked you
   likeBack: (targetUserId: string) => apiClient.post('/discover/like', { targetUserId }),
 
@@ -72,15 +75,10 @@ export const userAPI = {
 // DISCOVER API
 // ============================================================
 export const discoverAPI = {
-  getProfiles: (lat?: number, lng?: number, mode?: string, sortBy?: string) => {
-    let params = lat && lng ? `?lat=${lat}&lng=${lng}` : '';
-    if (mode) {
-      params += params ? `&mode=${mode}` : `?mode=${mode}`;
-    }
-    if (sortBy) {
-      params += params ? `&sortBy=${sortBy}` : `?sortBy=${sortBy}`;
-    }
-    return apiClient.get(`/nearby-users${params}`);
+  getProfiles: (lat?: number, lng?: number, mode?: string, sortBy?: string, page = 1, limit = 20, searchCity?: string) => {
+    return apiClient.get('/nearby-users', {
+      params: { lat, lng, mode, sortBy, page, limit, searchCity, travelBuddy: !!searchCity }
+    });
   },
   like: (targetUserId: string) => apiClient.post('/discover/like', { targetUserId }),
   skip: (targetUserId: string) => apiClient.post('/discover/skip', { targetUserId }),

@@ -669,19 +669,19 @@ export default function TripsScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'myTrips' && styles.tabActive]}
-            onPress={() => dispatch(setActiveTab('myTrips'))}
-          >
-            <Text style={[styles.tabText, activeTab === 'myTrips' && styles.tabTextActive]} numberOfLines={1}>
-              🎒 My Trips
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={[styles.tab, activeTab === 'aiPlanner' && styles.tabActive]}
             onPress={() => dispatch(setActiveTab('aiPlanner'))}
           >
             <Text style={[styles.tabText, activeTab === 'aiPlanner' && styles.tabTextActive]} numberOfLines={1}>
               🪄 Trip Wizard
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'myTrips' && styles.tabActive]}
+            onPress={() => dispatch(setActiveTab('myTrips'))}
+          >
+            <Text style={[styles.tabText, activeTab === 'myTrips' && styles.tabTextActive]} numberOfLines={1}>
+              🎒 My Trips
             </Text>
           </TouchableOpacity>
         </ScrollView>

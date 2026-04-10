@@ -41,6 +41,9 @@ export default function DiscoverScreen() {
   // Discovery State
   const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
   // UI State
   const [activeTab, setActiveTab] = useState<'discover' | 'feed'>('feed');
@@ -50,7 +53,7 @@ export default function DiscoverScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   
   // Filter Settings
-  const [maxDistance, setMaxDistance] = useState(user?.maxDiscoveryDistance || 50);
+  const [maxDistance, setMaxDistance] = useState(user?.maxDiscoveryDistance || 200);
   const [ghostMode, setGhostMode] = useState(user?.visibilityStatus === 'ghost');
   const [travelModeCity, setTravelModeCity] = useState('');
   const [manualCoords, setManualCoords] = useState<{ lat: number, lng: number } | null>(null);
@@ -77,11 +80,21 @@ export default function DiscoverScreen() {
     }
   }, [user?.isEmailVerified, user?.registrationStep]);
 
-  const fetchProfiles = async () => {
-    setLoading(true);
+  const fetchProfiles = async (reset = false) => {
+    if (loading && !reset) return;
+    if (!reset && !hasMore) return;
+
+    if (reset) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+
     try {
+      const targetPage = reset ? 1 : page;
       let lat: number | undefined;
       let lng: number | undefined;
+
       if (manualCoords) {
         lat = manualCoords.lat;
         lng = manualCoords.lng;
@@ -100,25 +113,41 @@ export default function DiscoverScreen() {
         }
       }
 
+      // 📍 Call API with new pagination and search filters
       const res = await discoverAPI.getProfiles(
         lat, 
         lng, 
         'default', 
-        viewMode === 'list' ? 'distance' : undefined
+        viewMode === 'list' ? 'distance' : undefined,
+        targetPage,
+        20,
+        travelModeCity // This triggers "Travel Buddy" mode on backend
       );
-      setProfiles(res.data.profiles || []);
+
+      const newProfiles = res.data.profiles || [];
+      
+      setProfiles(prev => {
+        const combined = reset ? newProfiles : [...prev, ...newProfiles];
+        // 🛡️ DEDUPLICATION: Strict unique check by ID
+        const unique = Array.from(new Map(combined.map(p => [p._id, p])).values());
+        return unique;
+      });
+
+      setPage(targetPage + 1);
+      setHasMore(res.data.hasMore);
     } catch (e) {
       console.error('[FETCH PROFILES ERROR]', e);
-      Alert.alert('Error', 'Could not load profiles');
+      if (reset) Alert.alert('Error', 'Could not load profiles');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchProfiles();
+    fetchProfiles(true); // Reset when view mode changes
     dispatch(fetchNotifications());
-  }, [viewMode]);
+  }, [viewMode, manualCoords]); // Also reset when coordinates change
 
   const handleLike = async (index: number | string) => {
     const profile = typeof index === 'number' ? profiles[index] : profiles.find(p => p._id === index);
@@ -327,8 +356,10 @@ export default function DiscoverScreen() {
               <NearbyTravelersView 
                 profiles={profiles}
                 loading={loading}
-                refreshing={loading}
-                onRefresh={fetchProfiles}
+                refreshing={refreshing}
+                onRefresh={() => fetchProfiles(true)}
+                onLoadMore={() => fetchProfiles(false)}
+                hasMore={hasMore}
                 ghostMode={ghostMode}
                 onProfilePress={(p: any) => navigation.navigate('UserDetail', { userId: p._id, profile: p })}
                 onLike={(p: any) => handleLike(p._id)}
@@ -396,7 +427,7 @@ export default function DiscoverScreen() {
               <Slider
                 style={{ width: '100%', height: 40 }}
                 minimumValue={10}
-                maximumValue={100}
+                maximumValue={500}
                 step={5}
                 value={maxDistance}
                 onValueChange={setMaxDistance}
@@ -422,13 +453,21 @@ export default function DiscoverScreen() {
                       return;
                     }
                     try {
+                      // 📍 Primary: Use custom geocoding for distance accuracy
                       const geo = await Location.geocodeAsync(travelModeCity);
                       if (geo.length > 0) {
                         setManualCoords({ lat: geo[0].latitude, lng: geo[0].longitude });
-                        Alert.alert('Travel Mode Active', `Showing travelers near ${travelModeCity}`);
+                        Alert.alert('Travel Buddy Mode', `Finding travelers interested in ${travelModeCity}`);
+                      } else {
+                        // Fallback: Just search by string on backend
+                        setManualCoords({ lat: 1, lng: 1 }); // Trigger search mode
+                        fetchProfiles(true);
                       }
                     } catch (e) {
-                      Alert.alert('Error', 'City not found');
+                      // Retry pattern or name-based search fallback
+                      console.warn('Geocoding failed, falling back to name search');
+                      setManualCoords({ lat: 1, lng: 1 });
+                      fetchProfiles(true);
                     }
                   }}
                 />
@@ -462,7 +501,7 @@ export default function DiscoverScreen() {
               style={styles.applyBtn} 
               onPress={() => {
                 setShowFilterModal(false);
-                fetchProfiles();
+                fetchProfiles(true);
               }}
             >
               <Text style={styles.applyBtnText}>Apply Settings</Text>

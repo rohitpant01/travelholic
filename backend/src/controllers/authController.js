@@ -3,6 +3,7 @@ const { generateToken } = require('../middleware/auth');
 const { sendOTP, verifyOTP } = require('../utils/otp');
 const { sendEmailOTP } = require('../utils/email');
 const { OAuth2Client } = require('google-auth-library');
+const { updateDeviceToken } = require('../utils/deviceUtility'); // Add this
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -61,6 +62,13 @@ const register = async (req, res) => {
     console.log(`[DEBUG] Final userPayload to be created:`, JSON.stringify(userPayload, null, 2));
 
     const user = await User.create(userPayload);
+    
+    // Multi-device support: Save token if provided
+    if (req.body.pushToken) {
+      updateDeviceToken(user, req.body.pushToken, req.body.platform, req.body.deviceId);
+      await user.save({ validateBeforeSave: false });
+    }
+
     console.log(`[DEBUG] Created user from DB: id=${user._id}, isEmailVerified=${user.isEmailVerified}, step=${user.registrationStep}`);
 
     // Send Email OTP only for non-Google users
@@ -131,6 +139,11 @@ const login = async (req, res) => {
     if (!isMatch) {
       console.log(`[AUTH] Login failed: Incorrect password for ${emailOrPhone}`);
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Update Devices/Tokens (Multi-device support)
+    if (req.body.pushToken) {
+      updateDeviceToken(user, req.body.pushToken, req.body.platform, req.body.deviceId);
     }
 
     // Update last seen
@@ -350,7 +363,9 @@ const googleLogin = async (req, res) => {
       console.log(`[AUTH] Google login: auto-verifying email for ${user.email}`);
       user.isEmailVerified = true;
       user.isPhoneVerified = true; // Phone OTP disabled
-      if (user.registrationStep < 4) user.registrationStep = 4;
+    // Multi-device: Update token
+    if (req.body.pushToken) {
+      updateDeviceToken(user, req.body.pushToken, req.body.platform, req.body.deviceId);
       await user.save({ validateBeforeSave: false });
     }
 

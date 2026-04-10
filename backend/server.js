@@ -10,6 +10,7 @@ const path = require("path");
 
 const connectDB = require("./src/config/db");
 const { initSocket } = require("./src/socket/socketHandler");
+const { initNotificationWorker } = require("./src/utils/queueService");
 
 // Routes
 const authRoutes = require("./src/routes/auth");
@@ -35,8 +36,27 @@ const server = http.createServer(app);
 // Connect MongoDB
 connectDB();
 
-// Initialize socket
-initSocket(server);
+// Initialize Background Worker
+initNotificationWorker();
+
+// --- Rate Limiting Configuration ---
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: "Too many requests, please try again later." }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20, // 20 attempts per hour
+  message: { error: "Too many login/register attempts. Please try again after an hour." }
+});
+
+const chatLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 40, // 40 messages per minute
+  message: { error: "You are sending messages too fast. Slow down!" }
+});
 
 // ── Global Request Logger (ABSOLUTE TOP) ──────────────────────
 app.use((req, res, next) => {
@@ -119,21 +139,21 @@ const webBuildPath = path.join(__dirname, '../frontend/web-build');
 app.use(express.static(webBuildPath));
 
 // Other Routes
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
 app.post("/api/update-location", require("./src/middleware/auth").protect, require("./src/controllers/userController").updateLocation);
 app.get("/api/nearby-users", require("./src/middleware/auth").protect, require("./src/controllers/discoverController").getDiscoverProfiles);
-app.use("/api/user", userRoutes);
-app.use("/api/discover", discoverRoutes);
-app.use("/api/matches", matchRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/trips", tripRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use("/api/ai", aiRoutes);
+app.use("/api/user", apiLimiter, userRoutes);
+app.use("/api/discover", apiLimiter, discoverRoutes);
+app.use("/api/matches", apiLimiter, matchRoutes);
+app.use("/api/chat", chatLimiter, chatRoutes);
+app.use("/api/trips", apiLimiter, tripRoutes);
+app.use("/api/notifications", apiLimiter, notificationRoutes);
+app.use("/api/ai", apiLimiter, aiRoutes);
 app.use("/api/waitlist", waitlistRoutes);
-app.use("/api/feed", feedRoutes);
-app.use("/api/stories", storyRoutes);
-app.use("/api/comments", commentRoutes);
-app.use("/api/images", imageRoutes);
+app.use("/api/feed", apiLimiter, feedRoutes);
+app.use("/api/stories", apiLimiter, storyRoutes);
+app.use("/api/comments", chatLimiter, commentRoutes);
+app.use("/api/images", apiLimiter, imageRoutes);
 
 
 // 🛡️ CATCH-ALL ROUTE (MUST BE LAST)

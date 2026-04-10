@@ -34,6 +34,8 @@ interface NearbyTravelersViewProps {
   onProfilePress: (profile: Profile) => void;
   onLike: (profile: Profile) => void;
   onSuperLike: (profile: Profile) => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
   ghostMode: boolean;
 }
 
@@ -45,6 +47,8 @@ const NearbyTravelersView = ({
   onProfilePress,
   onLike,
   onSuperLike,
+  onLoadMore,
+  hasMore,
   ghostMode,
 }: NearbyTravelersViewProps) => {
   const theme = useAppTheme();
@@ -56,12 +60,12 @@ const NearbyTravelersView = ({
       data: profiles.filter((p) => p.distanceKm < 10),
     },
     {
-      title: 'A Bit Further (10-50km)',
-      data: profiles.filter((p) => p.distanceKm >= 10 && p.distanceKm <= 50),
+      title: 'A Bit Further (10-100km)',
+      data: profiles.filter((p) => p.distanceKm >= 10 && p.distanceKm <= 100),
     },
     {
-      title: 'Global Explorers (> 50km)',
-      data: profiles.filter((p) => p.distanceKm > 50),
+      title: 'Global Explorers (> 100km)',
+      data: profiles.filter((p) => p.distanceKm > 100),
     },
   ].filter((s) => s.data.length > 0);
 
@@ -162,6 +166,13 @@ const NearbyTravelersView = ({
         contentContainerStyle={styles.listContent}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onEndReachedThreshold={0.5}
+        onEndReached={() => {
+          if (hasMore && onLoadMore) onLoadMore();
+        }}
+        ListFooterComponent={hasMore ? (
+          <ActivityIndicator size="small" color={theme.teal} style={{ marginVertical: 20 }} />
+        ) : null}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconContainer}>

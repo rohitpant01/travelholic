@@ -2,6 +2,9 @@ const User = require('../models/User');
 const { Match } = require('../models/Match');
 const { cloudinary, deleteImage } = require('../config/cloudinary');
 const { compareFaces } = require('../utils/faceVerification');
+const { updateDeviceToken } = require('../utils/deviceUtility');
+const ProfileView = require('../models/ProfileView');
+const { createNotification } = require('../utils/notificationService');
 
 // @desc    Get own profile
 // @route   GET /api/user/profile
@@ -10,7 +13,10 @@ const getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('-password -otp -otpExpiry');
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user });
+    
+    const viewsCount = await ProfileView.countDocuments({ viewee: req.user._id });
+    
+    res.json({ user: { ...user.toObject(), viewsCount } });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -71,9 +77,39 @@ const getUserById = async (req, res) => {
     userObj.tripsCompleted = targetUser.completedTrips?.length || 0;
     userObj.memberStatus = targetUser.memberStatus || 'Free';
     
-    // Cleanup internal arrays
     delete userObj.followers;
     delete userObj.following;
+
+    // 👁️ Record Profile View & Notify (Don't await to avoid slowing down response)
+    if (req.user?._id && req.user._id.toString() !== targetUser._id.toString()) {
+      (async () => {
+        try {
+          // 1. Check if viewed in the last 12 hours to avoid spamming
+          const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+          const recentView = await ProfileView.findOne({
+            viewer: req.user._id,
+            viewee: targetUser._id,
+            viewedAt: { $gte: twelveHoursAgo }
+          });
+
+          if (!recentView) {
+            await ProfileView.create({ viewer: req.user._id, viewee: targetUser._id });
+            const viewer = await User.findById(req.user._id).select('firstName');
+            
+            await createNotification({
+              recipient: targetUser._id,
+              sender: req.user._id,
+              type: 'match', // Using match visually for now or add 'view'
+              title: 'New Profile Visitor 👀',
+              message: `${viewer.firstName} viewed your profile. Check them out!`,
+              data: { viewerId: req.user._id }
+            });
+          }
+        } catch (err) {
+          console.error('[PROFILE VIEW LOG ERROR]', err);
+        }
+      })();
+    }
 
     res.json({ user: userObj });
   } catch (error) {
@@ -140,6 +176,36 @@ const getWhoLikedMe = async (req, res) => {
     res.json({ likedBy: sanitized, totalCount: sanitized.length });
   } catch (error) {
     console.error('[getWhoLikedMe] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Get profile viewers
+// @route   GET /api/user/views
+// @access  Private
+const getProfileViews = async (req, res) => {
+  try {
+    const views = await ProfileView.find({ viewee: req.user._id })
+      .populate('viewer', 'firstName lastName photos age city country gender isPhotoVerified isOnline')
+      .sort({ viewedAt: -1 })
+      .limit(50);
+
+    const sanitized = views.filter(v => v.viewer).map(v => ({
+      _id: v.viewer._id,
+      firstName: v.viewer.firstName,
+      lastName: v.viewer.lastName,
+      age: v.viewer.age,
+      city: v.viewer.city,
+      country: v.viewer.country,
+      gender: v.viewer.gender,
+      isPhotoVerified: v.viewer.isPhotoVerified,
+      isOnline: v.viewer.isOnline,
+      viewedAt: v.viewedAt,
+      profilePhoto: v.viewer.photos?.find(p => p.isProfile)?.url || v.viewer.photos?.[0]?.url || null
+    }));
+
+    res.json({ views: sanitized, count: sanitized.length });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
@@ -223,6 +289,12 @@ const updateProfile = async (req, res) => {
       { $set: updates },
       { new: true, runValidators: true }
     ).select('-password -otp -otpExpiry');
+
+    // Multi-device: Handle token update separately (to use the utility)
+    if (req.body.pushToken) {
+      updateDeviceToken(updatedUser, req.body.pushToken, req.body.platform, req.body.deviceId);
+      await updatedUser.save({ validateBeforeSave: false });
+    }
 
     res.json({ message: 'Profile updated', user: updatedUser });
   } catch (error) {
