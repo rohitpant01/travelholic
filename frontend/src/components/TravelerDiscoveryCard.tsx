@@ -38,7 +38,7 @@ interface TravelerDiscoveryCardProps {
   onPressProfile?: (profile: Profile) => void;
 }
 
-export default React.memo(TravelerDiscoveryCard);
+const TravelerDiscoveryCard = ({ profile, onPressProfile }: TravelerDiscoveryCardProps) => {
   const theme = useAppTheme();
   const styles = getStyles(theme);
 
@@ -121,7 +121,9 @@ export default React.memo(TravelerDiscoveryCard);
       </View>
     </View>
   );
-}
+};
+
+export default React.memo(TravelerDiscoveryCard);
 
 const getStyles = (theme: any) => StyleSheet.create({
   card: {

@@ -19,8 +19,7 @@ interface Props {
   onPressLikes?: (postId: string) => void;
   onPressEdit?: (post: Post) => void;
 }
-
-export default function TravelPostCard({ post, onPressProfile, onPressComment, onPressLikes, onPressEdit }: Props) {
+const TravelPostCard = ({ post, onPressProfile, onPressComment, onPressLikes, onPressEdit }: Props) => {
   const theme = useAppTheme();
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<any>();
@@ -254,6 +253,8 @@ export default function TravelPostCard({ post, onPressProfile, onPressComment, o
       />
     </View>
   );
+}
+
 export default React.memo(TravelPostCard);
 
 const getStyles = (theme: any) => StyleSheet.create({

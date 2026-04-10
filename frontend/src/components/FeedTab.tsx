@@ -49,11 +49,11 @@ export default function FeedTab() {
     dispatch(fetchFeed({ mode, page: 1 }));
   };
 
-  const onLoadMore = () => {
-    if (!loading && hasMore) {
+  const onLoadMore = useCallback(() => {
+    if (!loading && hasMore && posts.length > 0) {
       dispatch(fetchFeed({ mode, page: page + 1 }));
     }
-  };
+  }, [loading, hasMore, mode, page, dispatch, posts.length]);
 
   const handleSubTabChange = (newMode: any) => {
     dispatch(setFeedMode(newMode));
@@ -236,7 +236,7 @@ export default function FeedTab() {
           <RefreshControl refreshing={loading && page === 1} onRefresh={onRefresh} tintColor={theme.teal} />
         }
         onEndReached={onLoadMore}
-        onEndReachedThreshold={0.5}
+        onEndReachedThreshold={0.2}
         contentContainerStyle={styles.listContent}
         maxToRenderPerBatch={8}
         windowSize={5}
