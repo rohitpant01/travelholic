@@ -153,10 +153,16 @@ const MessageItem = React.memo(({
           <View style={styles.messageAvatarSlot}>
             {showAvatar && (
               <TouchableOpacity onPress={() => navigation.navigate('UserDetail', { userId: item.sender?._id || item.sender })}>
-                <Image
-                  source={senderPhoto ? { uri: senderPhoto } : require('../../assets/placeholder.png')}
-                  style={styles.messageAvatar}
-                />
+                {senderPhoto ? (
+                  <Image
+                    source={{ uri: senderPhoto }}
+                    style={styles.messageAvatar}
+                  />
+                ) : (
+                  <View style={[styles.messageAvatar, { backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                    <Ionicons name="person" size={16} color={theme.teal} />
+                  </View>
+                )}
               </TouchableOpacity>
             )}
           </View>

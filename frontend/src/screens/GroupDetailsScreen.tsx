@@ -227,10 +227,13 @@ export default function GroupDetailsScreen() {
                   onPress={() => handleMemberPress(mUser)}
                   onLongPress={() => handleRemoveMember(mUser)}
                >
-                 <Image 
-                   source={profilePic ? { uri: profilePic } : require('../../assets/placeholder.png')} 
-                   style={styles.memberAvatar} 
-                 />
+                 {profilePic ? (
+                   <Image source={{ uri: profilePic }} style={styles.memberAvatar} />
+                 ) : (
+                   <View style={[styles.memberAvatar, { backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' }]}>
+                     <Ionicons name="person" size={24} color={COLORS.teal} />
+                   </View>
+                 )}
                  <View style={styles.memberNameContainer}>
                    <Text style={[styles.memberName, isMe && { color: COLORS.teal, fontWeight: '700' }]}>
                      {isMe ? 'You' : `${mUser.firstName} ${mUser.lastName || ''}`}

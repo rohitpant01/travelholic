@@ -226,8 +226,10 @@ const getDiscoverProfiles = async (req, res) => {
 
     const enriched = profiles.map(p => {
       const matchScore = calculateMatchingScore(p, currentUser);
+      const profilePhoto = p.photos?.find(photo => photo.isProfile)?.url || p.photos?.[0]?.url || null;
       return {
         ...p,
+        profilePhoto,
         distanceKm: Math.round(p.distanceMet / 1000),
         matchScore
       };

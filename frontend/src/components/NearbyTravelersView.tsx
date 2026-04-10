@@ -72,14 +72,13 @@ const NearbyTravelersView = ({
       activeOpacity={0.7}
     >
       <View style={styles.imageContainer}>
-        <Image
-          source={
-            item.profilePhoto
-              ? { uri: item.profilePhoto }
-              : require('../../assets/placeholder.png')
-          }
-          style={styles.image}
-        />
+        {item.profilePhoto ? (
+          <Image source={{ uri: item.profilePhoto }} style={styles.image} />
+        ) : (
+          <View style={[styles.image, { backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+            <Ionicons name="person" size={32} color={theme.teal} />
+          </View>
+        )}
         {item.isOnline && <View style={styles.onlineBadge} />}
       </View>
 
