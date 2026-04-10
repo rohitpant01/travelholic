@@ -19,6 +19,8 @@ import { AppDispatch, RootState } from '../store';
 import { 
   fetchChecklists,
   toggleChecklistItem, 
+  addItem,
+  removeItem,
   setCurrentChecklist,
   Checklist,
   ChecklistItem
@@ -59,32 +61,17 @@ const ChecklistDetailScreen = () => {
 
     try {
       setIsAdding(true);
-      const newItem = {
+      await dispatch(addItem({
+        checklistId,
         title: newItemTitle,
-        category: selectedCategory,
-        isCompleted: false
-      };
-
-      const updatedItems = [...checklist.items, newItem];
-      const response = await apiClient.put(`/api/checklists/${checklistId}`, {
-        items: updatedItems
-      });
-
-      // Update state by fetching all or local update
-      // For simplicity, we'll rely on the parent slice update if we implement it correctly
-      // But here we'll just trigger a refresh of the list
-      // In a real app, you'd have a specific 'addItem' thunk
-      const updatedChecklist = response.data.data;
-      // We can't easily update the slice from here without a thunk, 
-      // so let's just use the currentChecklist state or re-fetch
-      // Actually, let's just use a local refetch for now to keep it simple
-      dispatch(fetchChecklists()); 
+        category: selectedCategory
+      })).unwrap();
       
       setNewItemTitle('');
       setIsAdding(false);
     } catch (err) {
       setIsAdding(false);
-      console.error(err);
+      Alert.alert('Error', 'Failed to add item');
     }
   };
 
@@ -95,13 +82,9 @@ const ChecklistDetailScreen = () => {
   const handleDeleteItem = async (itemId: string) => {
     if (!checklist) return;
     try {
-      const updatedItems = checklist.items.filter(i => i._id !== itemId);
-      await apiClient.put(`/api/checklists/${checklistId}`, {
-        items: updatedItems
-      });
-      dispatch(fetchChecklists());
+      await dispatch(removeItem({ checklistId, itemId })).unwrap();
     } catch (err) {
-      console.error(err);
+      Alert.alert('Error', 'Failed to remove item');
     }
   };
 

@@ -29,7 +29,6 @@ export default function Step5PhotosScreen() {
     if (photos.length >= 6) {
       return Alert.alert("Limit Reached", "Maximum 6 photos allowed");
     }
-    }
     
     // Play Store Rationale
     await new Promise<void>(resolve => {

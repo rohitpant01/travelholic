@@ -94,6 +94,30 @@ export const duplicateChecklist = createAsyncThunk(
   }
 );
 
+export const addItem = createAsyncThunk(
+  'checklist/addItem',
+  async ({ checklistId, title, category }: { checklistId: string; title: string; category: string }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.post(`/checklists/${checklistId}/items`, { title, category });
+      return response.data.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || 'Failed to add item');
+    }
+  }
+);
+
+export const removeItem = createAsyncThunk(
+  'checklist/removeItem',
+  async ({ checklistId, itemId }: { checklistId: string; itemId: string }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.delete(`/checklists/${checklistId}/items/${itemId}`);
+      return response.data.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || 'Failed to remove item');
+    }
+  }
+);
+
 const checklistSlice = createSlice({
   name: 'checklist',
   initialState,
@@ -140,6 +164,20 @@ const checklistSlice = createSlice({
       // Duplicate
       .addCase(duplicateChecklist.fulfilled, (state, action) => {
         state.checklists.unshift(action.payload);
+      })
+      // Add Item (updates the checklist in the list)
+      .addCase(addItem.fulfilled, (state, action) => {
+        const index = state.checklists.findIndex(c => c._id === action.payload._id);
+        if (index !== -1) {
+          state.checklists[index] = action.payload;
+        }
+      })
+      // Remove Item
+      .addCase(removeItem.fulfilled, (state, action) => {
+        const index = state.checklists.findIndex(c => c._id === action.payload._id);
+        if (index !== -1) {
+          state.checklists[index] = action.payload;
+        }
       });
   },
 });

@@ -8,6 +8,8 @@ const {
   deleteChecklist,
   toggleItem,
   duplicateChecklist,
+  addItem,
+  removeItem,
 } = require('../controllers/checklistController');
 const { protect } = require('../middleware/auth');
 
@@ -26,5 +28,7 @@ router
 
 router.patch('/:id/toggle-item', toggleItem);
 router.post('/:id/duplicate', duplicateChecklist);
+router.post('/:id/items', addItem);
+router.delete('/:id/items/:itemId', removeItem);
 
 module.exports = router;

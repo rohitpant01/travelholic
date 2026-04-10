@@ -189,4 +189,43 @@ exports.toggleItem = async (req, res) => {
     res.status(400).json({ success: false, error: err.message });
   }
 };
+// @desc    Add an item to a checklist
+// @route   POST /api/checklists/:id/items
+// @access  Private
+exports.addItem = async (req, res) => {
+  try {
+    const { title, category } = req.body;
+    const checklist = await Checklist.findOne({ _id: req.params.id, user: req.user._id });
 
+    if (!checklist) {
+      return res.status(404).json({ success: false, error: 'Checklist not found' });
+    }
+
+    checklist.items.push({ title, category, isCompleted: false });
+    await checklist.save();
+
+    res.status(200).json({ success: true, data: checklist });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Remove an item from a checklist
+// @route   DELETE /api/checklists/:id/items/:itemId
+// @access  Private
+exports.removeItem = async (req, res) => {
+  try {
+    const checklist = await Checklist.findOne({ _id: req.params.id, user: req.user._id });
+
+    if (!checklist) {
+      return res.status(404).json({ success: false, error: 'Checklist not found' });
+    }
+
+    checklist.items = checklist.items.filter(item => item._id.toString() !== req.params.itemId);
+    await checklist.save();
+
+    res.status(200).json({ success: true, data: checklist });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
