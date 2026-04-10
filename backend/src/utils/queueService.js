@@ -15,9 +15,14 @@ if (REDIS_URL && ENABLE_REDIS) {
       maxRetriesPerRequest: null,
       connectTimeout: 5000, 
       enableReadyCheck: false,
+      // Fix 1: Robust retry strategy that doesn't crash the process
       retryStrategy: (times) => {
-        const delay = Math.min(times * 100, 3000);
-        return delay;
+        if (times > 5) {
+            console.error('[REDIS] Max retries reached. Disabling queue.');
+            useQueue = false;
+            return null; // stop retrying
+        }
+        return Math.min(times * 500, 2000);
       },
       reconnectOnError: (err) => {
         console.warn('[REDIS] Reconnect error:', err.message);
@@ -26,13 +31,13 @@ if (REDIS_URL && ENABLE_REDIS) {
     });
 
     connection.on('error', (err) => {
-      console.warn('[REDIS] Connection error:', err.message);
+      console.warn('[REDIS] Connection error (non-fatal):', err.message);
       useQueue = false;
     });
 
     connection.on('connect', () => {
       console.log('✅ [REDIS] Connected successfully');
-      useQueue = true;
+      if (ENABLE_REDIS) useQueue = true;
     });
 
     notificationQueue = new Queue('notifications', { 
@@ -109,8 +114,18 @@ const enqueueNotification = async (notificationId) => {
     deliverNotification(notificationId).catch(err => console.error('[FALLBACK] Delivery failed:', err.message));
 };
 
+/**
+ * Fix 3: Get current Redis status for health check
+ */
+const getRedisStatus = () => {
+    if (!ENABLE_REDIS) return 'disabled';
+    if (!connection) return 'not_initialized';
+    return connection.status === 'ready' ? 'connected' : connection.status;
+};
+
 module.exports = {
     enqueueNotification,
     initNotificationWorker,
-    notificationQueue
+    notificationQueue,
+    getRedisStatus
 };

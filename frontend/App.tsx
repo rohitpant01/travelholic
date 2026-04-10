@@ -377,30 +377,41 @@ function AppNavigator() {
           socket.connect();
         }
 
-        dispatch(fetchNotifications());
-        // Fetch updated matches to get accurate chatsWithUnread from DB
-        Promise.all([
-          matchAPI.getMatches(),
-          tripAPI.getMyTrips()
-        ]).then(([matchRes, tripRes]) => {
-          const privateMatches = matchRes.data.matches.map((m: any) => ({ ...m, type: 'private' }));
-          const groupTrips = tripRes.data.trips.map((t: any) => ({
-            matchId: t._id,
-            type: 'group',
-            user: {
-              _id: t._id,
-              firstName: t.groupName || t.name || `${t.source?.city} → ${t.destination?.city}`,
-              profilePhoto: t.groupIcon || null,
-              isOnline: false,
-            },
-            lastMessage: t.lastMessage,
-            matchedAt: t.createdAt,
-            isTrip: true,
-            tripData: t,
-            unreadCount: t.unreadCount || 0
-          }));
-          dispatch(setMatches([...privateMatches, ...groupTrips]));
-        }).catch(() => {});
+        // 🚀 STAGGERED SYNC: Prevents 503 outages by not hitting the server all at once
+        const syncSequence = async () => {
+           try {
+             await dispatch(fetchNotifications());
+             // Small gap to let server breathe
+             await new Promise(resolve => setTimeout(resolve, 300));
+             
+             const [matchRes, tripRes] = await Promise.all([
+               matchAPI.getMatches(),
+               tripAPI.getMyTrips()
+             ]);
+ 
+             const privateMatches = matchRes.data.matches.map((m: any) => ({ ...m, type: 'private' }));
+             const groupTrips = tripRes.data.trips.map((t: any) => ({
+               matchId: t._id,
+               type: 'group',
+               user: {
+                 _id: t._id,
+                 firstName: t.groupName || t.name || `${t.source?.city} → ${t.destination?.city}`,
+                 profilePhoto: t.groupIcon || null,
+                 isOnline: false,
+               },
+               lastMessage: t.lastMessage,
+               matchedAt: t.createdAt,
+               isTrip: true,
+               tripData: t,
+               unreadCount: t.unreadCount || 0
+             }));
+             dispatch(setMatches([...privateMatches, ...groupTrips]));
+           } catch (e) {
+             console.warn('[SYNC] Foreground refresh failed slightly:', e);
+           }
+        };
+ 
+        syncSequence();
       }
     });
     return () => subscription.remove();

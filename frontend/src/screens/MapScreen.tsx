@@ -185,8 +185,8 @@ export default function MapScreen() {
             <Marker
               key={profile._id}
               coordinate={{
-                latitude: profile.location.coordinates[1],
-                longitude: profile.location.coordinates[0],
+                latitude: Number(profile.location.coordinates[1]),
+                longitude: Number(profile.location.coordinates[0]),
               }}
             >
               <View style={styles.markerContainer}>

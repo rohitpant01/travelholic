@@ -20,8 +20,8 @@ const LocationPickerScreen = () => {
   const { onSelect, initialLocation } = route.params;
 
   const [region, setRegion] = useState({
-    latitude: initialLocation?.lat || 20.5937,
-    longitude: initialLocation?.lng || 78.9629,
+    latitude: Number(initialLocation?.lat || 20.5937),
+    longitude: Number(initialLocation?.lng || 78.9629),
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   });
@@ -30,7 +30,11 @@ const LocationPickerScreen = () => {
     name: string;
     lat: number;
     lng: number;
-  } | null>(null);
+  } | null>(initialLocation ? {
+    name: 'Initial Location',
+    lat: Number(initialLocation.lat),
+    lng: Number(initialLocation.lng)
+  } : null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);

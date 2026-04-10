@@ -232,8 +232,8 @@ const MessageItem = React.memo(({
                   <MapView
                     style={styles.mapPreview}
                     initialRegion={{
-                      latitude: item.latitude!,
-                      longitude: item.longitude!,
+                      latitude: Number(item.latitude),
+                      longitude: Number(item.longitude),
                       latitudeDelta: 0.01,
                       longitudeDelta: 0.01,
                     }}
@@ -243,7 +243,7 @@ const MessageItem = React.memo(({
                     pitchEnabled={false}
                     rotateEnabled={false}
                   >
-                    <Marker coordinate={{ latitude: item.latitude!, longitude: item.longitude! }} />
+                    <Marker coordinate={{ latitude: Number(item.latitude), longitude: Number(item.longitude) }} />
                   </MapView>
                   <View style={styles.locationInfo}>
                     <Text style={[styles.locationTitle, isMe && styles.locationTitleMe]}>📍 Shared Location</Text>

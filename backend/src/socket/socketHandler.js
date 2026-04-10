@@ -1,11 +1,11 @@
 const socketIO = require('socket.io');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { Message, Match } = require('../models/Match');
-const { TripMember } = require('../models/Trip');
+const { Message, Match, Swipe } = require('../models/Match');
+const { TripMember, TripMessage } = require('../models/Trip');
 const Notification = require('../models/Notification');
+const { createNotification } = require('../utils/notificationService');
 const { encrypt, decrypt } = require('../utils/cryptoUtility');
-const { enqueueNotification } = require('../utils/queueService');
 
 let io;
 
@@ -147,13 +147,10 @@ const initSocket = (server) => {
         console.log(`[SOCKET DEBUG] Sender ID: ${socket.userId}, Chat ID: ${chatId}, Receiver: ${receiverId}`);
 
         if (chatType === 'group' || !receiverId) {
-          console.log('[SOCKET DEBUG] Processing group message');
-          // Group logic remains
-          const { TripMember, TripMessage } = require('../models/Trip'); // Re-require for group chat
+          // 4. Persistence First (Group)
           const member = await TripMember.findOne({ trip: chatId, user: socket.userId, status: 'accepted' });
           if (!member) return socket.emit('error', { message: 'Not a trip member' });
 
-          console.log('[SOCKET DEBUG] Creating group message in DB');
           const message = await TripMessage.create({
             trip: chatId,
             sender: socket.userId,
@@ -166,23 +163,36 @@ const initSocket = (server) => {
             type: (latitude && longitude) ? 'location' : (voiceUrl ? 'voice' : (imageUrl ? 'image' : 'text')),
             replyTo: replyTo || null,
           });
-          console.log('[SOCKET DEBUG] Group Message saved:', message._id);
 
-          await message.populate('sender', 'firstName lastName profilePhotos photos');
+          await message.populate('sender', 'firstName lastName photos');
           if (message.replyTo) {
             await message.populate({ path: 'replyTo', select: 'text type imageUrl voiceUrl sender edited isDeleted', populate: { path: 'sender', select: 'firstName' }});
           }
 
           const formattedMessage = { ...message.toObject(), chatId: message.trip, text: text || '' };
 
-          console.log('[SOCKET DEBUG] Updating group unread counts for members');
           await TripMember.updateMany(
             { trip: chatId, user: { $ne: socket.userId }, status: 'accepted' },
             { $inc: { unreadCount: 1 } }
           );
-          console.log('[SOCKET DEBUG] Group unread counts updated');
 
           io.to(`trip_${chatId}`).emit('receive_message', formattedMessage);
+          
+          // 5. Create & Enqueue Notification
+          try {
+            await createNotification({
+                recipient: null, // notificationService handles trip-wide broadcasting
+                tripId: chatId,
+                sender: socket.userId,
+                type: 'trip_message',
+                title: `New trip message 🎒`,
+                message: text || (imageUrl ? '📷 Photo' : 'New message'),
+                data: { type: 'trip_message', tripId: chatId },
+                priority: 'normal'
+            });
+          } catch (err) {
+            console.error('[SOCKET] Group notification failed (non-fatal):', err.message);
+          }
 
         } else {
           console.log('[SOCKET DEBUG] Processing individual message');
@@ -262,20 +272,23 @@ const initSocket = (server) => {
           }
 
           // 5. Create & Enqueue Notification
-          const { createNotification } = require('../utils/notificationService');
-          createNotification({
-              recipient: receiverId,
-              sender: socket.userId,
-              type: 'message',
-              title: `${senderName} sent you a message 👀`,
-              message: text || (imageUrl ? '📷 Photo' : (voiceUrl ? '🎤 Voice message' : 'New message')),
-              data: { 
-                  type: 'message', 
-                  messageId: message._id.toString(),
-                  chatId: chatId
-              },
-              priority: 'high'
-          }).catch(err => console.error('[SOCKET] Notification failed:', err));
+          try {
+            await createNotification({
+                recipient: receiverId,
+                sender: socket.userId,
+                type: 'message',
+                title: `${senderName} sent you a message 👀`,
+                message: text || (imageUrl ? '📷 Photo' : (voiceUrl ? '🎤 Voice message' : 'New message')),
+                data: { 
+                    type: 'message', 
+                    messageId: message._id.toString(),
+                    chatId: chatId
+                },
+                priority: 'high'
+            });
+          } catch (err) {
+            console.error('[SOCKET] Notification failed (non-fatal):', err.message);
+          }
         }
       } catch (error) {
         console.error('[SOCKET ERROR] Failed to process send_message:', error);

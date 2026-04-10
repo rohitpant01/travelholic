@@ -592,7 +592,7 @@ export default function LyraItineraryScreen() {
             >
               {/* 🛤️ Sequential Route Line */}
               <Polyline
-                coordinates={pins.map(p => ({ latitude: p.lat, longitude: p.lng }))}
+                coordinates={pins.map(p => ({ latitude: Number(p.lat), longitude: Number(p.lng) }))}
                 strokeColor={theme.teal}
                 strokeWidth={3}
                 lineDashPattern={[0]}
@@ -601,7 +601,7 @@ export default function LyraItineraryScreen() {
               {pins.map((pin, i) => (
                 <Marker
                   key={i}
-                  coordinate={{ latitude: pin.lat, longitude: pin.lng }}
+                  coordinate={{ latitude: Number(pin.lat), longitude: Number(pin.lng) }}
                   title={pin.title}
                   pinColor={pin.color}
                   onPress={() => focusDay(pin.dayIdx)}

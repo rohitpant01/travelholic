@@ -537,7 +537,7 @@ export default function PlaceDiscoveryScreen() {
           {allPlaces.map((p, idx) => (
              <Marker 
                key={p.id || `marker-${idx}`} 
-               coordinate={{ latitude: p.location.lat, longitude: p.location.lng }}
+               coordinate={{ latitude: Number(p.location.lat), longitude: Number(p.location.lng) }}
                title={p.name}
                description={p.distanceText}
              />

@@ -126,11 +126,23 @@ if (process.env.NODE_ENV === "development") {
 }
 
 // Health route
-app.get("/health", (req, res) => {
-  res.json({
+app.get("/health", async (req, res) => {
+  const health = {
     status: "OK",
     app: "EkalGo API",
-  });
+    time: new Date().toISOString(),
+    redis: 'unknown'
+  };
+
+  try {
+     const { getRedisStatus } = require('./src/utils/queueService');
+     health.redis = getRedisStatus();
+  } catch (e) {
+     health.redis = 'error';
+  }
+
+  const statusCode = (health.redis === 'connected' || health.redis === 'disabled' || health.redis === 'not_initialized') ? 200 : 207;
+  res.status(statusCode).json(health);
 });
 
 // ── UNIVERSAL DEEP LINKING (AASA / ASSETLINKS) ────────────────
