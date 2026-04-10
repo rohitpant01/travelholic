@@ -116,9 +116,10 @@ const createNotification = async ({ recipient, sender, type, title, message, dat
       status: 'pending'
     });
 
-    // 3. Trigger immediate delivery loop
-    // Fires in background to not block the main request thread
-    deliverNotification(notification._id).catch(err => console.error('[ASYNC HUB ERROR]', err));
+    // 3. Trigger queue-based delivery
+    // This allows for retries and persistent delivery via BullMQ
+    const { enqueueNotification } = require('./queueService');
+    enqueueNotification(notification._id).catch(err => console.error('[QUEUE ENQUEUE ERROR]', err));
 
     return notification;
   } catch (error) {

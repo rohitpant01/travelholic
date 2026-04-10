@@ -225,13 +225,16 @@ const initSocket = (server) => {
 
           // 3. Emit via Socket (Instant)
           let deliveredToReceiver = false;
+          const senderName = socket.user?.firstName || 'Someone';
+          const senderPhoto = socket.user?.photos?.find(p => p.isProfile)?.url || socket.user?.photos?.[0]?.url;
+
           const receiverSocketRoom = io.sockets.adapter.rooms.get(receiverId);
           if (receiverSocketRoom && receiverSocketRoom.size > 0) {
              io.to(receiverId).emit('receive_message', {
                ...formattedMessage,
                matchId: chatId,
                senderName,
-               senderPhoto: senderProfilePhoto,
+               senderPhoto,
                status: 'delivered'
              });
              deliveredToReceiver = true;
@@ -242,7 +245,7 @@ const initSocket = (server) => {
              ...formattedMessage,
              matchId: chatId,
              senderName,
-             senderPhoto: senderProfilePhoto,
+             senderPhoto,
              status: deliveredToReceiver ? 'delivered' : 'sent'
           });
 
@@ -263,12 +266,13 @@ const initSocket = (server) => {
           if (receiverUser && (receiverUser.devices || []).length > 0) {
              await enqueueNotification(
                receiverId, 
-               `${senderName} sent you a message 👀`, 
-               req_text, 
+               'message',
+               text, 
                { 
                  type: 'message', 
                  messageId: message._id.toString(),
-                 chatId: chatId 
+                 chatId: chatId,
+                 title: `${senderName} sent you a message 👀`
                },
                'high',
                `msg_${message._id}`

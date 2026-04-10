@@ -24,14 +24,14 @@ const initNotificationWorker = () => {
     const { deliverNotification } = require('./notificationService');
     
     const worker = new Worker('notifications', async (job) => {
-        console.log(`[QUEUE] Processing job ${job.id} for user ${job.data.userId}`);
-        const { userId, type, content, data, priority, idempotencyKey } = job.data;
+        const { notificationId } = job.data;
+        console.log(`[QUEUE] Processing notification ${notificationId}`);
         
         try {
-            await deliverNotification(userId, type, content, data, priority, idempotencyKey);
+            await deliverNotification(notificationId);
         } catch (error) {
             console.error(`[QUEUE] Job ${job.id} failed:`, error.message);
-            throw error; // Rethrow to trigger BullMQ retry
+            throw error;
         }
     }, { connection });
 
@@ -49,17 +49,12 @@ const initNotificationWorker = () => {
 /**
  * Add a notification to the queue
  */
-const enqueueNotification = async (userId, type, content, data = {}, priority = 'normal', idempotencyKey = null) => {
-    const jobKey = idempotencyKey || `${userId}_${type}_${Date.now()}`;
-    await notificationQueue.add(jobKey, {
-        userId,
-        type,
-        content,
-        data,
-        priority,
-        idempotencyKey
-    }, { jobId: jobKey });
-    console.log(`[QUEUE] Enqueued ${type} for ${userId} (Key: ${jobKey})`);
+const enqueueNotification = async (notificationId) => {
+    await notificationQueue.add('deliver', { notificationId }, { 
+        jobId: `notif_${notificationId}`,
+        removeOnComplete: true 
+    });
+    console.log(`[QUEUE] Enqueued notification ${notificationId}`);
 };
 
 module.exports = {
