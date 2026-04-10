@@ -16,6 +16,10 @@ const postSchema = new mongoose.Schema({
     enum: ['nearby', 'friends', 'global'], 
     default: 'global' 
   },
+  allowAIItinerary: { 
+    type: Boolean, 
+    default: true 
+  },
 }, { 
   timestamps: true,
   toJSON: { virtuals: true },

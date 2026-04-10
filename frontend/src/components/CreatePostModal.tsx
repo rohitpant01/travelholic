@@ -87,7 +87,7 @@ export default function CreatePostModal({ visible, onClose }: Props) {
     setImages(images.filter((_, i) => i !== index));
   };
 
-  const submitPostInBackground = async (contentStr: string, currentImages: string[], tempId: string, locationData: any) => {
+  const submitPostInBackground = async (contentStr: string, currentImages: string[], tempId: string, locationData: any, allowAI: boolean) => {
     try {
       // 1. Prioritize Selection -> then Current GPS -> then Profile
       let finalLocation: any = locationData ? {
@@ -113,6 +113,7 @@ export default function CreatePostModal({ visible, onClose }: Props) {
       formData.append('location', JSON.stringify(finalLocation));
       formData.append('placeName', locationData?.name || user?.city || 'India');
       formData.append('visibility', 'global');
+      formData.append('allowAIItinerary', String(allowAI));
 
       // 3. Compress & Append Images
       if (currentImages.length > 0) {
@@ -139,7 +140,8 @@ export default function CreatePostModal({ visible, onClose }: Props) {
           firstName: user?.firstName,
           lastName: user?.lastName,
           photos: user?.photos
-        }
+        },
+        allowAIItinerary: allowAI
       };
 
       await dispatch(createPostAction({ formData, optimisticData, tempId })).unwrap();
@@ -181,14 +183,15 @@ export default function CreatePostModal({ visible, onClose }: Props) {
         firstName: user?.firstName || 'You',
         lastName: user?.lastName,
         photos: user?.photos
-      }
+      },
+      allowAIItinerary: aiEnabled
     };
 
     // 1. Add post to UI immediately
     dispatch(addTempPost(optimisticPost));
 
     // 2. Fire and forget background post upload
-    submitPostInBackground(content, images, tempId, selectedLocation);
+    submitPostInBackground(content, images, tempId, selectedLocation, aiEnabled);
 
     // 3. If AI toggle is ON → navigate to Lyra screen
     if (aiEnabled && content.trim()) {

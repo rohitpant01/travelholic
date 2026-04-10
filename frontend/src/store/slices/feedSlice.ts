@@ -20,6 +20,7 @@ export interface Post {
   commentsCount: number;
   isLiked: boolean;
   placeName?: string;
+  allowAIItinerary?: boolean;
   createdAt: string;
 }
 

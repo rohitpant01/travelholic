@@ -231,7 +231,7 @@ export default function TravelPostCard({ post, onPressProfile, onPressComment, o
       </View>
 
       {/* 💡 Generate Itinerary CTA */}
-      {post.content && !isTemp && (
+      {post.content && !isTemp && post.allowAIItinerary !== false && (
         <TouchableOpacity
           style={styles.lyraBtn}
           activeOpacity={0.7}

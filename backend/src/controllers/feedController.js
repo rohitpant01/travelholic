@@ -100,7 +100,7 @@ const getFeed = async (req, res) => {
 // @access  Private
 const createPost = async (req, res) => {
   try {
-    const { content, placeName, visibility } = req.body;
+    const { content, placeName, visibility, allowAIItinerary } = req.body;
     let { location } = req.body;
 
     // 1. Handle Multipart Parsing (location is sent as JSON string)
@@ -131,7 +131,8 @@ const createPost = async (req, res) => {
       images,
       location,
       placeName: placeName || '',
-      visibility: visibility || 'global'
+      visibility: visibility || 'global',
+      allowAIItinerary: allowAIItinerary === 'false' ? false : (allowAIItinerary === 'true' ? true : !!allowAIItinerary)
     });
 
     const populatedPost = await Post.findById(post._id).populate('userId', 'firstName lastName username photos age city country');
