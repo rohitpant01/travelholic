@@ -307,10 +307,12 @@ const getDiscoverProfiles = async (req, res) => {
       }
     }
 
-    res.json({ profiles: enriched, count: enriched.length });
+    // No second res.json here! It was already sent at line 238 after enriching profiles.
   } catch (error) {
     console.error('Discover error:', error);
-    res.status(500).json({ error: error.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
   }
 };
 
