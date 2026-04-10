@@ -5,7 +5,8 @@ const {
   getDiscoverProfiles, 
   likeUser, 
   skipUser, 
-  superLikeUser
+  superLikeUser,
+  updateLocation
 } = require('../controllers/discoverController');
 
 router.use(protect);
