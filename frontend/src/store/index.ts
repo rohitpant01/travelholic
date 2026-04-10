@@ -7,6 +7,7 @@ import themeReducer from './slices/themeSlice';
 import savedReducer from './slices/savedSlice';
 import feedReducer from './slices/feedSlice';
 import storyReducer from './slices/storySlice';
+import checklistReducer from './slices/checklistSlice';
 import uploadReducer from './slices/uploadSlice';
 import commentReducer from './slices/commentSlice';
 
@@ -22,6 +23,7 @@ const store = configureStore({
     stories: storyReducer,
     uploads: uploadReducer,
     comments: commentReducer,
+    checklist: checklistReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

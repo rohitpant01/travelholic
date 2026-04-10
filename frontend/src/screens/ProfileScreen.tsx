@@ -377,6 +377,19 @@ export default function ProfileScreen() {
               style={styles.menuItem} 
               onPress={() => {
                 menuSheetRef.current?.dismiss();
+                navigation.navigate('Checklist');
+              }}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: theme.info + '20' }]}>
+                <Ionicons name="list-outline" size={20} color={theme.info} />
+              </View>
+              <Text style={styles.menuLabel}>Travel Checklist</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => {
+                menuSheetRef.current?.dismiss();
                 navigation.navigate('Settings');
               }}
             >

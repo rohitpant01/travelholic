@@ -28,6 +28,7 @@ const feedRoutes = require("./src/routes/feedRoutes");
 const storyRoutes = require("./src/routes/storyRoutes");
 const commentRoutes = require("./src/routes/commentRoutes");
 const imageRoutes = require("./src/routes/imageRoutes");
+const checklistRoutes = require("./src/routes/checklistRoutes");
 
 
 const app = express();
@@ -169,6 +170,7 @@ app.use("/api/feed", apiLimiter, feedRoutes);
 app.use("/api/stories", apiLimiter, storyRoutes);
 app.use("/api/comments", chatLimiter, commentRoutes);
 app.use("/api/images", apiLimiter, imageRoutes);
+app.use("/api/checklists", checklistRoutes);
 
 
 // 🛡️ CATCH-ALL ROUTE (MUST BE LAST)

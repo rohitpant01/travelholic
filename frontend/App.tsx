@@ -79,6 +79,8 @@ import PrivacySafetyScreen from './src/screens/PrivacySafetyScreen';
 import HelpSupportScreen from './src/screens/HelpSupportScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import ProfileViewsScreen from './src/screens/ProfileViewsScreen';
+import ChecklistScreen from './src/screens/ChecklistScreen';
+import ChecklistDetailScreen from './src/screens/ChecklistDetailScreen';
 
 import apiClient from './src/api/client';
 
@@ -681,6 +683,8 @@ function AppNavigator() {
             <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="About" component={AboutScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="ProfileViews" component={ProfileViewsScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ChecklistDetail" component={ChecklistDetailScreen} options={{ animation: 'slide_from_right' }} />
           </>
         )}
 
