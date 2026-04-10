@@ -32,7 +32,13 @@ const addComment = async (req, res) => {
       return res.status(400).json({ error: 'Comment text is required' });
     }
 
-    const sanitizedText = filter.clean(text);
+    // Safely sanitize text - bad-words filter.clean() can throw on certain inputs
+    let sanitizedText = text;
+    try {
+      sanitizedText = filter.clean(String(text));
+    } catch (filterErr) {
+      console.warn('[COMMENT FILTER] Profanity filter error, using raw text:', filterErr.message);
+    }
 
     const comment = await Comment.create({
       postId,
@@ -97,7 +103,15 @@ const updateComment = async (req, res) => {
       return res.status(401).json({ error: 'User not authorized to update this comment' });
     }
 
-    comment.text = text ? filter.clean(text) : comment.text;
+    let sanitizedText = text;
+    if (text) {
+      try {
+        sanitizedText = filter.clean(String(text));
+      } catch (filterErr) {
+        console.warn('[COMMENT FILTER] Profanity filter error, using raw text:', filterErr.message);
+      }
+    }
+    comment.text = sanitizedText || comment.text;
     await comment.save();
 
     const populatedComment = await comment.populate('userId', 'firstName lastName username photos');
