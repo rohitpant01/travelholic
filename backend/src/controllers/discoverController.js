@@ -7,9 +7,10 @@ const Notification = require('../models/Notification');
  * Helper to handle match creation and notifications
  */
 const handleMatch = async (userId1, userId2, isSuperLike = false) => {
-  const existingMatch = await Match.findOne({
-    users: { $all: [userId1, userId2] },
-  });
+  try {
+    const existingMatch = await Match.findOne({
+      users: { $all: [userId1, userId2] },
+    });
 
   if (existingMatch) return existingMatch;
 
