@@ -1105,6 +1105,30 @@ const reportTrip = async (req, res) => {
   }
 };
 
+// ============================================================
+// GET SAVED PLANS (AI & Lyra)
+// ============================================================
+const getSavedPlans = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const [aiPlans, lyraPlans] = await Promise.all([
+      AIItinerary.find({ userId }).sort({ createdAt: -1 }),
+      LyraItinerary.find({ userId }).sort({ createdAt: -1 })
+    ]);
+
+    const combined = [
+      ...aiPlans.map(p => ({ ...p.toObject(), type: 'ai_itinerary' })),
+      ...lyraPlans.map(p => ({ ...p.toObject(), type: 'lyra' }))
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({ savedPlans: combined });
+  } catch (error) {
+    console.error('[getSavedPlans]', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createTrip,
   getTrips,
@@ -1126,5 +1150,6 @@ module.exports = {
   getPendingRequests,
   togglePinTrip,
   toggleMuteTrip,
-  reportTrip
+  reportTrip,
+  getSavedPlans
 };
