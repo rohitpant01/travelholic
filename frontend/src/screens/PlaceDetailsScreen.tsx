@@ -102,8 +102,8 @@ export default function PlaceDetailsScreen() {
 
       // 2. Fetch Deep AI Insights
       try {
-        const placeLat = place.lat || place.coordinates?.lat;
-        const placeLng = place.lng || place.coordinates?.lng;
+        const placeLat = place.lat || place.coordinates?.lat || place.location?.lat;
+        const placeLng = place.lng || place.coordinates?.lng || place.location?.lng;
 
         const res = await aiAPI.getPlaceInsights({
           placeName: saveTitle,

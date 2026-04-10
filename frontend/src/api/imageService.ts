@@ -24,8 +24,8 @@ export const fetchPlaceImages = async (query: string, count: number = 3): Promis
     // but for now, we point to the reliable proxy endpoint
     const images = [];
     for (let i = 0; i < count; i++) {
-        // We use the query as a fallback if no direct reference is available
-        images.push(`${apiClient.defaults.baseURL}/images/place/${encodeURIComponent(query)}?v=${i}`);
+        // We use redirect=true so the Image component can load the binary data directly
+        images.push(`${apiClient.defaults.baseURL}/images/place/${encodeURIComponent(query)}?redirect=true&v=${i}`);
     }
     return images;
   } catch (e) {

@@ -87,6 +87,14 @@ exports.getPlaceImage = async (req, res) => {
 
   const searchQuery = `${query} travel`;
 
+  // Helper for response
+  const sendRes = (imgUrl, source) => {
+    if (req.query.redirect === 'true') {
+      return res.redirect(imgUrl);
+    }
+    return res.json({ image: imgUrl, source });
+  };
+
   // 2. Try Google Places Search (Fresh & High Quality)
   if (GOOGLE_PLACES_API_KEY) {
     try {
@@ -95,10 +103,8 @@ exports.getPlaceImage = async (req, res) => {
       });
       const photoRef = gRes.data.results?.[0]?.photos?.[0]?.photo_reference;
       if (photoRef) {
-        return res.json({ 
-          image: `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${photoRef}`, 
-          source: 'Google Places' 
-        });
+        const finalUrl = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${photoRef}`;
+        return sendRes(finalUrl, 'Google Places');
       }
     } catch (e) {
       console.error('[ImageController] Google Places search failed:', e.message);
@@ -113,7 +119,7 @@ exports.getPlaceImage = async (req, res) => {
         headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` }
       });
       if (response.data.results?.[0]) {
-        return res.json({ image: response.data.results[0].urls.regular, source: 'Unsplash' });
+        return sendRes(response.data.results[0].urls.regular, 'Unsplash');
       }
     } catch (e) {}
   }
@@ -126,13 +132,14 @@ exports.getPlaceImage = async (req, res) => {
         headers: { Authorization: PEXELS_API_KEY }
       });
       if (response.data.photos?.[0]) {
-        return res.json({ image: response.data.photos[0].src.large2x, source: 'Pexels' });
+        return sendRes(response.data.photos[0].src.large2x, 'Pexels');
       }
     } catch (e) {}
   }
 
   // Final Picsum placeholder
-  res.json({ image: `https://picsum.photos/seed/${encodeURIComponent(query)}/1000/600`, source: 'Picsum' });
+  const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(query)}/1000/600`;
+  sendRes(fallbackUrl, 'Picsum');
 };
 
 /**
