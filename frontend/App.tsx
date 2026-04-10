@@ -112,37 +112,6 @@ function RaisedTripButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-const linking: any = {
-  prefixes: ['ekalgo://', 'https://ekalgo.com', 'https://www.ekalgo.com'],
-  config: {
-    screens: {
-      MainTabs: {
-        screens: {
-          Travelers: 'discover',
-          Profile: 'profile',
-        }
-      },
-      LyraItinerary: 'trip/:id',
-      PostDetail: 'post/:postId',
-      UserDetail: 'user/:userId',
-    },
-  },
-};
-
-// Handle redirects for empty paths like /post/ or /trip/
-const fixedLinking: any = {
-  ...linking,
-  config: {
-    ...linking.config,
-    screens: {
-      ...linking.config.screens,
-      // Add a fallback for /post/ and /trip/ with no ID
-      PostDetailRedirect: 'post/',
-      LyraRedirect: 'trip/',
-    }
-  }
-};
-
 
 function MainTabs() {
   const totalUnread = useSelector((s: RootState) => s.chat.totalUnread);
