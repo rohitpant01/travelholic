@@ -186,7 +186,10 @@ const getMyTrips = async (req, res) => {
 // ============================================================
 const getSavedPlans = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const mongoose = require('mongoose');
+    const userId = new mongoose.Types.ObjectId(req.user._id);
+
+    console.log(`[getSavedPlans] Fetching plans for user: ${userId}`);
 
     // [LYRA] Fetch user's saved AI itineraries
     const lyraPlans = await LyraItinerary.find({ userId: userId, isSaved: true })
@@ -226,14 +229,17 @@ const getSavedPlans = async (req, res) => {
       };
     });
 
-    const combined = [...lyraFormatted, ...aiFormatted].sort((a, b) => 
-      new Date(b.date) - new Date(a.date)
-    );
+    const combined = [...lyraFormatted, ...aiFormatted].sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    });
 
+    console.log(`[getSavedPlans] Successfully found and formatted ${combined.length} plans`);
     res.json({ savedPlans: combined });
   } catch (error) {
-    console.error('[getSavedPlans]', error);
-    res.status(500).json({ error: error.message });
+    console.error('[getSavedPlans] ERROR:', error);
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 };
 
@@ -1105,50 +1111,7 @@ const reportTrip = async (req, res) => {
   }
 };
 
-// ============================================================
-// GET SAVED PLANS (AI & Lyra)
-// ============================================================
-const getSavedPlans = async (req, res) => {
-  try {
-    const mongoose = require('mongoose');
-    const userId = new mongoose.Types.ObjectId(req.user._id);
 
-    console.log(`[getSavedPlans] Fetching plans for user: ${userId}`);
-
-    const [aiPlans, lyraPlans] = await Promise.all([
-      AIItinerary.find({ userId }).sort({ createdAt: -1 }),
-      LyraItinerary.find({ userId }).sort({ createdAt: -1 })
-    ]);
-
-    console.log(`[getSavedPlans] Found ${aiPlans.length} AI plans and ${lyraPlans.length} Lyra plans`);
-
-    const combined = [
-      ...(aiPlans || []).map(p => {
-        try {
-          return { ...p.toObject(), type: 'ai_itinerary' };
-        } catch (e) {
-          return { ...p, type: 'ai_itinerary' };
-        }
-      }),
-      ...(lyraPlans || []).map(p => {
-        try {
-          return { ...p.toObject(), type: 'lyra' };
-        } catch (e) {
-          return { ...p, type: 'lyra' };
-        }
-      })
-    ].sort((a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return dateB - dateA;
-    });
-
-    res.json({ savedPlans: combined });
-  } catch (error) {
-    console.error('[getSavedPlans] ERROR:', error);
-    res.status(500).json({ error: error.message, stack: error.stack });
-  }
-};
 
 module.exports = {
   createTrip,
