@@ -10,7 +10,12 @@ if (REDIS_URL) {
   try {
     connection = new IORedis(REDIS_URL, { 
       maxRetriesPerRequest: null,
-      connectTimeout: 2000, 
+      connectTimeout: 5000, 
+      enableReadyCheck: false,
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 100, 3000);
+        return delay;
+      },
       reconnectOnError: (err) => {
         console.warn('[REDIS] Reconnect error:', err.message);
         return true;
@@ -84,11 +89,12 @@ const initNotificationWorker = () => {
 const enqueueNotification = async (notificationId) => {
     if (useQueue && notificationQueue) {
         try {
-            await notificationQueue.add('deliver', { notificationId }, { 
-                jobId: `notif_${notificationId}`,
+            const idStr = notificationId.toString();
+            await notificationQueue.add('deliver', { notificationId: idStr }, { 
+                jobId: `notif_${idStr}`,
                 removeOnComplete: true 
             });
-            console.log(`[QUEUE] Enqueued notification ${notificationId}`);
+            console.log(`[QUEUE] Enqueued notification ${idStr}`);
             return;
         } catch (err) {
             console.error('[QUEUE] Enqueue failed, falling back to immediate delivery:', err.message);

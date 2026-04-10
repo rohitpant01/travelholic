@@ -261,23 +261,21 @@ const initSocket = (server) => {
             await Message.findByIdAndUpdate(message._id, { status: 'sent' });
           }
 
-          // 5. Enqueue Push Notification (Using BullMQ)
-          const receiverUser = await User.findById(receiverId).select('devices');
-          if (receiverUser && (receiverUser.devices || []).length > 0) {
-             await enqueueNotification(
-               receiverId, 
-               'message',
-               text, 
-               { 
-                 type: 'message', 
-                 messageId: message._id.toString(),
-                 chatId: chatId,
-                 title: `${senderName} sent you a message 👀`
-               },
-               'high',
-               `msg_${message._id}`
-             ).catch(err => console.error('[SOCKET] Queue failed:', err));
-          }
+          // 5. Create & Enqueue Notification
+          const { createNotification } = require('../utils/notificationService');
+          createNotification({
+              recipient: receiverId,
+              sender: socket.userId,
+              type: 'message',
+              title: `${senderName} sent you a message 👀`,
+              message: text || (imageUrl ? '📷 Photo' : (voiceUrl ? '🎤 Voice message' : 'New message')),
+              data: { 
+                  type: 'message', 
+                  messageId: message._id.toString(),
+                  chatId: chatId
+              },
+              priority: 'high'
+          }).catch(err => console.error('[SOCKET] Notification failed:', err));
         }
       } catch (error) {
         console.error('[SOCKET ERROR] Failed to process send_message:', error);
