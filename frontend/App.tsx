@@ -607,13 +607,9 @@ function AppNavigator() {
     return () => { unmounted = true; };
   }, [isAuthenticated, user?._id]);
 
-  if (isLoading) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color={COLORS.teal} />
-      </View>
-    );
-  }
+  // Note: No isLoading guard here — SplashScreen (inside AuthStack) handles
+  // the animated intro. React Navigation's conditional rendering auto-transitions
+  // to MainTabs when bootstrapAuth completes and sets isAuthenticated=true.
 
     const effectiveRegStep = user?.registrationStep ?? 0;
     const isNewUser = effectiveRegStep < 9;

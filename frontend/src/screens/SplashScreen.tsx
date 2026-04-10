@@ -17,6 +17,12 @@ export default function SplashScreen() {
   const navigation = useNavigation<any>();
   const { isAuthenticated, isLoading } = useSelector((s: RootState) => s.auth);
 
+  // Refs to keep latest auth state accessible inside animation callbacks
+  const isLoadingRef = useRef(isLoading);
+  const isAuthenticatedRef = useRef(isAuthenticated);
+  useEffect(() => { isLoadingRef.current = isLoading; }, [isLoading]);
+  useEffect(() => { isAuthenticatedRef.current = isAuthenticated; }, [isAuthenticated]);
+
   // Opacity controls
   const mapOpacity = useRef(new Animated.Value(0)).current;
 
@@ -145,9 +151,11 @@ export default function SplashScreen() {
       duration: 800,
       useNativeDriver: true,
     }).start(() => {
-      // Immediate navigation after branding
-      if (!isLoading) {
-        navigation.replace(isAuthenticated ? 'MainTabs' : 'Landing');
+      // For authenticated users, AppNavigator's conditional rendering
+      // auto-transitions from AuthStack to MainTabs — no manual nav needed.
+      // Only navigate explicitly for unauthenticated users.
+      if (!isLoadingRef.current && !isAuthenticatedRef.current) {
+        navigation.replace('Landing');
       }
     });
   };
