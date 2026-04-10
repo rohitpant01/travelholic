@@ -536,6 +536,15 @@ function AppNavigator() {
       dispatch(removeMatch(data.matchId));
     };
 
+    const onMessageStatusUpdate = (data: any) => {
+      console.log('[SOCKET] message_status_update:', data);
+      dispatch(updateMessageStatus({
+        chatId: data.chatId,
+        messageId: data.messageId,
+        status: data.status
+      }));
+    };
+
     socket.on('receive_message', onReceiveMessage);
     socket.on('user_online', onUserOnline);
     socket.on('like_received', onLikeReceived);
@@ -544,6 +553,7 @@ function AppNavigator() {
     socket.on('new_notification', onNewNotification);
     socket.on('notifications_read_sync', onNotificationsReadSync);
     socket.on('match_removed', onMatchRemoved);
+    socket.on('message_status_update', onMessageStatusUpdate);
 
     return () => {
       socket.off('receive_message', onReceiveMessage);
@@ -554,6 +564,7 @@ function AppNavigator() {
       socket.off('new_notification', onNewNotification);
       socket.off('notifications_read_sync', onNotificationsReadSync);
       socket.off('match_removed', onMatchRemoved);
+      socket.off('message_status_update', onMessageStatusUpdate);
     };
   }, [isAuthenticated, user?._id, socket]);
 

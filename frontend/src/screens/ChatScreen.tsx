@@ -481,8 +481,13 @@ export default function ChatScreen() {
           setActiveUserPhoto(trip.groupIcon);
         }).catch(() => {});
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('[ChatScreen] loadMessages error:', e);
+      // If we get a 502/503 or repeated failure, stop trying to load more for now
+      // to prevent an infinite loop that hits the rate limiter.
+      if (e.response?.status >= 500) {
+        setHasMore(false); // Stop trying to load more if server is failing
+      }
     }
     finally { 
       setLoading(false); 

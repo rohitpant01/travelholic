@@ -92,7 +92,9 @@ const messageSchema = new mongoose.Schema({
 });
 
 messageSchema.index({ matchId: 1, createdAt: -1 });
-messageSchema.index({ sender: 1, receiver: 1 });
+messageSchema.index({ matchId: 1, receiver: 1, readBy: 1 });
+messageSchema.index({ sender: 1, receiver: 1, createdAt: -1 });
+messageSchema.index({ status: 1 });
 
 const Message = mongoose.model('Message', messageSchema);
 

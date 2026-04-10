@@ -230,10 +230,24 @@ const chatSlice = createSlice({
     removeMatch(state, action: PayloadAction<string>) {
       const matchId = action.payload;
       state.matches = state.matches.filter(m => String(m.matchId) !== String(matchId));
-      const prev = state.unreadByMatch[matchId] || 0;
-      state.totalUnread = Math.max(0, state.totalUnread - prev);
-      if (prev > 0) state.chatsWithUnread = Math.max(0, state.chatsWithUnread - 1);
       delete state.unreadByMatch[matchId];
+    },
+    updateMessageStatus(state, action: PayloadAction<{ chatId: string; messageId?: string; status: string }>) {
+      const { chatId, messageId, status } = action.payload;
+      const index = state.matches.findIndex(m => String(m.matchId) === String(chatId));
+      if (index !== -1) {
+        const match = state.matches[index];
+        // Only update if it's the last message (which is what shows in the list)
+        if (!messageId || (match.lastMessage && String(match.lastMessage._id) === String(messageId))) {
+          state.matches[index] = {
+            ...match,
+            lastMessage: {
+              ...match.lastMessage,
+              status: status as any
+            }
+          };
+        }
+      }
     },
   },
 });
@@ -251,6 +265,7 @@ export const {
   resetUnread,
   togglePin,
   toggleMute,
-  removeMatch
+  removeMatch,
+  updateMessageStatus
 } = chatSlice.actions;
 export default chatSlice.reducer;
