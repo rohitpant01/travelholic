@@ -363,6 +363,7 @@ const googleLogin = async (req, res) => {
       console.log(`[AUTH] Google login: auto-verifying email for ${user.email}`);
       user.isEmailVerified = true;
       user.isPhoneVerified = true; // Phone OTP disabled
+    }
     // Multi-device: Update token
     if (req.body.pushToken) {
       updateDeviceToken(user, req.body.pushToken, req.body.platform, req.body.deviceId);
