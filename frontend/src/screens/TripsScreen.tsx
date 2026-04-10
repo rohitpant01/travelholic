@@ -129,7 +129,7 @@ export default function TripsScreen() {
     }
   }, [filters, page, dispatch]);
 
-  const handleDeleteTrip = async (id: string, type: 'social' | 'lyra') => {
+  const handleDeleteTrip = async (id: string, type: 'social' | 'lyra' | 'ai_itinerary') => {
     Alert.alert(
       'Delete Trip?',
       'This will permanently remove this itinerary from your collection.',

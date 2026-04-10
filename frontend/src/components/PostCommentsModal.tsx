@@ -20,7 +20,7 @@ import {
   deleteComment, 
   editComment 
 } from '../store/slices/commentSlice';
-import { decrementCommentCount } from '../store/slices/feedSlice';
+import { incrementCommentCount, decrementCommentCount } from '../store/slices/feedSlice';
 import OptionsMenu from './OptionsMenu';
 import { useAppTheme } from '../utils/theme';
 
@@ -44,9 +44,11 @@ const CommentInputArea = React.memo(({ postId }: { postId: string }) => {
     setIsSubmitting(true);
     try {
       await dispatch(addComment({ postId, text: inputText.trim() })).unwrap();
+      dispatch(incrementCommentCount(postId));
       setInputText('');
       Keyboard.dismiss();
     } catch (e) {
+      console.error('[Add Comment Error]', e);
       Alert.alert('Error', 'Failed to post comment');
     } finally {
       setIsSubmitting(false);

@@ -70,43 +70,45 @@ const NearbyTravelersView = ({
   ].filter((s) => s.data.length > 0);
 
   const renderItem = ({ item }: { item: Profile }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => onProfilePress(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.imageContainer}>
-        {item.profilePhoto ? (
-          <Image source={{ uri: item.profilePhoto }} style={styles.image} />
-        ) : (
-          <View style={[styles.image, { backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
-            <Ionicons name="person" size={32} color={theme.teal} />
-          </View>
-        )}
-        {item.isOnline && <View style={styles.onlineBadge} />}
-      </View>
-
-      <View style={styles.infoContainer}>
-        <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={1}>
-            {item.firstName} {item.lastName}
-          </Text>
-          <View style={styles.distanceBadge}>
-            <Ionicons name="location" size={12} color={theme.teal} />
-            <Text style={styles.distanceText}>{item.distanceKm} km</Text>
-          </View>
+    <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.cardTouchable}
+        onPress={() => onProfilePress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.imageContainer}>
+          {item.profilePhoto ? (
+            <Image source={{ uri: item.profilePhoto }} style={styles.image} />
+          ) : (
+            <View style={[styles.image, { backgroundColor: theme.mode === 'dark' ? '#1E293B' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+              <Ionicons name="person" size={32} color={theme.teal} />
+            </View>
+          )}
+          {item.isOnline && <View style={styles.onlineBadge} />}
         </View>
 
-        <Text style={styles.status} numberOfLines={1}>
-          {item.activityStatus || 'Planning a trip'}
-        </Text>
-        
-        {item.bio ? (
-          <Text style={styles.bio} numberOfLines={1}>
-            {item.bio}
+        <View style={styles.infoContainer}>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              {item.firstName} {item.lastName}
+            </Text>
+            <View style={styles.distanceBadge}>
+              <Ionicons name="location" size={12} color={theme.teal} />
+              <Text style={styles.distanceText}>{item.distanceKm} km</Text>
+            </View>
+          </View>
+
+          <Text style={styles.status} numberOfLines={1}>
+            {item.activityStatus || 'Planning a trip'}
           </Text>
-        ) : null}
-      </View>
+          
+          {item.bio ? (
+            <Text style={styles.bio} numberOfLines={1}>
+              {item.bio}
+            </Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
 
       <View style={styles.actionRow}>
         <TouchableOpacity 
@@ -123,7 +125,7 @@ const NearbyTravelersView = ({
           <Ionicons name="heart" size={20} color={theme.teal} />
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   const renderSectionHeader = ({ section: { title } }: any) => (
@@ -240,6 +242,11 @@ const getStyles = (theme: any) =>
       shadowOpacity: 0.05,
       shadowRadius: 5,
       elevation: 2,
+    },
+    cardTouchable: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
     },
     imageContainer: {
       position: 'relative',

@@ -36,6 +36,9 @@ const addComment = async (req, res) => {
       text
     });
 
+    // Populate user info for the new comment
+    const populatedComment = await Comment.findById(comment._id).populate('userId', 'firstName lastName username photos');
+
     // Increment commentsCount on Post
     await Post.findByIdAndUpdate(postId, { $inc: { commentsCount: 1 } });
 
@@ -51,7 +54,9 @@ const addComment = async (req, res) => {
         newComment: populatedComment,
         type: 'comment' 
       });
-    } catch (sErr) {}
+    } catch (sErr) {
+      console.error('[SOCKET ERROR] Failed to emit comment interaction:', sErr);
+    }
 
     // 6. TRIGGER NOTIFICATION
     if (post && post.userId.toString() !== userId.toString()) {
@@ -66,6 +71,7 @@ const addComment = async (req, res) => {
 
     res.status(201).json(populatedComment);
   } catch (error) {
+    console.error('[ADD COMMENT ERROR]', error);
     res.status(500).json({ error: error.message });
   }
 };

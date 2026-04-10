@@ -275,6 +275,9 @@ export default function DiscoverScreen() {
                       onPressProfile={(p) => navigation.navigate('UserDetail', {
                         userId: p._id,
                         profile: p,
+                        onActionPerformed: () => {
+                          setProfiles(prev => prev.filter(item => item._id !== p._id));
+                        }
                       })}
                     />
                   </View>
@@ -361,7 +364,13 @@ export default function DiscoverScreen() {
                 onLoadMore={() => fetchProfiles(false)}
                 hasMore={hasMore}
                 ghostMode={ghostMode}
-                onProfilePress={(p: any) => navigation.navigate('UserDetail', { userId: p._id, profile: p })}
+                onProfilePress={(p: any) => navigation.navigate('UserDetail', { 
+                  userId: p._id, 
+                  profile: p,
+                  onActionPerformed: () => {
+                    setProfiles(prev => prev.filter(item => item._id !== p._id));
+                  }
+                })}
                 onLike={(p: any) => handleLike(p._id)}
                 onSuperLike={(p: any) => handleSuperLike(p._id)}
               />
@@ -587,6 +596,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 24, paddingHorizontal: 40, gap: 20,
     backgroundColor: 'transparent',
     position: 'absolute', bottom: 0, left: 0, right: 0,
+    zIndex: 10,
   },
   actionBtn: {
     width: 66, height: 66, borderRadius: 33, alignItems: 'center',
