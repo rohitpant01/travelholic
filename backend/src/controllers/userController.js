@@ -895,5 +895,5 @@ module.exports = {
   getWhoLikedMe, followUser,
   addCompletedTrip, updateCompletedTrip, deleteCompletedTrip, getCompletedTrips,
   saveDestination, deleteSavedDestination, syncSavedDestinations,
-  requestAccountDeletion, cancelAccountDeletion,
+  requestAccountDeletion, cancelAccountDeletion, getProfileViews,
 };

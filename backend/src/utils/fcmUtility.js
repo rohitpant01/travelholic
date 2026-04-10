@@ -1,15 +1,32 @@
 const admin = require('firebase-admin');
 const path = require('path');
 
-// Initialize Firebase Admin
+// Initialize Firebase Admin (Hybrid: File for local, Env for Prod)
 try {
-  const serviceAccount = require('../../service-account.json');
+  let serviceAccount;
+  
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    // ☁️ Production: Use Environment Variable from Render/CI
+    console.log('☁️ [FCM] Initializing via FIREBASE_SERVICE_ACCOUNT_JSON Env Var');
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    
+    // Fix: Ensure private_key handles multi-line formatting (standard Google JSON format)
+    if (serviceAccount.private_key && serviceAccount.private_key.includes('\\n')) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
+  } else {
+    // 🏠 Local Development: Use JSON file
+    console.log('🏠 [FCM] Initializing via local service-account.json');
+    serviceAccount = require('../../service-account.json');
+  }
+
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
   console.log('✅ [FCM] Firebase Admin initialized successfully');
 } catch (error) {
   console.error('❌ [FCM] Firebase Admin initialization failed:', error.message);
+  console.warn('⚠️ [FCM] Notifications will be limited to Expo fallback only.');
 }
 
 /**
