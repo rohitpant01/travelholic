@@ -148,6 +148,7 @@ export const chatAPI = {
 export const tripAPI = {
   getTrips: (filters?: any) => apiClient.get('/trips', { params: filters }),
   getMyTrips: () => apiClient.get('/trips/my'),
+  getSavedPlans: () => apiClient.get('/trips/saved'),
   getTrip: (id: string) => apiClient.get(`/trips/${id}`),
   createTrip: (data: any) => apiClient.post('/trips', data),
   updateTrip: (id: string, data: any) => apiClient.put(`/trips/${id}`, data),

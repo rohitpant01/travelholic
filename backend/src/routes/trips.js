@@ -22,7 +22,8 @@ const {
   getPendingRequests,
   togglePinTrip,
   toggleMuteTrip,
-  reportTrip
+  reportTrip,
+  getSavedPlans
 } = require('../controllers/tripController');
 const { uploadPhoto, uploadVoice, uploadChatMedia } = require('../config/cloudinary');
 
@@ -33,6 +34,7 @@ router.use(protect);
 router.post('/', createTrip);
 router.get('/', getTrips);
 router.get('/my', getMyTrips);
+router.get('/saved', getSavedPlans);
 router.get('/:id', getTripDetail);
 router.put('/:id', updateTrip);
 router.delete('/:id', deleteTrip);

@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import { tripAPI, lyraAPI, aiAPI } from '../api/services';
 import Slider from '@react-native-community/slider';
-import { setTrips, appendTrips, setMyTrips, setLoading, setActiveTab, removeTripFromList } from '../store/slices/tripSlice';
+import { setTrips, appendTrips, setMyTrips, setSavedPlans, setLoading, setActiveTab, removeTripFromList } from '../store/slices/tripSlice';
 import { RootState } from '../store';
 import ScreenWrapper from '../components/ScreenWrapper';
 
@@ -48,7 +48,7 @@ export default function TripsScreen() {
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const styles = getStyles(theme, insets);
-  const { trips, myTrips, loading, activeTab } = useSelector((s: RootState) => s.trip);
+  const { trips, myTrips, savedPlans, loading, activeTab } = useSelector((s: RootState) => s.trip);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -161,27 +161,42 @@ export default function TripsScreen() {
     try {
       dispatch(setLoading(true));
       const res = await tripAPI.getMyTrips();
-      dispatch(setMyTrips(res.data.trips));
+      dispatch(setMyTrips(res.data.trips || []));
     } catch (e) {
       console.error('[TripsScreen] my trips error:', e);
     } finally {
       dispatch(setLoading(false));
       setRefreshing(false);
     }
-  }, []);
+  }, [dispatch]);
+
+  const fetchSavedPlans = useCallback(async () => {
+    try {
+      dispatch(setLoading(true));
+      const res = await tripAPI.getSavedPlans();
+      dispatch(setSavedPlans(res.data.savedPlans || []));
+    } catch (e) {
+      console.error('[TripsScreen] saved plans error:', e);
+    } finally {
+      dispatch(setLoading(false));
+      setRefreshing(false);
+    }
+  }, [dispatch]);
 
   useEffect(() => {
     if (activeTab === 'explore') fetchTrips(true);
-    else fetchMyTrips();
-  }, [activeTab, filters]);
+    else if (activeTab === 'myTrips') fetchMyTrips();
+    else if (activeTab === 'savedPlans') fetchSavedPlans();
+  }, [activeTab, filters, fetchTrips, fetchMyTrips, fetchSavedPlans]);
 
   const onRefresh = () => {
     setRefreshing(true);
     if (activeTab === 'explore') fetchTrips(true);
-    else fetchMyTrips();
+    else if (activeTab === 'myTrips') fetchMyTrips();
+    else if (activeTab === 'savedPlans') fetchSavedPlans();
   };
 
-  const data = activeTab === 'explore' ? trips : myTrips;
+  const data = activeTab === 'explore' ? trips : (activeTab === 'myTrips' ? myTrips : savedPlans);
 
   const formatDate = (d: string) => {
     const date = new Date(d);
@@ -477,7 +492,7 @@ export default function TripsScreen() {
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            {activeTab === 'myTrips' && (
+            {(activeTab === 'myTrips' || activeTab === 'savedPlans') && (
               <TouchableOpacity
                 onPress={() => handleDeleteTrip(item._id, isLyra ? 'lyra' : (isAI ? 'ai_itinerary' : 'social'))}
                 style={{ padding: 4 }}
@@ -681,7 +696,15 @@ export default function TripsScreen() {
             onPress={() => dispatch(setActiveTab('myTrips'))}
           >
             <Text style={[styles.tabText, activeTab === 'myTrips' && styles.tabTextActive]} numberOfLines={1}>
-              🎒 My Trips
+              🎒 Group Trips
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'savedPlans' && styles.tabActive]}
+            onPress={() => dispatch(setActiveTab('savedPlans'))}
+          >
+            <Text style={[styles.tabText, activeTab === 'savedPlans' && styles.tabTextActive]} numberOfLines={1}>
+              📑 Saved Plans
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -704,12 +727,12 @@ export default function TripsScreen() {
               <View style={styles.empty}>
                 <Text style={{ fontSize: 48 }}>🗺️</Text>
                 <Text style={styles.emptyTitle}>
-                  {activeTab === 'explore' ? 'No trips found' : 'No trips yet'}
+                  {activeTab === 'explore' ? 'No trips found' : (activeTab === 'myTrips' ? 'No social groups' : 'No saved plans')}
                 </Text>
                 <Text style={styles.emptySubtitle}>
                   {activeTab === 'explore'
                     ? 'Try adjusting your filters or check back later'
-                    : 'Create your first trip and find travel companions!'}
+                    : (activeTab === 'myTrips' ? 'Join a trip group to see it here!' : 'Save an itinerary from the Wizard to see it here!')}
                 </Text>
                 {activeTab === 'myTrips' && (
                   <TouchableOpacity

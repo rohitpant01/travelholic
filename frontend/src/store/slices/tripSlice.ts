@@ -3,6 +3,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 interface TripState {
   trips: any[];
   myTrips: any[];
+  savedPlans: any[];
   currentTrip: any | null;
   currentTripMembers: any[];
   tripMessages: Record<string, any[]>;
@@ -13,12 +14,13 @@ interface TripState {
     mode: string | null;
   };
   loading: boolean;
-  activeTab: 'explore' | 'myTrips' | 'aiPlanner';
+  activeTab: 'explore' | 'myTrips' | 'aiPlanner' | 'savedPlans';
 }
 
 const initialState: TripState = {
   trips: [],
   myTrips: [],
+  savedPlans: [],
   currentTrip: null,
   currentTripMembers: [],
   tripMessages: {},
@@ -41,6 +43,9 @@ const tripSlice = createSlice({
     },
     setMyTrips: (state, action: PayloadAction<any[]>) => {
       state.myTrips = action.payload;
+    },
+    setSavedPlans: (state, action: PayloadAction<any[]>) => {
+      state.savedPlans = action.payload;
     },
     setCurrentTrip: (state, action: PayloadAction<any>) => {
       state.currentTrip = action.payload;
@@ -67,18 +72,19 @@ const tripSlice = createSlice({
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
     },
-    setActiveTab: (state, action: PayloadAction<'explore' | 'myTrips' | 'aiPlanner'>) => {
+    setActiveTab: (state, action: PayloadAction<'explore' | 'myTrips' | 'aiPlanner' | 'savedPlans'>) => {
       state.activeTab = action.payload;
     },
     removeTripFromList: (state, action: PayloadAction<string>) => {
       state.trips = state.trips.filter((t: any) => t._id !== action.payload);
       state.myTrips = state.myTrips.filter((t: any) => t._id !== action.payload);
+      state.savedPlans = state.savedPlans.filter((t: any) => t._id !== action.payload);
     },
   },
 });
 
 export const {
-  setTrips, appendTrips, setMyTrips,
+  setTrips, appendTrips, setMyTrips, setSavedPlans,
   setCurrentTrip, setCurrentTripMembers,
   addTripMessage, setTripMessages,
   setFilters, clearFilters, setLoading,

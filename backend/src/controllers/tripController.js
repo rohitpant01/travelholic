@@ -169,6 +169,25 @@ const getMyTrips = async (req, res) => {
       };
     }));
 
+    // Return only social trips in this endpoint to prevent confusion with itineraries
+    const combined = [...tripsWithMeta].sort((a, b) => 
+      new Date(b.date) - new Date(a.date)
+    );
+
+    res.json({ trips: combined });
+  } catch (error) {
+    console.error('[getMyTrips]', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ============================================================
+// GET SAVED PLANS (AI & LYRA ITINERARIES)
+// ============================================================
+const getSavedPlans = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
     // [LYRA] Fetch user's saved AI itineraries
     const lyraPlans = await LyraItinerary.find({ userId: userId, isSaved: true })
       .sort({ createdAt: -1 });
@@ -207,14 +226,13 @@ const getMyTrips = async (req, res) => {
       };
     });
 
-    // Combine and sort by date descending
-    const combined = [...tripsWithMeta, ...lyraFormatted, ...aiFormatted].sort((a, b) => 
-      new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)
+    const combined = [...lyraFormatted, ...aiFormatted].sort((a, b) => 
+      new Date(b.date) - new Date(a.date)
     );
 
-    res.json({ trips: combined });
+    res.json({ savedPlans: combined });
   } catch (error) {
-    console.error('[getMyTrips]', error);
+    console.error('[getSavedPlans]', error);
     res.status(500).json({ error: error.message });
   }
 };
