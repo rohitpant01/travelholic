@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import store, { RootState, AppDispatch } from './src/store';
 import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
 import { setUser, setToken, setLoading, updateUser } from './src/store/slices/authSlice';
 import { upsertMessage, upsertTripMessage, updateMatchOnlineStatus, setUnreadCounts, addMatch, setTotalUnread, setMatches, removeMatch } from './src/store/slices/chatSlice';
 import { fetchNotifications, addNotification, setUnreadCount, markAllRead } from './src/store/slices/notificationSlice';
