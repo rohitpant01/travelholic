@@ -24,12 +24,14 @@ export const useLocationTracker = () => {
       const now = Date.now();
       if (now - lastUpdateTime.current < MIN_UPDATE_INTERVAL) return;
       
+      // Update the timer immediately to prevent rapid-fire retries on failure
+      lastUpdateTime.current = now;
+      
       console.log('[LOCATION TRACKER] Updating backend:', coords);
       const res = await discoverAPI.updateLocation(coords.latitude, coords.longitude);
       
       if (res.data.success) {
         dispatch(updateUser(res.data.user));
-        lastUpdateTime.current = now;
       }
       
       // Also broadcast via socket for real-time movement to nearby users

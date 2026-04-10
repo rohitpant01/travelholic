@@ -583,31 +583,39 @@ const initSocket = (server) => {
     // ---- REAL-TIME DISCOVERY (Movement) ----
     socket.on('update_location', async ({ lat, lng }) => {
       try {
-        if (!lat || !lng) return;
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
         
-        // Broadcast movement to nearby users room
-        // Note: For large scale, we'd use dynamic rooms or Geo-hashes.
-        // For now, we reuse the controller logic or emit to individual nearby users.
         const userId = socket.userId;
-        
+        if (!userId) return;
+
+        console.log(`[SOCKET] Location update for ${userId}: ${lat}, ${lng}`);
+
+        // Update DB
+        await User.findByIdAndUpdate(userId, {
+            location: { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] }
+        });
+
+        // Broadcast movement to nearby users room
         const nearbyUsers = await User.find({
           location: {
             $near: {
               $geometry: { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
-              $maxDistance: 50000,
+              $maxDistance: 50000, // 50km
             },
           },
           _id: { $ne: userId },
           isOnline: true,
           visibilityStatus: 'public'
-        }).select('_id');
+        }).select('_id').limit(20); // Limit to top 20 nearby users to save CPU
 
-        nearbyUsers.forEach(u => {
-          io.to(u._id.toString()).emit('user_moved', {
-            userId,
-            location: { type: 'Point', coordinates: [lng, lat] }
-          });
-        });
+        if (io) {
+            nearbyUsers.forEach(u => {
+              io.to(u._id.toString()).emit('user_moved', {
+                userId,
+                location: { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] }
+              });
+            });
+        }
       } catch (err) {
         console.error('Socket location update error:', err);
       }
@@ -647,8 +655,7 @@ const initSocket = (server) => {
 };
 
 const getIO = () => {
-  if (!io) throw new Error('Socket.io not initialized');
-  return io;
+  return io || null;
 };
 
 module.exports = { initSocket, getIO };

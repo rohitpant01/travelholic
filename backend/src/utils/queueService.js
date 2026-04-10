@@ -2,11 +2,14 @@ const { Queue, Worker } = require('bullmq');
 const IORedis = require('ioredis');
 
 const REDIS_URL = process.env.REDIS_URL;
+// 🔒 SOFT DISABLE: Change to true only when 503 issues are fully resolved.
+const ENABLE_REDIS = false; 
+
 let connection = null;
 let notificationQueue = null;
 let useQueue = false;
 
-if (REDIS_URL) {
+if (REDIS_URL && ENABLE_REDIS) {
   try {
     connection = new IORedis(REDIS_URL, { 
       maxRetriesPerRequest: null,

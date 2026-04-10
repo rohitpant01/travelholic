@@ -32,15 +32,18 @@ const deliverNotification = async (notificationId, idempotencyKey = null) => {
     // 2. Socket Delivery (In-App)
     try {
       const io = getIO();
-      if (io) {
-        const rooms = io.sockets.adapter.rooms.get(notification.recipient._id.toString());
+      if (io && notification.recipient) {
+        const recipientId = notification.recipient._id.toString();
+        const rooms = io.sockets.adapter.rooms.get(recipientId);
         const isOnline = rooms && rooms.size > 0;
         
         if (isOnline) {
-          io.to(notification.recipient._id.toString()).emit('new_notification', notification);
+          io.to(recipientId).emit('new_notification', notification);
           deliveredViaSocket = true;
-          console.log(`[HUB] Socket delivered to ${notification.recipient._id}`);
+          console.log(`[HUB] Socket delivered to ${recipientId}`);
         }
+      } else {
+        console.log('[HUB] Socket not initialized or recipient missing, skipping socket delivery.');
       }
     } catch (err) {
       console.warn('[HUB] Socket delivery failed:', err.message);
