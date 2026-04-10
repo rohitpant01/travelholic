@@ -717,6 +717,34 @@ function AppNavigator() {
   );
 }
 
+// ================================================================
+// DEEP LINKING CONFIGURATION
+// ================================================================
+const linking = {
+  prefixes: ['ekalgo://', 'https://travelholic-zsqn.onrender.com'],
+  config: {
+    screens: {
+      MainTabs: {
+        screens: {
+          Travelers: 'travelers',
+          Explorer: 'explorer',
+          Trips: 'trips',
+          Matches: 'matches',
+          Profile: 'profile',
+        },
+      },
+      Chat: 'chat/:chatId',
+      PostDetail: 'post/:postId',
+      UserDetail: 'user/:userId',
+      AIItinerary: 'itinerary/:id',
+      LyraItinerary: 'lyra/:id',
+      ProfileViews: 'profile/views',
+      Notifications: 'notifications',
+      Settings: 'settings',
+    },
+  },
+};
+
 export default function App() {
   return (
     <Provider store={store}>
@@ -725,7 +753,7 @@ export default function App() {
           <SocketProvider socketUrl={SOCKET_URL}>
             <ToastProvider>
               <BottomSheetModalProvider>
-                <NavigationContainer linking={fixedLinking}>
+                <NavigationContainer linking={linking}>
                   <StatusBar style="dark" translucent={false} />
                   <AppNavigator />
                   <ActionToast />

@@ -49,6 +49,17 @@ const ProfileViewsScreen = () => {
     fetchViews();
   };
 
+  const formatTime = (dateStr: string) => {
+    try {
+      if (!dateStr) return 'some time ago';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'some time ago';
+      return formatDistanceToNow(d) + ' ago';
+    } catch (e) {
+      return 'some time ago';
+    }
+  };
+
   const renderItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.card}
@@ -72,7 +83,7 @@ const ProfileViewsScreen = () => {
         <Text style={styles.location}>
           <Ionicons name="location-outline" size={12} /> {item.city}, {item.country}
         </Text>
-        <Text style={styles.time}>{formatDistanceToNow(new Date(item.viewedAt))} ago</Text>
+        <Text style={styles.time}>{formatTime(item.viewedAt)}</Text>
       </View>
 
       <TouchableOpacity 
