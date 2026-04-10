@@ -49,17 +49,26 @@ const PostLikesModal = forwardRef<BottomSheetModal, Props>(({ postId }, ref) => 
     []
   );
 
-  const loadLikes = async () => {
+  const loadLikes = async (retryCount = 0) => {
     setLoading(true);
     try {
       const resultAction = await dispatch(fetchPostLikes(postId));
       if (fetchPostLikes.fulfilled.match(resultAction)) {
         setUsers(resultAction.payload);
+      } else if (retryCount < 1) {
+        // Auto-retry once on transient server errors (502/503)
+        setTimeout(() => loadLikes(retryCount + 1), 1000);
+        return; // Keep loading state
       }
     } catch (e) {
+      if (retryCount < 1) {
+        setTimeout(() => loadLikes(retryCount + 1), 1000);
+        return;
+      }
       Alert.alert('Error', 'Failed to load likes');
     } finally {
-      setLoading(false);
+      if (retryCount >= 1 || users.length > 0) setLoading(false);
+      else setLoading(false);
     }
   };
 

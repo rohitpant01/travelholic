@@ -24,6 +24,7 @@ import storage from './src/utils/storage';
 import { setUser, setToken, setLoading, updateUser } from './src/store/slices/authSlice';
 import { upsertMessage, upsertTripMessage, updateMatchOnlineStatus, setUnreadCounts, addMatch, setTotalUnread, setMatches, removeMatch } from './src/store/slices/chatSlice';
 import { fetchNotifications, addNotification, setUnreadCount, markAllRead } from './src/store/slices/notificationSlice';
+import { updatePostInteraction } from './src/store/slices/feedSlice';
 import { userAPI, chatAPI, matchAPI, tripAPI } from './src/api/services';
 import { API_BASE_URL } from './src/api/client';
 import { useSocket, SocketProvider } from './src/context/SocketContext';
@@ -558,6 +559,16 @@ function AppNavigator() {
       }));
     };
 
+    const onPostInteraction = (data: any) => {
+      console.log('[SOCKET] post_interaction:', data);
+      dispatch(updatePostInteraction({
+        postId: data.postId,
+        likesCount: data.likesCount,
+        commentsCount: data.commentsCount,
+        type: data.type
+      }));
+    };
+
     socket.on('receive_message', onReceiveMessage);
     socket.on('user_online', onUserOnline);
     socket.on('like_received', onLikeReceived);
@@ -567,6 +578,7 @@ function AppNavigator() {
     socket.on('notifications_read_sync', onNotificationsReadSync);
     socket.on('match_removed', onMatchRemoved);
     socket.on('message_status_update', onMessageStatusUpdate);
+    socket.on('post_interaction', onPostInteraction);
 
     return () => {
       socket.off('receive_message', onReceiveMessage);
@@ -578,6 +590,7 @@ function AppNavigator() {
       socket.off('notifications_read_sync', onNotificationsReadSync);
       socket.off('match_removed', onMatchRemoved);
       socket.off('message_status_update', onMessageStatusUpdate);
+      socket.off('post_interaction', onPostInteraction);
     };
   }, [isAuthenticated, user?._id, socket]);
 

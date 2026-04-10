@@ -48,10 +48,13 @@ export const fetchFeed = createAsyncThunk(
 
 export const toggleLikeAction = createAsyncThunk(
   'feed/toggleLike',
-  async (postId: string, { rejectWithValue }) => {
+  async (postId: string, { rejectWithValue, getState }) => {
+    // Prevent rapid double-taps from causing state desync
+    const state = getState() as { feed: FeedState };
+    const post = state.feed.posts.find(p => p._id === postId);
     try {
       const res = await feedAPI.toggleLike(postId);
-      return { postId, liked: res.data.liked };
+      return { postId, liked: res.data.liked, likesCount: res.data.likesCount };
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || 'Failed to toggle like');
     }
@@ -181,6 +184,22 @@ const feedSlice = createSlice({
     },
     clearUserPosts: (state) => {
       state.userPosts = [];
+    },
+    updatePostInteraction: (state, action: PayloadAction<{
+      postId: string;
+      likesCount?: number;
+      commentsCount?: number;
+      type: string;
+    }>) => {
+      const { postId, likesCount, commentsCount, type } = action.payload;
+      // Update in both posts (feed) and userPosts (profile)
+      [state.posts, state.userPosts].forEach(list => {
+        const post = list.find(p => p._id === postId);
+        if (post) {
+          if (typeof likesCount === 'number') post.likesCount = likesCount;
+          if (typeof commentsCount === 'number') post.commentsCount = commentsCount;
+        }
+      });
     }
   },
   extraReducers: (builder) => {
@@ -218,25 +237,40 @@ const feedSlice = createSlice({
         const feedPost = state.posts.find(p => p._id === postId);
         if (feedPost) {
           feedPost.isLiked = !feedPost.isLiked;
-          feedPost.likesCount += feedPost.isLiked ? 1 : -1;
+          feedPost.likesCount = Math.max(0, feedPost.likesCount + (feedPost.isLiked ? 1 : -1));
         }
         const userPost = state.userPosts.find(p => p._id === postId);
         if (userPost) {
           userPost.isLiked = !userPost.isLiked;
-          userPost.likesCount += userPost.isLiked ? 1 : -1;
+          userPost.likesCount = Math.max(0, userPost.likesCount + (userPost.isLiked ? 1 : -1));
+        }
+      })
+      .addCase(toggleLikeAction.fulfilled, (state, action) => {
+        // Sync with server truth to fix any desync from rapid taps
+        const { postId, liked, likesCount } = action.payload;
+        const feedPost = state.posts.find(p => p._id === postId);
+        if (feedPost) {
+          feedPost.isLiked = liked;
+          if (typeof likesCount === 'number') feedPost.likesCount = likesCount;
+        }
+        const userPost = state.userPosts.find(p => p._id === postId);
+        if (userPost) {
+          userPost.isLiked = liked;
+          if (typeof likesCount === 'number') userPost.likesCount = likesCount;
         }
       })
       .addCase(toggleLikeAction.rejected, (state, action) => {
+        // Revert optimistic update on failure
         const postId = action.meta.arg;
         const feedPost = state.posts.find(p => p._id === postId);
         if (feedPost) {
           feedPost.isLiked = !feedPost.isLiked;
-          feedPost.likesCount += feedPost.isLiked ? 1 : -1;
+          feedPost.likesCount = Math.max(0, feedPost.likesCount + (feedPost.isLiked ? 1 : -1));
         }
         const userPost = state.userPosts.find(p => p._id === postId);
         if (userPost) {
           userPost.isLiked = !userPost.isLiked;
-          userPost.likesCount += userPost.isLiked ? 1 : -1;
+          userPost.likesCount = Math.max(0, userPost.likesCount + (userPost.isLiked ? 1 : -1));
         }
       })
       .addCase(createPostAction.pending, (state, action) => {
@@ -328,6 +362,7 @@ export const {
   clearError, 
   incrementCommentCount, 
   decrementCommentCount,
-  clearUserPosts 
+  clearUserPosts,
+  updatePostInteraction
 } = feedSlice.actions;
 export default feedSlice.reducer;

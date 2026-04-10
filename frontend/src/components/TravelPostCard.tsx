@@ -43,9 +43,14 @@ const TravelPostCard = ({ post, onPressProfile, onPressComment, onPressLikes, on
     if (index !== activeImageIndex) setActiveImageIndex(index);
   };
 
+  const likeDebounceRef = React.useRef(false);
+
   const handleLike = () => {
-    if (isTemp) return;
+    if (isTemp || likeDebounceRef.current) return;
+    likeDebounceRef.current = true;
     dispatch(toggleLikeAction(post._id));
+    // Block re-taps for 800ms to let the server respond
+    setTimeout(() => { likeDebounceRef.current = false; }, 800);
   };
 
   const handleShare = async () => {

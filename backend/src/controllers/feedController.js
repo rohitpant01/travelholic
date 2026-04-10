@@ -123,7 +123,9 @@ const createPost = async (req, res) => {
       return res.status(400).json({ error: 'Post must have content or images' });
     }
 
-    if (content && filter.isProfane(content)) {
+    let isProfane = false;
+    if (content) { try { isProfane = filter.isProfane(String(content)); } catch (e) {} }
+    if (isProfane) {
       return res.status(400).json({ error: 'Your post contains offensive language. Please keep it friendly!' });
     }
 
@@ -221,7 +223,9 @@ const addComment = async (req, res) => {
 
     if (!text) return res.status(400).json({ error: 'Comment text is required' });
 
-    if (filter.isProfane(text)) {
+    let isProfane = false;
+    try { isProfane = filter.isProfane(String(text)); } catch (e) {}
+    if (isProfane) {
       return res.status(400).json({ error: 'Your comment contains offensive language.' });
     }
 
