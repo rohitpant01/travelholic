@@ -92,8 +92,7 @@
           }
         }
       ],
-      "expo-secure-store",
-      "expo-av\\"
+      "expo-secure-store"
     ],
     "newArchEnabled": true,
     "extra": {
