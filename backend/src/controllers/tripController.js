@@ -1110,22 +1110,43 @@ const reportTrip = async (req, res) => {
 // ============================================================
 const getSavedPlans = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const mongoose = require('mongoose');
+    const userId = new mongoose.Types.ObjectId(req.user._id);
+
+    console.log(`[getSavedPlans] Fetching plans for user: ${userId}`);
 
     const [aiPlans, lyraPlans] = await Promise.all([
       AIItinerary.find({ userId }).sort({ createdAt: -1 }),
       LyraItinerary.find({ userId }).sort({ createdAt: -1 })
     ]);
 
+    console.log(`[getSavedPlans] Found ${aiPlans.length} AI plans and ${lyraPlans.length} Lyra plans`);
+
     const combined = [
-      ...aiPlans.map(p => ({ ...p.toObject(), type: 'ai_itinerary' })),
-      ...lyraPlans.map(p => ({ ...p.toObject(), type: 'lyra' }))
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      ...(aiPlans || []).map(p => {
+        try {
+          return { ...p.toObject(), type: 'ai_itinerary' };
+        } catch (e) {
+          return { ...p, type: 'ai_itinerary' };
+        }
+      }),
+      ...(lyraPlans || []).map(p => {
+        try {
+          return { ...p.toObject(), type: 'lyra' };
+        } catch (e) {
+          return { ...p, type: 'lyra' };
+        }
+      })
+    ].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
 
     res.json({ savedPlans: combined });
   } catch (error) {
-    console.error('[getSavedPlans]', error);
-    res.status(500).json({ error: error.message });
+    console.error('[getSavedPlans] ERROR:', error);
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 };
 
