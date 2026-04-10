@@ -244,9 +244,6 @@ const ChecklistDetailScreen = () => {
   );
 };
 
-  );
-};
-
 const getStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
