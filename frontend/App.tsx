@@ -218,34 +218,32 @@ function AppNavigator() {
     const bootstrapAuth = async () => {
       try {
         const token = await storage.getSecureItem('token');
-        const userData = await storage.getItem('user');
+        const userData = await storage.getItem('user'); // This already handles JSON.parse in storage.ts
 
-        if (token && userData && userData !== 'undefined' && userData !== 'null') {
+        if (token) {
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           dispatch(setToken(token));
 
-          // Show cached user immediately so UI is not blocked
-          try {
-            const parsedUser = JSON.parse(userData);
-            if (parsedUser) {
-              dispatch(setUser(parsedUser));
+          // If userData is an object (successfully parsed by storage.getItem), use it
+          if (userData && typeof userData === 'object') {
+            console.log('[bootstrapAuth] Hydrating from cache:', userData.email);
+            dispatch(setUser(userData));
+          } else if (userData && typeof userData === 'string' && userData.startsWith('{')) {
+            // Fallback for cases where storage.getItem returned a raw string but it's valid JSON
+            try {
+              dispatch(setUser(JSON.parse(userData)));
+            } catch (e) {
+              console.warn('[bootstrapAuth] Failed to parse cached user string fallback:', e);
             }
-          } catch (e) {
-            console.warn('[bootstrapAuth] Failed to parse cached user:', e);
           }
 
-          // ✅ FIX: Extract .data.user from the Axios response
-          // Previously: dispatch(updateUser(freshUser))  ← was passing the whole Axios response object
-          // Now:        dispatch(updateUser(freshUser.data.user)) ← correctly extracts the user object
+          // Fetch fresh profile in background
           try {
             const response = await userAPI.getProfile();
             const freshUser = response?.data?.user;
             if (freshUser) {
               dispatch(updateUser(freshUser));
               await storage.setItem('user', freshUser);
-
-              // Fetch matches and unread count globally for instant real-time parity
-              // This logic is moved to a reactive useEffect below
             }
           } catch (apiError) {
             console.warn('[bootstrapAuth] Could not refresh user, using cache:', apiError);

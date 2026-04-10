@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, Modal, 
   TouchableOpacity, Image, ActivityIndicator, 
-  Alert, SafeAreaView, Platform
+  Alert, Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -59,8 +60,8 @@ export default function AddStoryModal({ visible, onClose }: Props) {
   const handleUpload = async () => {
     if (!image) return;
 
-    setLoading(true);
     try {
+      // Background compression and upload
       const compressedUri = await compressImage(image);
       const formData = new FormData();
       const filename = compressedUri.split('/').pop() || `story_${Date.now()}.jpg`;
@@ -71,15 +72,20 @@ export default function AddStoryModal({ visible, onClose }: Props) {
         type: 'image/jpeg',
       } as any);
 
-      await dispatch(createStoryAction(formData)).unwrap();
-      dispatch(fetchStories()); // Refresh feed
+      // Start the upload in the background
+      dispatch(createStoryAction(formData)).unwrap()
+        .then(() => {
+          dispatch(fetchStories());
+        })
+        .catch(() => {
+          Alert.alert('Upload Failed', 'Could not share your story. Please try again.');
+        });
       
+      // Close immediately for a "seamless" feel
       setImage(null);
       onClose();
     } catch (error: any) {
-      Alert.alert('Upload Failed', 'Could not share your story. Please try again.');
-    } finally {
-      setLoading(false);
+      Alert.alert('Upload Failed', 'Something went wrong while preparing your story.');
     }
   };
 

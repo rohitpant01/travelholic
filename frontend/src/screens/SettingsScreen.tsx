@@ -75,7 +75,11 @@ export default function SettingsScreen() {
     {
       icon: mode === 'light' ? 'moon-outline' : 'sunny-outline', 
       label: mode === 'light' ? 'Dark Mode' : 'Light Mode',
-      onPress: () => dispatch(toggleTheme()), color: theme.gold,
+      onPress: () => {
+        dispatch(toggleTheme());
+        navigation.goBack();
+      }, 
+      color: theme.gold,
     },
     {
       icon: 'shield-checkmark-outline', label: 'Privacy & Safety',

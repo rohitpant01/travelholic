@@ -348,7 +348,10 @@ export default function ProfileScreen() {
 
             <TouchableOpacity 
               style={styles.menuItem} 
-              onPress={() => dispatch(toggleTheme())}
+              onPress={() => {
+                dispatch(toggleTheme());
+                menuSheetRef.current?.dismiss();
+              }}
             >
               <View style={[styles.menuIcon, { backgroundColor: theme.goldLight }]}>
                 <Ionicons 

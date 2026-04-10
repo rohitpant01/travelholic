@@ -1,25 +1,69 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
+import { Platform, NativeModules } from 'react-native';
 
 /**
  * Unified storage utility for EkalGo.
  * Uses SecureStore for sensitive data (tokens) and AsyncStorage for non-sensitive data.
  */
+let isSecureStoreAvailableCache: boolean | null = null;
+let SecureStoreModule: any = null;
+
 const storage = {
+  /**
+   * Internal helper to safely check if SecureStore is truly functional
+   */
+  async isSecureAvailable(): Promise<boolean> {
+    if (isSecureStoreAvailableCache !== null) return isSecureStoreAvailableCache;
+
+    try {
+      // Platform check: SecureStore is only for Native (iOS/Android)
+      if (Platform.OS === 'web') {
+        isSecureStoreAvailableCache = false;
+        return false;
+      }
+
+      // 🛡️ Silent pre-check: Check if the native module is actually linked
+      // Accessing NativeModules[name] is silent and returns undefined if missing.
+      // Doing require('expo-secure-store') triggers a console error in some Expo versions.
+      const isLinked = !!(NativeModules.ExpoSecureStore || NativeModules.SecureStore);
+      
+      if (!isLinked) {
+        isSecureStoreAvailableCache = false;
+        return false;
+      }
+
+      // Dynamic require now that we know it's linked
+      if (!SecureStoreModule) {
+        SecureStoreModule = require('expo-secure-store');
+      }
+      
+      if (!SecureStoreModule || typeof SecureStoreModule.isAvailableAsync !== 'function') {
+        isSecureStoreAvailableCache = false;
+        return false;
+      }
+
+      isSecureStoreAvailableCache = await SecureStoreModule.isAvailableAsync();
+      return isSecureStoreAvailableCache;
+    } catch (e) {
+      isSecureStoreAvailableCache = false;
+      return false;
+    }
+  },
+
   /**
    * Save sensitive data securely (Keychain/Keystore)
    */
   async setSecureItem(key: string, value: string) {
     try {
-      if (!(await SecureStore.isAvailableAsync())) {
+      const isAvailable = await this.isSecureAvailable();
+      if (!isAvailable || !SecureStoreModule) {
         return await AsyncStorage.setItem(key, value);
       }
-      await SecureStore.setItemAsync(key, value);
+      await SecureStoreModule.setItemAsync(key, value);
     } catch (error: any) {
-      if (error.message?.includes('native module')) {
-        return await AsyncStorage.setItem(key, value);
-      }
-      console.error(`[Storage] Error setting secure item ${key}:`, error);
+      // Secondary fallback if setItemAsync itself crashes
+      await AsyncStorage.setItem(key, value);
+      console.error(`[Storage] SecureStore.setItemAsync failed for ${key}, fell back to AsyncStorage:`, error.message);
     }
   },
 
@@ -28,16 +72,16 @@ const storage = {
    */
   async getSecureItem(key: string) {
     try {
-      if (!(await SecureStore.isAvailableAsync())) {
+      const isAvailable = await this.isSecureAvailable();
+      if (!isAvailable || !SecureStoreModule) {
         return await AsyncStorage.getItem(key);
       }
-      return await SecureStore.getItemAsync(key);
+      return await SecureStoreModule.getItemAsync(key);
     } catch (error: any) {
-      if (error.message?.includes('native module')) {
-        return await AsyncStorage.getItem(key);
-      }
-      console.error(`[Storage] Error getting secure item ${key}:`, error);
-      return null;
+      // Secondary fallback
+      const val = await AsyncStorage.getItem(key);
+      console.error(`[Storage] SecureStore.getItemAsync failed for ${key}, returning AsyncStorage value:`, error.message);
+      return val;
     }
   },
 
@@ -46,15 +90,14 @@ const storage = {
    */
   async removeSecureItem(key: string) {
     try {
-      if (!(await SecureStore.isAvailableAsync())) {
+      const isAvailable = await this.isSecureAvailable();
+      if (!isAvailable || !SecureStoreModule) {
         return await AsyncStorage.removeItem(key);
       }
-      await SecureStore.deleteItemAsync(key);
+      await SecureStoreModule.deleteItemAsync(key);
     } catch (error: any) {
-      if (error.message?.includes('native module')) {
-        return await AsyncStorage.removeItem(key);
-      }
-      console.error(`[Storage] Error deleting secure item ${key}:`, error);
+      await AsyncStorage.removeItem(key);
+      console.error(`[Storage] SecureStore.deleteItemAsync failed for ${key}, cleared AsyncStorage instead:`, error.message);
     }
   },
 
@@ -77,6 +120,14 @@ const storage = {
     try {
       const value = await AsyncStorage.getItem(key);
       if (!value) return null;
+      
+      // Handle the common "[object Object]" corruption error
+      if (value === '[object Object]') {
+        console.warn(`[Storage] Corrupted data found for key: ${key}. Clearing it.`);
+        await AsyncStorage.removeItem(key);
+        return null;
+      }
+
       try {
         return JSON.parse(value);
       } catch {
@@ -110,5 +161,6 @@ const storage = {
     }
   }
 };
+
 
 export default storage;
