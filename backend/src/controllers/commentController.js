@@ -39,11 +39,21 @@ const addComment = async (req, res) => {
     // Increment commentsCount on Post
     await Post.findByIdAndUpdate(postId, { $inc: { commentsCount: 1 } });
 
-    // Populate user info for immediate display
-    const populatedComment = await comment.populate('userId', 'firstName lastName username photos');
-
-    // TRIGGER NOTIFICATION
+    // 4. Fetch Post to get updated count and recipient
     const post = await Post.findById(postId);
+
+    // 5. BROADCAST UPDATE (Real-time visibility)
+    try {
+      const { getIO } = require('../socket/socketHandler');
+      getIO().emit('post_interaction', { 
+        postId, 
+        commentsCount: post?.commentsCount || 1, 
+        newComment: populatedComment,
+        type: 'comment' 
+      });
+    } catch (sErr) {}
+
+    // 6. TRIGGER NOTIFICATION
     if (post && post.userId.toString() !== userId.toString()) {
       createNotification({
         recipient: post.userId,

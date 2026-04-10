@@ -39,23 +39,25 @@ const getFeed = async (req, res) => {
         sort = {}; // Sorted by proximity automatically
       }
     } else if (mode === 'friends') {
-      const user = await User.findById(req.user._id).select('following');
+      const [user, matches] = await Promise.all([
+        User.findById(req.user._id).select('following'),
+        Match.find({ 
+          users: req.user._id, 
+          isActive: true 
+        })
+      ]);
       
       // 1. Get IDs of users we follow
-      const followingIds = user.following || [];
+      const followingIds = user?.following || [];
       
       // 2. Get IDs of users we have matched with
-      const matches = await Match.find({ 
-        users: req.user._id, 
-        isActive: true 
-      });
       const matchedUserIds = matches.map(m => 
         m.users.find(id => id.toString() !== req.user._id.toString())
       ).filter(Boolean);
 
       // Friends see any post (except maybe private, but normally they see all) 
       // from their matched/followed circle
-      query.userId = { $in: [...followingIds, ...matchedUserIds, req.user._id] };
+      query.userId = { $in: [...followingIds, ...matchedUserIds, req.user._id, req.user._id] }; // Includes self
     } else {
       // DEFAULT: Global Mode
       // Only show posts explicitly marked as global
@@ -158,14 +160,27 @@ const toggleLike = async (req, res) => {
     if (existingLike) {
       // UNLIKE
       await Like.deleteOne({ _id: existingLike._id });
-      await Post.findByIdAndUpdate(postId, { $inc: { likesCount: -1 } });
-      res.json({ liked: false, message: 'Unliked' });
+      const post = await Post.findByIdAndUpdate(postId, { $inc: { likesCount: -1 } }, { new: true });
+      
+      // Broadcast update
+      try {
+        const { getIO } = require('../socket/socketHandler');
+        getIO().emit('post_interaction', { postId, likesCount: post?.likesCount || 0, type: 'unlike' });
+      } catch (sErr) {}
+
+      res.json({ liked: false, message: 'Unliked', likesCount: post?.likesCount || 0 });
     } else {
       // LIKE
       try {
         await Like.create({ postId, userId });
-        const post = await Post.findByIdAndUpdate(postId, { $inc: { likesCount: 1 } });
+        const post = await Post.findByIdAndUpdate(postId, { $inc: { likesCount: 1 } }, { new: true });
         
+        // Broadcast update
+        try {
+          const { getIO } = require('../socket/socketHandler');
+          getIO().emit('post_interaction', { postId, likesCount: post?.likesCount || 1, type: 'like' });
+        } catch (sErr) {}
+
         // TRIGGER NOTIFICATION
         if (post && post.userId.toString() !== userId.toString()) {
            createNotification({
@@ -176,7 +191,7 @@ const toggleLike = async (req, res) => {
              data: { postId }
            });
         }
-        res.json({ liked: true, message: 'Liked' });
+        res.json({ liked: true, message: 'Liked', likesCount: post?.likesCount || 1 });
       } catch (err) {
         // Handle race condition if unique index fails
         if (err.code === 11000) return res.json({ liked: true });
@@ -332,6 +347,7 @@ const getUserPosts = async (req, res) => {
       .limit(Number(limit))
       .populate('userId', 'firstName lastName username photos age city country');
 
+    const postIds = posts.map(p => p._id);
     // Enrich with 'isLiked' (if logged in)
     let myLikeIds = [];
     if (req.user?._id) {
