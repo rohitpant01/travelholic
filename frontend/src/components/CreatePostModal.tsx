@@ -18,6 +18,7 @@ import { RootState, AppDispatch } from '../store';
 import { createPostAction, addTempPost } from '../store/slices/feedSlice';
 import { COLORS, SHADOW, useAppTheme } from '../utils/theme';
 import { lyraAPI } from '../api/services';
+import { requestLocationPermission } from '../utils/permissionUtils';
 
 interface Props {
   visible: boolean;
@@ -96,7 +97,10 @@ export default function CreatePostModal({ visible, onClose }: Props) {
       } : null;
 
       if (!finalLocation) {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const { status } = await requestLocationPermission(
+          'Post Location',
+          'Tag your travel moments with a location to help other travelers discover your journey.'
+        );
         if (status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({});
           finalLocation = { type: 'Point', coordinates: [loc.coords.longitude, loc.coords.latitude] };

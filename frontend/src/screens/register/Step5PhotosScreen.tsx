@@ -9,7 +9,7 @@ import { useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from '../../utils/storage';
 import RegisterHeader from '../../components/RegisterHeader';
 import { userAPI } from '../../api/services';
 import { updateUser, logout } from '../../store/slices/authSlice';
@@ -29,9 +29,20 @@ export default function Step5PhotosScreen() {
     if (photos.length >= 6) {
       return Alert.alert("Limit Reached", "Maximum 6 photos allowed");
     }
+    }
+    
+    // Play Store Rationale
+    await new Promise<void>(resolve => {
+      Alert.alert(
+        'Photo Selection',
+        'EkalGo needs access to your photos so you can choose the best moments from your travels to show in your profile.',
+        [{ text: 'Continue', onPress: () => resolve() }]
+      );
+    });
+
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      return Alert.alert("Permission Denied", "Allow photo access");
+      return Alert.alert("Permission Denied", "Allow photo access in Settings to upload your travel profile.");
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,

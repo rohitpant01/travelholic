@@ -12,7 +12,7 @@ const reportSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['user', 'group'],
+    enum: ['user', 'group', 'post', 'comment'],
     required: true
   },
   reason: {

@@ -9,9 +9,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootState } from '../store';
 import { updateUser } from '../store/slices/authSlice';
+import storage from '../utils/storage';
 import { useAppTheme, FONTS, RADIUS, SPACING, SHADOW } from '../utils/theme';
 import { authAPI, userAPI } from '../api/services';
 import CountryPickerModal from '../components/CountryPickerModal';
@@ -59,7 +59,7 @@ export default function EditProfileScreen() {
       const freshUser = response.data.user;
       if (freshUser) {
         dispatch(updateUser(freshUser));
-        await AsyncStorage.setItem('user', JSON.stringify(freshUser));
+        await storage.setItem('user', freshUser);
         
         // Sync local states if they are still at initial empty values
         if (!firstName) setFirstName(freshUser.firstName || '');

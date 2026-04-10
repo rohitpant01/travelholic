@@ -13,6 +13,7 @@ import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
 import apiClient from '../api/client';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 import { getLocalBucketList, clearLocalBucketList } from '../utils/bucketListUtils';
+import storage from '../utils/storage';
 
 
 export default function LoginScreen() {
@@ -82,8 +83,9 @@ export default function LoginScreen() {
   };
 
   const finishLogin = async (token: string, user: any) => {
-    await AsyncStorage.setItem('token', token);
-    await AsyncStorage.setItem('user', JSON.stringify(user));
+    // 🛡️ Securely store tokens for Play Store Compliance
+    await storage.setSecureItem('token', token);
+    await storage.setItem('user', user);
     apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
     const localItems = await getLocalBucketList();

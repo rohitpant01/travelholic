@@ -8,7 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from '../../utils/storage';
 import RegisterHeader from '../../components/RegisterHeader';
 import { userAPI } from '../../api/services';
 import { updateUser, logout } from '../../store/slices/authSlice';
@@ -109,8 +109,8 @@ export default function Step6InterestsScreen() {
             Alert.alert('Exit', 'Do you want to exit registration?', [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Exit', style: 'destructive', onPress: async () => {
-                  await AsyncStorage.removeItem('token');
-                  await AsyncStorage.removeItem('user');
+                  await storage.clearSecure();
+                  await storage.clearAll();
                   dispatch(logout());
                 } 
               }

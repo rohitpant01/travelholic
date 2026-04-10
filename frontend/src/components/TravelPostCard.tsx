@@ -11,6 +11,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../store';
 import OptionsMenu, { MenuOption } from './OptionsMenu';
 import { SHADOW, useAppTheme } from '../utils/theme';
+import { feedAPI } from '../api/services';
 
 interface Props {
   post: Post;
@@ -59,6 +60,15 @@ const TravelPostCard = ({ post, onPressProfile, onPressComment, onPressLikes, on
     } catch (e) {}
   };
 
+  const handleSendReport = async (reason: string) => {
+    try {
+      await feedAPI.reportPost(post._id, { reason });
+      Alert.alert('Success', 'Thank you for your report. Our team will review this content shortly to keep the community safe.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send report. Please try again later.');
+    }
+  };
+
   const getMenuOptions = (): MenuOption[] => {
     const opts: MenuOption[] = [];
     
@@ -89,7 +99,25 @@ const TravelPostCard = ({ post, onPressProfile, onPressComment, onPressLikes, on
         iconName: 'warning-outline',
         color: theme.error,
         onPress: () => {
-          Alert.alert('Reported', 'Thank you for keeping our community safe. Our team will review this shortly.');
+          Alert.alert(
+            'Report Post',
+            'Why are you reporting this post?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Spam', 
+                onPress: () => handleSendReport('Spam')
+              },
+              { 
+                text: 'Inappropriate', 
+                onPress: () => handleSendReport('Inappropriate content')
+              },
+              { 
+                text: 'Harassment', 
+                onPress: () => handleSendReport('Harassment')
+              }
+            ]
+          );
         }
       });
     }

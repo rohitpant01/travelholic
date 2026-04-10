@@ -8,7 +8,8 @@ import { useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
+import storage from '../../utils/storage';
 import RegisterHeader from '../../components/RegisterHeader';
 import KeyboardWrapper from '../../components/KeyboardWrapper';
 import { userAPI } from '../../api/services';
@@ -81,8 +82,8 @@ export default function Step7PreferencesScreen() {
             Alert.alert('Exit', 'Do you want to exit registration?', [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Exit', style: 'destructive', onPress: async () => {
-                  await AsyncStorage.removeItem('token');
-                  await AsyncStorage.removeItem('user');
+                  await storage.clearSecure();
+                  await storage.clearAll();
                   dispatch(logout());
                 } 
               }

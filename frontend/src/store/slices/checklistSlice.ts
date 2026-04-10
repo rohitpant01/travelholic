@@ -38,7 +38,7 @@ export const fetchChecklists = createAsyncThunk(
   'checklist/fetchAll',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get('/api/checklists');
+      const response = await apiClient.get('/checklists');
       return response.data.data;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || 'Failed to fetch checklists');
@@ -50,7 +50,7 @@ export const createChecklist = createAsyncThunk(
   'checklist/create',
   async (data: { title: string; tripType: string; autoSuggest: boolean; tripId?: string }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post('/api/checklists', data);
+      const response = await apiClient.post('/checklists', data);
       return response.data.data;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || 'Failed to create checklist');
@@ -62,7 +62,7 @@ export const toggleChecklistItem = createAsyncThunk(
   'checklist/toggleItem',
   async ({ checklistId, itemId }: { checklistId: string; itemId: string }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.patch(`/api/checklists/${checklistId}/toggle-item`, { itemId });
+      const response = await apiClient.patch(`/checklists/${checklistId}/toggle-item`, { itemId });
       return response.data.data;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || 'Failed to toggle item');
@@ -74,7 +74,7 @@ export const deleteChecklist = createAsyncThunk(
   'checklist/delete',
   async (id: string, { rejectWithValue }) => {
     try {
-      await apiClient.delete(`/api/checklists/${id}`);
+      await apiClient.delete(`/checklists/${id}`);
       return id;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || 'Failed to delete checklist');
@@ -86,7 +86,7 @@ export const duplicateChecklist = createAsyncThunk(
   'checklist/duplicate',
   async (id: string, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/api/checklists/${id}/duplicate`);
+      const response = await apiClient.post(`/checklists/${id}/duplicate`);
       return response.data.data;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || 'Failed to duplicate checklist');

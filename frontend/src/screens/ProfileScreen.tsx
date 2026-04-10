@@ -16,7 +16,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from '../utils/storage';
 import { AppDispatch, RootState } from '../store';
 import { logout, setUser } from '../store/slices/authSlice';
 import { 
@@ -115,8 +115,8 @@ export default function ProfileScreen() {
       {
         text: 'Logout', style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.removeItem('token');
-          await AsyncStorage.removeItem('user');
+          await storage.removeSecureItem('token');
+          await storage.removeItem('user');
           dispatch(logout());
         },
       },

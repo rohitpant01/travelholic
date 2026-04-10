@@ -272,6 +272,8 @@ export const feedAPI = {
   editPost: (postId: string, data: { content?: string; placeName?: string }) => apiClient.put(`/feed/${postId}`, data),
   getPostLikes: (postId: string) => apiClient.get(`/feed/${postId}/likes`),
   getUserPosts: (userId: string, page: number = 1) => apiClient.get(`/feed/user/${userId}?page=${page}`),
+  reportPost: (postId: string, data: { reason: string; details?: string }) => 
+    apiClient.post(`/feed/${postId}/report`, data),
 };
 
 export const commentAPI = {

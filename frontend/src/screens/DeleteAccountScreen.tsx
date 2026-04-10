@@ -8,10 +8,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { RootState } from '../store';
 import { logout } from '../store/slices/authSlice';
 import { userAPI } from '../api/services';
+import storage from '../utils/storage';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 
 export default function DeleteAccountScreen() {
@@ -43,8 +42,8 @@ export default function DeleteAccountScreen() {
             {
               text: 'OK',
               onPress: async () => {
-                await AsyncStorage.removeItem('token');
-                await AsyncStorage.removeItem('user');
+                await storage.removeSecureItem('token');
+                await storage.removeItem('user');
                 dispatch(logout());
                 navigation.reset({
                   index: 0,

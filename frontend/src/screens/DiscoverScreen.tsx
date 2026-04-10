@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { discoverAPI } from '../api/services';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
+import { requestLocationPermission } from '../utils/permissionUtils';
 import ShimmerPlaceholder from 'react-native-shimmer-placeholder';
 
 import Swiper from 'react-native-deck-swiper';
@@ -99,7 +100,10 @@ export default function DiscoverScreen() {
         lat = manualCoords.lat;
         lng = manualCoords.lng;
       } else {
-        let { status } = await Location.requestForegroundPermissionsAsync();
+        let { status } = await requestLocationPermission(
+          'Nearby Travelers',
+          'Search for travelers and moments near you. EkalGo uses your location to show you local adventures.'
+        );
         if (status === 'granted') {
           const lastLoc = await Location.getLastKnownPositionAsync();
           if (lastLoc) {

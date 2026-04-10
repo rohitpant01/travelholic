@@ -6,7 +6,7 @@ import {
 import KeyboardWrapper from '../../components/KeyboardWrapper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from '../../utils/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import RegisterHeader from '../../components/RegisterHeader';
@@ -64,8 +64,8 @@ export default function Step1AccountScreen() {
       const { token, user } = res.data;
       console.log('[REG] Registration success. User ID:', user._id);
       
-      await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
+      await storage.setSecureItem('token', token);
+      await storage.setItem('user', user);
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       dispatch(setToken(token));
       dispatch(setUser(user));

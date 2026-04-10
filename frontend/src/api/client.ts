@@ -1,5 +1,5 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from '../utils/storage';
 
 // ================================================================
 // API CONFIGURATION
@@ -42,7 +42,7 @@ const apiClient = axios.create({
 // Request interceptor: attach JWT token and log diagnostics
 apiClient.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('token');
+    const token = await storage.getSecureItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -98,8 +98,8 @@ apiClient.interceptors.response.use(
     }
 
     if (error.response?.status === 401) {
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('user');
+      await storage.removeSecureItem('token');
+      await storage.removeItem('user');
     }
     return Promise.reject(error);
   }

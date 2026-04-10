@@ -19,6 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import store, { RootState, AppDispatch } from './src/store';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import { requestLocationPermission } from './src/utils/permissionUtils';
+import storage from './src/utils/storage';
 import { setUser, setToken, setLoading, updateUser } from './src/store/slices/authSlice';
 import { upsertMessage, upsertTripMessage, updateMatchOnlineStatus, setUnreadCounts, addMatch, setTotalUnread, setMatches, removeMatch } from './src/store/slices/chatSlice';
 import { fetchNotifications, addNotification, setUnreadCount, markAllRead } from './src/store/slices/notificationSlice';
@@ -215,8 +217,8 @@ function AppNavigator() {
   useEffect(() => {
     const bootstrapAuth = async () => {
       try {
-        const token = await AsyncStorage.getItem('token');
-        const userData = await AsyncStorage.getItem('user');
+        const token = await storage.getSecureItem('token');
+        const userData = await storage.getItem('user');
 
         if (token && userData && userData !== 'undefined' && userData !== 'null') {
           apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -240,7 +242,7 @@ function AppNavigator() {
             const freshUser = response?.data?.user;
             if (freshUser) {
               dispatch(updateUser(freshUser));
-              await AsyncStorage.setItem('user', JSON.stringify(freshUser));
+              await storage.setItem('user', freshUser);
 
               // Fetch matches and unread count globally for instant real-time parity
               // This logic is moved to a reactive useEffect below
@@ -357,7 +359,7 @@ function AppNavigator() {
           });
         }
 
-        await AsyncStorage.setItem('last_sync_time', response.data.serverTime || new Date().toISOString());
+        await storage.setItem('last_sync_time', response.data.serverTime || new Date().toISOString());
       } catch (e) {
         console.warn('[SYNC ERROR]', e);
       }
@@ -586,7 +588,10 @@ function AppNavigator() {
     if (isAuthenticated && user) {
       const updateLocationPassive = async () => {
         try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
+          const { status } = await requestLocationPermission(
+            'Explore Nearby',
+            'Allow EkalGo to occasionally check your location to keep your "Nearby Travelers" feed updated with the most relevant people around you.'
+          );
           if (status === 'granted' && !unmounted) {
             let loc = await Location.getLastKnownPositionAsync();
             if (!loc) {

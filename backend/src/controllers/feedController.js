@@ -2,8 +2,11 @@ const Post = require('../models/Post');
 const Like = require('../models/Like');
 const Comment = require('../models/Comment');
 const User = require('../models/User');
+const Report = require('../models/Report');
 const { Match } = require('../models/Match');
 const { createNotification } = require('../utils/notificationService');
+const Filter = require('bad-words');
+const filter = new Filter();
 
 // @desc    Get feed (Nearby, Friends, Global)
 // @route   GET /api/feed
@@ -120,6 +123,10 @@ const createPost = async (req, res) => {
       return res.status(400).json({ error: 'Post must have content or images' });
     }
 
+    if (content && filter.isProfane(content)) {
+      return res.status(400).json({ error: 'Your post contains offensive language. Please keep it friendly!' });
+    }
+
     if (!location || !location.coordinates) {
       return res.status(400).json({ error: 'Location is required for travel posts' });
     }
@@ -213,6 +220,10 @@ const addComment = async (req, res) => {
     const postId = req.params.id;
 
     if (!text) return res.status(400).json({ error: 'Comment text is required' });
+
+    if (filter.isProfane(text)) {
+      return res.status(400).json({ error: 'Your comment contains offensive language.' });
+    }
 
     const comment = await Comment.create({
       postId,
@@ -375,12 +386,42 @@ const getUserPosts = async (req, res) => {
   }
 };
 
+// @desc    Report Post (Compliance)
+// @route   POST /api/feed/:id/report
+// @access  Private
+const reportPost = async (req, res) => {
+  try {
+    const { reason, details } = req.body;
+    const postId = req.params.id;
+
+    if (!reason) return res.status(400).json({ error: 'Reason for report is required' });
+
+    // Verify post exists
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+
+    await Report.create({
+      reportedBy: req.user._id,
+      targetId: postId,
+      type: 'post',
+      reason,
+      details: details || ''
+    });
+
+    res.json({ message: 'Post reported successfully. Our team will review it.' });
+  } catch (error) {
+    console.error('[REPORT POST ERROR]', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getFeed,
   createPost,
   getPost,
   toggleLike,
   addComment,
+  reportPost,
   deletePost,
   editPost,
   getPostLikes,

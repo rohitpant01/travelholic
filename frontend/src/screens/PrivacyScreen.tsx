@@ -24,9 +24,10 @@ export default function PrivacyScreen() {
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>1. Information We Collect</Text>
         <Text style={[styles.bodyText, { color: theme.textLight }]}>
-          • Name and email (via Google login){'\n'}
-          • App usage data{'\n'}
-          • Saved destinations (bucket list)
+          • <Text style={{fontWeight: 'bold'}}>Precise Location:</Text> We collect your GPS coordinates to match you with nearby travelers and show local travel moments. This may occur while the app is in the background if active tracking is enabled.{'\n'}
+          • <Text style={{fontWeight: 'bold'}}>Photos & Media:</Text> When you upload travel moments or profile photos, we access your storage and camera.{'\n'}
+          • <Text style={{fontWeight: 'bold'}}>Personal Info:</Text> Name, email, and travel preferences.{'\n'}
+          • <Text style={{fontWeight: 'bold'}}>Device Info:</Text> We collect limited device identifiers for push notifications.
         </Text>
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>2. How We Use Data</Text>

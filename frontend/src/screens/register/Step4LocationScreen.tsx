@@ -8,7 +8,8 @@ import { useDispatch } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from '../../utils/storage';
+import { requestLocationPermission } from '../../utils/permissionUtils';
 import RegisterHeader from '../../components/RegisterHeader';
 import KeyboardWrapper from '../../components/KeyboardWrapper';
 import CountryPickerModal from '../../components/CountryPickerModal';
@@ -37,7 +38,10 @@ export default function Step4LocationScreen() {
   const getGPSLocation = async () => {
     setGpsLoading(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await requestLocationPermission(
+        'Set Your Location',
+        'To find nearby travelers and adventures, EkalGo needs to set your base location. This helps us personalize your discovery feed.'
+      );
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Allow location access to use this feature');
         return;
@@ -116,8 +120,8 @@ export default function Step4LocationScreen() {
             Alert.alert('Exit', 'Do you want to exit registration?', [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Exit', style: 'destructive', onPress: async () => {
-                  await AsyncStorage.removeItem('token');
-                  await AsyncStorage.removeItem('user');
+                  await storage.clearSecure();
+                  await storage.clearAll();
                   dispatch(logout());
                 } 
               }

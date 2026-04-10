@@ -9,7 +9,7 @@ import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { RootState } from '../store';
 import { userAPI } from '../api/services';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from '../utils/storage';
 import { COLORS, FONTS, RADIUS, SPACING, useAppTheme } from '../utils/theme';
 import { logout, updateUser } from '../store/slices/authSlice';
 import { clearSaved } from '../store/slices/savedSlice';
@@ -52,10 +52,10 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem('token');
-              await AsyncStorage.removeItem('user');
-              await AsyncStorage.removeItem('@explore_destinations');
-              await AsyncStorage.removeItem('@last_fetch_time');
+              await storage.removeSecureItem('token');
+              await storage.removeItem('user');
+              await storage.removeItem('@explore_destinations');
+              await storage.removeItem('@last_fetch_time');
               dispatch(logout());
               dispatch(clearSaved());
             } catch (e) {

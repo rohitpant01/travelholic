@@ -70,8 +70,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow EkalGo to access your photos.",
-          "cameraPermission": "Allow EkalGo to use your camera for verification."
+          "photosPermission": "Allow EkalGo to access your photos so you can share travel moments with the community.",
+          "cameraPermission": "Allow EkalGo to use your camera for profile photo verification and capturing travel memories."
         }
       ],
       [
@@ -91,7 +91,8 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "newArchEnabled": true,
     "extra": {
