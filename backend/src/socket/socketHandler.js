@@ -4,7 +4,6 @@ const User = require('../models/User');
 const { Message, Match, Swipe } = require('../models/Match');
 const { TripMember, TripMessage } = require('../models/Trip');
 const Notification = require('../models/Notification');
-const { createNotification } = require('../utils/notificationService');
 const { encrypt, decrypt } = require('../utils/cryptoUtility');
 
 let io;
@@ -180,6 +179,7 @@ const initSocket = (server) => {
           
           // 5. Create & Enqueue Notification
           try {
+            const { createNotification } = require('../utils/notificationService');
             await createNotification({
                 recipient: null, // notificationService handles trip-wide broadcasting
                 tripId: chatId,
@@ -273,6 +273,7 @@ const initSocket = (server) => {
 
           // 5. Create & Enqueue Notification
           try {
+            const { createNotification } = require('../utils/notificationService');
             await createNotification({
                 recipient: receiverId,
                 sender: socket.userId,

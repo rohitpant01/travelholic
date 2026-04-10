@@ -1,6 +1,5 @@
 const Notification = require('../models/Notification');
 const User = require('../models/User');
-const { getIO } = require('../socket/socketHandler');
 const { sendPushNotification } = require('./fcmUtility');
 
 /**
@@ -9,6 +8,7 @@ const { sendPushNotification } = require('./fcmUtility');
  */
 const deliverNotification = async (notificationId, idempotencyKey = null) => {
   try {
+    const { getIO } = require('../socket/socketHandler');
     const notification = await Notification.findById(notificationId)
       .populate('sender', 'firstName lastName username photos')
       .populate('recipient', 'devices');
