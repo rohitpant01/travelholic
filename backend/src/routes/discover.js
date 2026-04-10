@@ -13,5 +13,6 @@ router.get('/', getDiscoverProfiles);
 router.post('/like', likeUser);
 router.post('/skip', skipUser);
 router.post('/superlike', superLikeUser);
+router.post('/location', updateLocation);
 
 module.exports = router;

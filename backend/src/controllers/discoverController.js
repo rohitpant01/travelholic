@@ -496,9 +496,25 @@ const superLikeUser = async (req, res) => {
   }
 };
 
+// @desc    Update user location
+// @route   POST /api/discover/location
+// @access  Private
+const updateLocation = async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    await User.findByIdAndUpdate(req.user._id, {
+      location: { type: 'Point', coordinates: [lng, lat] }
+    });
+    res.json({ message: 'Location updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = { 
   getDiscoverProfiles, 
   likeUser, 
   skipUser, 
-  superLikeUser
+  superLikeUser,
+  updateLocation
 };
