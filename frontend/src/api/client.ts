@@ -76,7 +76,7 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     console.warn(`[API ERROR] ${error.message} on ${error.config?.url}`);
-    
+
     // Fallback System for Place Discovery (Zero-Empty Screen)
     if (error.response?.status === 404 && error.config?.url?.includes('/places/search')) {
       console.log('[INTERCEPTOR] 404 caught. Returning curated fallback places.');

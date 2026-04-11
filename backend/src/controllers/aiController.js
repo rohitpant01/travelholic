@@ -1041,27 +1041,43 @@ exports.generateDestinations = async (req, res) => {
   _locks.add("generateDestinations");
   try {
     let doc = await GlobalDestination.findOne();
-    const isStale =
-      !doc || req.query.force === "true" || Date.now() - new Date(doc.createdAt).getTime() > HOURS_12;
+    const isForce = req.query.force === "true";
+    const lastUpdate = doc ? new Date(doc.createdAt).getTime() : 0;
+    const isStale = !doc || isForce || (Date.now() - lastUpdate > HOURS_12);
 
     if (isStale) {
-      const fresh = await fetchFromGemini(doc?.previousTitles || []);
-      doc = await GlobalDestination.findOneAndUpdate(
-        {},
-        {
-          destinations: fresh,
-          previousTitles: [
-            ...(doc?.previousTitles || []),
-            ...fresh.map((d) => d.name),
-          ].slice(-18),
-          createdAt: new Date(),
-        },
-        { upsert: true, new: true }
-      );
+      console.log(`[generateDestinations] ${isForce ? 'Shuffle requested.' : 'Data is stale.'} Fetching from AI...`);
+      try {
+        const fresh = await fetchFromGemini(doc?.previousTitles || []);
+        
+        doc = await GlobalDestination.findOneAndUpdate(
+          {},
+          {
+            destinations: fresh,
+            previousTitles: [
+              ...(doc?.previousTitles || []),
+              ...fresh.map((d) => d.name),
+            ].slice(-18),
+            createdAt: new Date(), // Explicitly update timestamp
+          },
+          { upsert: true, new: true }
+        );
+        console.log(`[generateDestinations] Successfully refreshed destinations via AI.`);
+      } catch (aiErr) {
+        console.error(`[generateDestinations] AI Regeneration failed: ${aiErr.message}`);
+        if (doc) {
+          console.log(`[generateDestinations] Falling back to existing cached destinations from DB to avoid error.`);
+        } else {
+          throw aiErr; // No cache available, must error
+        }
+      }
+    } else {
+      console.log(`[generateDestinations] Fetching from DB (Using cached data, last updated ${Math.round((Date.now() - lastUpdate) / 60000)} mins ago).`);
     }
-    return res.json({ destinations: doc.destinations });
+
+    return res.json({ destinations: doc ? doc.destinations : [] });
   } catch (e) {
-    console.error("[generateDestinations]", e.message);
+    console.error("[generateDestinations] Fatal Error:", e.message);
     return res.status(500).json({ error: e.message });
   } finally {
     _locks.delete("generateDestinations");
