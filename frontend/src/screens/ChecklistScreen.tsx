@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
+import { Pressable, 
   View,
   Text,
   StyleSheet,
@@ -11,7 +11,7 @@ import {
   Alert,
   Dimensions,
   Platform,
-} from 'react-native';
+ } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { 
@@ -29,6 +29,7 @@ import {
   createChecklist, 
   toggleChecklistItem, 
   deleteChecklist,
+  duplicateChecklist,
   Checklist,
   ChecklistItem
 } from '../store/slices/checklistSlice';
@@ -190,6 +191,7 @@ const ChecklistScreen = () => {
         onRequestClose={() => setShowAddModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAddModal(false)} />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>New Checklist</Text>

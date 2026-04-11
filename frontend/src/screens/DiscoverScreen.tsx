@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
+import { Pressable, 
   View, Text, StyleSheet, TouchableOpacity, Animated as RNAnimated,
   Dimensions, ActivityIndicator, Alert, Modal, Platform, TextInput
-} from 'react-native';
+ } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store';
 import { fetchNotifications } from '../store/slices/notificationSlice';
@@ -422,8 +422,9 @@ export default function DiscoverScreen() {
       )}
 
       {/* Filter Modal */}
-      <Modal visible={showFilterModal} transparent animationType="slide">
+      <Modal visible={showFilterModal} transparent animationType="slide" onRequestClose={() => setShowFilterModal(false)}>
         <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFilterModal(false)} />
           <View style={styles.filterCard}>
             <View style={styles.filterHeader}>
               <Text style={styles.filterTitle}>Discovery Settings</Text>
@@ -524,7 +525,7 @@ export default function DiscoverScreen() {
       </Modal>
 
       {/* Email Verification Pop-up */}
-      <Modal visible={showVerifyPopup} transparent={true} animationType="fade">
+      <Modal visible={showVerifyPopup} transparent={true} animationType="fade" onRequestClose={() => setShowVerifyPopup(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.verifyPopupCard}>
             <View style={styles.verifyIconCircle}>

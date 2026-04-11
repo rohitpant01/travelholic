@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
+  Pressable,
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   RefreshControl, ActivityIndicator, Modal, ScrollView,
   TextInput, Alert, KeyboardAvoidingView, Platform, Keyboard
@@ -409,7 +410,7 @@ export default function TripsScreen() {
   const renderTripCard = ({ item }: { item: any }) => {
     const isLyra = item.tripType === 'lyra';
     const isAI = item.tripType === 'ai_itinerary';
-    
+
     return (
       <TouchableOpacity
         style={[styles.card, (isLyra || isAI) && { borderColor: theme.teal, borderWidth: 1 }]}
@@ -508,8 +509,9 @@ export default function TripsScreen() {
   };
 
   const renderFilterModal = () => (
-    <Modal visible={showFilters} animationType="slide" transparent>
+    <Modal visible={showFilters} animationType="slide" transparent onRequestClose={() => setShowFilters(false)}>
       <View style={styles.modalOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFilters(false)} />
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>🎯 Smart Filters</Text>
@@ -617,7 +619,7 @@ export default function TripsScreen() {
     ];
 
     return (
-      <Modal visible={showDurationPicker} transparent animationType="fade">
+      <Modal visible={showDurationPicker} transparent animationType="fade" onRequestClose={() => setShowDurationPicker(false)}>
         <TouchableOpacity
           style={styles.modalOverlay}
           onPress={() => setShowDurationPicker(false)}
@@ -649,122 +651,122 @@ export default function TripsScreen() {
   return (
     <ScreenWrapper withTopInset={false} withBottomInset={false}>
       <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient colors={['#00C9A7', '#008E7F']} style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>✈️ EkalGo</Text>
-          <Text style={styles.headerTagline}>Plan smarter. Travel deeper.</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.filterIcon}
-          onPress={() => setShowFilters(true)}
-        >
-          <Ionicons name="options" size={22} color={theme.textWhite} />
-          {activeFilterCount > 0 && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </LinearGradient>
-
-      {/* Tabs */}
-      <View style={styles.tabsWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsContent}
-        >
+        {/* Header */}
+        <LinearGradient colors={['#00C9A7', '#008E7F']} style={styles.header}>
+          <View>
+            <Text style={styles.headerTitle}>✈️ EkalGo</Text>
+            <Text style={styles.headerTagline}>Plan smarter. Travel deeper.</Text>
+          </View>
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'explore' && styles.tabActive]}
-            onPress={() => dispatch(setActiveTab('explore'))}
+            style={styles.filterIcon}
+            onPress={() => setShowFilters(true)}
           >
-            <Text style={[styles.tabText, activeTab === 'explore' && styles.tabTextActive]} numberOfLines={1}>
-              🌍 Explore
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'aiPlanner' && styles.tabActive]}
-            onPress={() => dispatch(setActiveTab('aiPlanner'))}
-          >
-            <Text style={[styles.tabText, activeTab === 'aiPlanner' && styles.tabTextActive]} numberOfLines={1}>
-              🪄 Trip Wizard
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'myTrips' && styles.tabActive]}
-            onPress={() => dispatch(setActiveTab('myTrips'))}
-          >
-            <Text style={[styles.tabText, activeTab === 'myTrips' && styles.tabTextActive]} numberOfLines={1}>
-              🎒 Group Trips
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'savedPlans' && styles.tabActive]}
-            onPress={() => dispatch(setActiveTab('savedPlans'))}
-          >
-            <Text style={[styles.tabText, activeTab === 'savedPlans' && styles.tabTextActive]} numberOfLines={1}>
-              📑 Saved Plans
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      {/* List */}
-      {activeTab !== 'aiPlanner' ? (
-        <FlatList
-          data={data}
-          renderItem={renderTripCard}
-          keyExtractor={(item, index) => item._id || `trip-${index}`}
-          contentContainerStyle={{ padding: SPACING.md, paddingBottom: 100 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.teal} />}
-          onEndReached={() => {
-            if (activeTab === 'explore' && hasMore && !loading) fetchTrips(false);
-          }}
-          onEndReachedThreshold={0.5}
-          ListEmptyComponent={
-            !loading ? (
-              <View style={styles.empty}>
-                <Text style={{ fontSize: 48 }}>🗺️</Text>
-                <Text style={styles.emptyTitle}>
-                  {activeTab === 'explore' ? 'No trips found' : (activeTab === 'myTrips' ? 'No social groups' : 'No saved plans')}
-                </Text>
-                <Text style={styles.emptySubtitle}>
-                  {activeTab === 'explore'
-                    ? 'Try adjusting your filters or check back later'
-                    : (activeTab === 'myTrips' ? 'Join a trip group to see it here!' : 'Save an itinerary from the Wizard to see it here!')}
-                </Text>
-                {activeTab === 'myTrips' && (
-                  <TouchableOpacity
-                    style={styles.createBtn}
-                    onPress={() => nav.navigate('CreateTrip')}
-                  >
-                    <Text style={styles.createBtnText}>+ Create Trip</Text>
-                  </TouchableOpacity>
-                )}
+            <Ionicons name="options" size={22} color={theme.textWhite} />
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
               </View>
-            ) : null
-          }
-          ListFooterComponent={loading ? <ActivityIndicator color={theme.teal} style={{ marginVertical: 20 }} /> : null}
-        />
-      ) : (
-        renderAIPlanner()
-      )}
-
-      {renderDurationPicker()}
-
-      {/* FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => nav.navigate('CreateTrip')}
-        activeOpacity={0.85}
-      >
-        <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.fabGradient}>
-          <Ionicons name="add" size={28} color={theme.textWhite} />
+            )}
+          </TouchableOpacity>
         </LinearGradient>
-      </TouchableOpacity>
 
-      {renderFilterModal()}
+        {/* Tabs */}
+        <View style={styles.tabsWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsContent}
+          >
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'explore' && styles.tabActive]}
+              onPress={() => dispatch(setActiveTab('explore'))}
+            >
+              <Text style={[styles.tabText, activeTab === 'explore' && styles.tabTextActive]} numberOfLines={1}>
+                🌍 Explore
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'aiPlanner' && styles.tabActive]}
+              onPress={() => dispatch(setActiveTab('aiPlanner'))}
+            >
+              <Text style={[styles.tabText, activeTab === 'aiPlanner' && styles.tabTextActive]} numberOfLines={1}>
+                🪄 Trip Wizard
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'myTrips' && styles.tabActive]}
+              onPress={() => dispatch(setActiveTab('myTrips'))}
+            >
+              <Text style={[styles.tabText, activeTab === 'myTrips' && styles.tabTextActive]} numberOfLines={1}>
+                🎒 Group Trips
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'savedPlans' && styles.tabActive]}
+              onPress={() => dispatch(setActiveTab('savedPlans'))}
+            >
+              <Text style={[styles.tabText, activeTab === 'savedPlans' && styles.tabTextActive]} numberOfLines={1}>
+                📑 Saved Plans
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {/* List */}
+        {activeTab !== 'aiPlanner' ? (
+          <FlatList
+            data={data}
+            renderItem={renderTripCard}
+            keyExtractor={(item, index) => item._id || `trip-${index}`}
+            contentContainerStyle={{ padding: SPACING.md, paddingBottom: 100 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.teal} />}
+            onEndReached={() => {
+              if (activeTab === 'explore' && hasMore && !loading) fetchTrips(false);
+            }}
+            onEndReachedThreshold={0.5}
+            ListEmptyComponent={
+              !loading ? (
+                <View style={styles.empty}>
+                  <Text style={{ fontSize: 48 }}>🗺️</Text>
+                  <Text style={styles.emptyTitle}>
+                    {activeTab === 'explore' ? 'No trips found' : (activeTab === 'myTrips' ? 'No social groups' : 'No saved plans')}
+                  </Text>
+                  <Text style={styles.emptySubtitle}>
+                    {activeTab === 'explore'
+                      ? 'Try adjusting your filters or check back later'
+                      : (activeTab === 'myTrips' ? 'Join a trip group to see it here!' : 'Save an itinerary from the Wizard to see it here!')}
+                  </Text>
+                  {activeTab === 'myTrips' && (
+                    <TouchableOpacity
+                      style={styles.createBtn}
+                      onPress={() => nav.navigate('CreateTrip')}
+                    >
+                      <Text style={styles.createBtnText}>+ Create Trip</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : null
+            }
+            ListFooterComponent={loading ? <ActivityIndicator color={theme.teal} style={{ marginVertical: 20 }} /> : null}
+          />
+        ) : (
+          renderAIPlanner()
+        )}
+
+        {renderDurationPicker()}
+
+        {/* FAB */}
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => nav.navigate('CreateTrip')}
+          activeOpacity={0.85}
+        >
+          <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.fabGradient}>
+            <Ionicons name="add" size={28} color={theme.textWhite} />
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {renderFilterModal()}
       </View>
     </ScreenWrapper>
   );
@@ -774,7 +776,7 @@ const getStyles = (theme: any, insets: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, 
+    paddingHorizontal: 20,
     paddingTop: Math.max(insets.top, 16),
     paddingBottom: 16,
   },

@@ -85,6 +85,12 @@
       "@react-native-community/datetimepicker",
       "@react-native-google-signin/google-signin",
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow EkalGo to access your microphone for voice messages."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

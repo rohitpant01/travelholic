@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
-  ActivityIndicator, TextInput, Modal, Pressable, StatusBar, Platform
+  ActivityIndicator, TextInput, Modal, Pressable, StatusBar, Platform, KeyboardAvoidingView
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
@@ -159,7 +160,7 @@ export default function TripHistoryScreen() {
           <Ionicons name="chevron-back" size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Trip History</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.addBtn}
           onPress={() => {
             resetTripForm();
@@ -202,7 +203,7 @@ export default function TripHistoryScreen() {
           <View style={styles.emptyContainer}>
             <Ionicons name="trail-sign-outline" size={64} color={theme.textSecondary + '40'} />
             <Text style={styles.emptyText}>No trips documented yet</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.emptyAddBtn}
               onPress={() => {
                 resetTripForm();
@@ -216,93 +217,109 @@ export default function TripHistoryScreen() {
       </ScrollView>
 
       {/* Add/Edit Modal */}
-      <Modal visible={showAddTrip} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAddTrip(false)} />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{isEditingTrip ? 'Edit Trip' : 'Add Past Trip'}</Text>
-              <TouchableOpacity onPress={() => setShowAddTrip(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView bounces={false}>
-              <Text style={styles.inputLabel}>Where did you start?</Text>
-              <TextInput
-                style={styles.tripInput}
-                placeholder="Origin City"
-                placeholderTextColor={theme.textSecondary}
-                value={tripForm.origin}
-                onChangeText={(val) => fetchSuggestions(val, 'origin')}
-              />
-              {activeField === 'origin' && showSuggestions && suggestions.length > 0 && (
-                <View style={styles.suggestionsContainer}>
-                  {suggestions.map((item, idx) => (
-                    <TouchableOpacity key={idx} style={styles.suggestionItem} onPress={() => selectSuggestion(item)}>
-                      <Text style={styles.suggestionText}>{item.description}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
-              <Text style={styles.inputLabel}>Where did you go?</Text>
-              <TextInput
-                style={styles.tripInput}
-                placeholder="Destination City"
-                placeholderTextColor={theme.textSecondary}
-                value={tripForm.destination}
-                onChangeText={(val) => fetchSuggestions(val, 'destination')}
-              />
-              {activeField === 'destination' && showSuggestions && suggestions.length > 0 && (
-                <View style={styles.suggestionsContainer}>
-                  {suggestions.map((item, idx) => (
-                    <TouchableOpacity key={idx} style={styles.suggestionItem} onPress={() => selectSuggestion(item)}>
-                      <Text style={styles.suggestionText}>{item.description}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
-              <View style={styles.dateRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Started On</Text>
-                  <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowStartDatePicker(true)}>
-                    <Ionicons name="calendar-outline" size={18} color={theme.teal} />
-                    <Text style={styles.datePickerText}>{tripForm.startDate || 'Select'}</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={{ flex: 1, marginLeft: 15 }}>
-                  <Text style={styles.inputLabel}>Ended On</Text>
-                  <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowEndDatePicker(true)}>
-                    <Ionicons name="calendar-outline" size={18} color={theme.teal} />
-                    <Text style={styles.datePickerText}>{tripForm.endDate || 'Select'}</Text>
-                  </TouchableOpacity>
-                </View>
+      <Modal 
+        visible={showAddTrip} 
+        animationType="slide" 
+        transparent
+        onRequestClose={() => setShowAddTrip(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAddTrip(false)} />
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{isEditingTrip ? 'Edit Trip' : 'Add Past Trip'}</Text>
+                <TouchableOpacity onPress={() => setShowAddTrip(false)}>
+                  <Ionicons name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
               </View>
 
-              <Text style={styles.inputLabel}>Any special memories? (Optional)</Text>
-              <TextInput
-                style={[styles.tripInput, { height: 80, textAlignVertical: 'top' }]}
-                placeholder="Brief details..."
-                placeholderTextColor={theme.textSecondary}
-                value={tripForm.details}
-                onChangeText={(val) => setTripForm({ ...tripForm, details: val })}
-                multiline
-              />
-
-              <TouchableOpacity 
-                style={[styles.submitBtn, submittingTrip && { opacity: 0.7 }]}
-                onPress={handleAddTrip}
-                disabled={submittingTrip}
+              <KeyboardAwareScrollView
+                bounces={false}
+                enableOnAndroid={true}
+                extraHeight={120}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
               >
-                {submittingTrip ? <ActivityIndicator color="#fff" /> : (
-                  <Text style={styles.submitBtnText}>{isEditingTrip ? 'Update History' : 'Add to History'}</Text>
+                <Text style={styles.inputLabel}>Where did you start?</Text>
+                <TextInput
+                  style={styles.tripInput}
+                  placeholder="Origin City"
+                  placeholderTextColor={theme.textSecondary}
+                  value={tripForm.origin}
+                  onChangeText={(val) => fetchSuggestions(val, 'origin')}
+                />
+                {activeField === 'origin' && showSuggestions && suggestions.length > 0 && (
+                  <View style={styles.suggestionsContainer}>
+                    {suggestions.map((item, idx) => (
+                      <TouchableOpacity key={idx} style={styles.suggestionItem} onPress={() => selectSuggestion(item)}>
+                        <Text style={styles.suggestionText}>{item.description}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 )}
-              </TouchableOpacity>
-            </ScrollView>
+
+                <Text style={styles.inputLabel}>Where did you go?</Text>
+                <TextInput
+                  style={styles.tripInput}
+                  placeholder="Destination City"
+                  placeholderTextColor={theme.textSecondary}
+                  value={tripForm.destination}
+                  onChangeText={(val) => fetchSuggestions(val, 'destination')}
+                />
+                {activeField === 'destination' && showSuggestions && suggestions.length > 0 && (
+                  <View style={styles.suggestionsContainer}>
+                    {suggestions.map((item, idx) => (
+                      <TouchableOpacity key={idx} style={styles.suggestionItem} onPress={() => selectSuggestion(item)}>
+                        <Text style={styles.suggestionText}>{item.description}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                <View style={styles.dateRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>Started On</Text>
+                    <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowStartDatePicker(true)}>
+                      <Ionicons name="calendar-outline" size={18} color={theme.teal} />
+                      <Text style={styles.datePickerText}>{tripForm.startDate || 'Select'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 15 }}>
+                    <Text style={styles.inputLabel}>Ended On</Text>
+                    <TouchableOpacity style={styles.datePickerBtn} onPress={() => setShowEndDatePicker(true)}>
+                      <Ionicons name="calendar-outline" size={18} color={theme.teal} />
+                      <Text style={styles.datePickerText}>{tripForm.endDate || 'Select'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <Text style={styles.inputLabel}>Any special memories? (Optional)</Text>
+                <TextInput
+                  style={[styles.tripInput, { height: 80, textAlignVertical: 'top' }]}
+                  placeholder="Brief details..."
+                  placeholderTextColor={theme.textSecondary}
+                  value={tripForm.details}
+                  onChangeText={(val) => setTripForm({ ...tripForm, details: val })}
+                  multiline
+                />
+
+                <TouchableOpacity
+                  style={[styles.submitBtn, submittingTrip && { opacity: 0.7 }]}
+                  onPress={handleAddTrip}
+                  disabled={submittingTrip}
+                >
+                  {submittingTrip ? <ActivityIndicator color="#fff" /> : (
+                    <Text style={styles.submitBtnText}>{isEditingTrip ? 'Update History' : 'Add to History'}</Text>
+                  )}
+                </TouchableOpacity>
+              </KeyboardAwareScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
 
         {showStartDatePicker && (
           <DateTimePicker
@@ -333,7 +350,7 @@ export default function TripHistoryScreen() {
 
 const getStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  header: { 
+  header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingBottom: 15, backgroundColor: theme.card,
     borderBottomWidth: 1, borderBottomColor: theme.border
@@ -354,7 +371,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   emptyText: { fontSize: 16, fontWeight: '600', color: theme.textSecondary, marginTop: 20 },
   emptyAddBtn: { marginTop: 20, backgroundColor: theme.teal, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 15 },
   emptyAddBtnText: { color: '#fff', fontWeight: '700' },
-  
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

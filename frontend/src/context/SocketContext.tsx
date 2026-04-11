@@ -36,7 +36,7 @@ export const SocketProvider = ({ children, socketUrl }: { children: ReactNode, s
 
     const newSocket = io(socketUrl, {
       auth: { token },
-      transports: ['polling', 'websocket'], // Start with polling for better reliability on unstable networks
+      transports: ['websocket'], // Force websocket in React Native to avoid XHR polling timeouts
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
+  Pressable,
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Image, ActivityIndicator, Dimensions, Platform, Modal, Alert, Share
 } from 'react-native';
@@ -9,10 +10,10 @@ import { AppDispatch, RootState } from '../store';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { 
-  fetchUserPosts, 
+import {
+  fetchUserPosts,
   clearUserPosts,
-  Post 
+  Post
 } from '../store/slices/feedSlice';
 import { userAPI, discoverAPI, matchAPI } from '../api/services';
 import { updateUser } from '../store/slices/authSlice';
@@ -31,7 +32,7 @@ const formatLastSeen = (dateStr: string | null) => {
   const d = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - d.getTime();
-  
+
   if (diff < 60000) return 'Online now';
   if (diff < 3600000) return `Last seen ${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `Last seen ${Math.floor(diff / 3600000)}h ago`;
@@ -54,7 +55,7 @@ export default function UserDetailScreen() {
   const styles = getStyles(theme);
   const insets = useSafeAreaInsets();
   const { userId } = route.params || {};
-  
+
   const { user: currentUser, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { userPosts, loading: loadingPosts } = useSelector((state: RootState) => state.feed);
   const matches = useSelector((s: RootState) => s.chat.matches);
@@ -97,11 +98,11 @@ export default function UserDetailScreen() {
 
   const handleMessage = () => {
     const existingMatch = matches.find(m => String(m.user?._id) === String(userId));
-    
-    navigation.navigate('Chat', { 
+
+    navigation.navigate('Chat', {
       type: 'individual',
       chatId: existingMatch?.matchId || null,
-      userId, 
+      userId,
       userName: `${profile.firstName} ${profile.lastName}`,
       userPhoto: profile.photos?.find((p: any) => p.isProfile)?.url || profile.photos?.[0]?.url,
     });
@@ -162,17 +163,17 @@ export default function UserDetailScreen() {
 
     return (
       <View style={styles.footer}>
-        <LinearGradient 
-          colors={['transparent', theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255,255,255,0.95)', theme.background]} 
-          style={styles.footerGradient} 
+        <LinearGradient
+          colors={['transparent', theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255,255,255,0.95)', theme.background]}
+          style={styles.footerGradient}
         />
         <View style={styles.actionRow}>
           {isMatched ? (
             <TouchableOpacity style={styles.messageBtn} onPress={handleMessage}>
-              <LinearGradient 
-                colors={[theme.teal, theme.tealDark]} 
-                start={{ x: 0, y: 0 }} 
-                end={{ x: 1, y: 1 }} 
+              <LinearGradient
+                colors={[theme.teal, theme.tealDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={styles.messageBtnGradient}
               >
                 <Ionicons name="chatbubble-ellipses" size={22} color={theme.textWhite} />
@@ -188,18 +189,18 @@ export default function UserDetailScreen() {
             </View>
           ) : (
             <>
-              <TouchableOpacity 
-                style={[styles.secondaryActionBtn, { backgroundColor: theme.error }]} 
+              <TouchableOpacity
+                style={[styles.secondaryActionBtn, { backgroundColor: theme.error }]}
                 onPress={handlePass}
               >
                 <Ionicons name="close" size={28} color={theme.textWhite} />
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.messageBtn} onPress={handleLike}>
-                <LinearGradient 
-                  colors={[theme.teal, theme.tealDark]} 
-                  start={{ x: 0, y: 0 }} 
-                  end={{ x: 1, y: 1 }} 
+                <LinearGradient
+                  colors={[theme.teal, theme.tealDark]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={styles.messageBtnGradient}
                 >
                   <Ionicons name="heart" size={24} color={theme.textWhite} />
@@ -240,10 +241,10 @@ export default function UserDetailScreen() {
               <Text style={{ fontSize: 80 }}>✈️</Text>
             </LinearGradient>
           )}
-          
-          <LinearGradient 
-            colors={['rgba(0,0,0,0.6)', 'transparent', 'rgba(0,0,0,0.85)']} 
-            style={StyleSheet.absoluteFillObject} 
+
+          <LinearGradient
+            colors={['rgba(0,0,0,0.6)', 'transparent', 'rgba(0,0,0,0.85)']}
+            style={StyleSheet.absoluteFillObject}
           />
 
           {/* Photo navigation tap zones */}
@@ -262,8 +263,8 @@ export default function UserDetailScreen() {
             <Ionicons name="chevron-back" size={26} color={theme.textWhite} />
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.shareBtn, { top: insets.top + 12 }]} 
+          <TouchableOpacity
+            style={[styles.shareBtn, { top: insets.top + 12 }]}
             onPress={async () => {
               const shareUrl = `https://ekalgo.com/user/${userId}`;
               try {
@@ -272,7 +273,7 @@ export default function UserDetailScreen() {
                   message: `Check out ${profile.firstName} on EkalGo! 🌍✨ They are a traveler from ${profile.location?.city || 'the world'}.\n\nView Profile: ${shareUrl}`,
                   url: shareUrl,
                 });
-              } catch (e) {}
+              } catch (e) { }
             }}
           >
             <Ionicons name="share-outline" size={24} color={theme.textWhite} />
@@ -293,7 +294,7 @@ export default function UserDetailScreen() {
                 <Ionicons name="checkmark-circle" size={22} color={theme.teal} style={{ marginLeft: 6 }} />
               )}
             </View>
-            
+
             <View style={styles.statusRow}>
               {profile.isOnline ? (
                 <View style={[styles.statusBadge, { backgroundColor: theme.success }]}>
@@ -328,10 +329,10 @@ export default function UserDetailScreen() {
             </View>
             <View style={styles.statItem}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <MaterialCommunityIcons 
-                  name={profile.memberStatus === 'Elite' ? 'crown' : profile.memberStatus === 'Premium' ? 'star' : 'account-check'} 
-                  size={16} 
-                  color={profile.memberStatus === 'Elite' ? theme.gold : profile.memberStatus === 'Premium' ? theme.teal : theme.textSecondary} 
+                <MaterialCommunityIcons
+                  name={profile.memberStatus === 'Elite' ? 'crown' : profile.memberStatus === 'Premium' ? 'star' : 'account-check'}
+                  size={16}
+                  color={profile.memberStatus === 'Elite' ? theme.gold : profile.memberStatus === 'Premium' ? theme.teal : theme.textSecondary}
                 />
                 <Text style={[styles.statNumber, { fontSize: 16 }]}>{profile.memberStatus || 'Free'}</Text>
               </View>
@@ -351,8 +352,8 @@ export default function UserDetailScreen() {
           {(profile.destination?.city || profile.origin?.city) && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Current Expedition</Text>
-              <LinearGradient 
-                colors={[theme.tealLight, theme.mode === 'dark' ? 'rgba(0, 180, 180, 0.05)' : 'rgba(230, 246, 245, 0.5)']} 
+              <LinearGradient
+                colors={[theme.tealLight, theme.mode === 'dark' ? 'rgba(0, 180, 180, 0.05)' : 'rgba(230, 246, 245, 0.5)']}
                 style={styles.travelCard}
               >
                 <View style={styles.travelTimeline}>
@@ -401,49 +402,49 @@ export default function UserDetailScreen() {
             </View>
           )}
 
-        {/* ── Traveler's Moments Section ── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Traveler's Moments</Text>
-          {loadingPosts && userPosts.length === 0 ? (
-            <ActivityIndicator color={theme.teal} style={{ marginTop: 20 }} />
-          ) : userPosts.length > 0 ? (
-            <View style={{ gap: 20 }}>
-              {userPosts.map((post) => (
-                <TravelPostCard
-                  key={post._id}
-                  post={post}
-                  onPressProfile={() => {}} // Already on user profile
-                  onPressComment={(id) => {
-                    setSelectedPostId(id);
-                    commentsModalRef.current?.present();
-                  }}
-                  onPressLikes={(id) => {
-                    setSelectedPostId(id);
-                    likesModalRef.current?.present();
-                  }}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={{ alignItems: 'center', paddingVertical: 40, backgroundColor: theme.card, borderRadius: 20 }}>
-              <Ionicons name="images-outline" size={40} color={theme.textSecondary + '40'} />
-              <Text style={{ marginTop: 10, color: theme.textSecondary }}>No moments shared yet</Text>
-            </View>
-          )}
-        </View>
+          {/* ── Traveler's Moments Section ── */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Traveler's Moments</Text>
+            {loadingPosts && userPosts.length === 0 ? (
+              <ActivityIndicator color={theme.teal} style={{ marginTop: 20 }} />
+            ) : userPosts.length > 0 ? (
+              <View style={{ gap: 20 }}>
+                {userPosts.map((post) => (
+                  <TravelPostCard
+                    key={post._id}
+                    post={post}
+                    onPressProfile={() => { }} // Already on user profile
+                    onPressComment={(id) => {
+                      setSelectedPostId(id);
+                      commentsModalRef.current?.present();
+                    }}
+                    onPressLikes={(id) => {
+                      setSelectedPostId(id);
+                      likesModalRef.current?.present();
+                    }}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={{ alignItems: 'center', paddingVertical: 40, backgroundColor: theme.card, borderRadius: 20 }}>
+                <Ionicons name="images-outline" size={40} color={theme.textSecondary + '40'} />
+                <Text style={{ marginTop: 10, color: theme.textSecondary }}>No moments shared yet</Text>
+              </View>
+            )}
+          </View>
 
-        {/* Details Grid */}
+          {/* Details Grid */}
           <View style={styles.detailsGrid}>
             {profile.languages?.length > 0 && (
               <View style={[styles.detailCard, { flex: 1.5 }]}>
                 <Ionicons name="language" size={20} color={theme.teal} />
                 <Text style={styles.detailCardLabel}>Languages</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
-                   {profile.languages.map((l: string, idx: number) => (
-                     <Text key={l} style={styles.detailCardValue}>
-                       {l}{idx < profile.languages.length - 1 ? ',' : ''}
-                     </Text>
-                   ))}
+                  {profile.languages.map((l: string, idx: number) => (
+                    <Text key={l} style={styles.detailCardValue}>
+                      {l}{idx < profile.languages.length - 1 ? ',' : ''}
+                    </Text>
+                  ))}
                 </View>
               </View>
             )}
@@ -456,22 +457,22 @@ export default function UserDetailScreen() {
             )}
           </View>
 
-        {!isAuthenticated && (
-          <View style={styles.guestCta}>
-             <Ionicons name="lock-closed" size={32} color={theme.teal} style={{ marginBottom: 12 }} />
-             <Text style={styles.guestTitle}>Connect with {profile.firstName}</Text>
-             <Text style={styles.guestSubtitle}>Sign in to message, match, and plan trips with travelers like {profile.firstName}.</Text>
-             <TouchableOpacity 
-               style={styles.guestBtn}
-               onPress={() => navigation.navigate('Auth')}
-             >
-               <Text style={styles.guestBtnText}>Login to Connect</Text>
-             </TouchableOpacity>
-          </View>
-        )}
-        <View style={{ height: 120 }} />
-      </View>
-    </ScrollView>
+          {!isAuthenticated && (
+            <View style={styles.guestCta}>
+              <Ionicons name="lock-closed" size={32} color={theme.teal} style={{ marginBottom: 12 }} />
+              <Text style={styles.guestTitle}>Connect with {profile.firstName}</Text>
+              <Text style={styles.guestSubtitle}>Sign in to message, match, and plan trips with travelers like {profile.firstName}.</Text>
+              <TouchableOpacity
+                style={styles.guestBtn}
+                onPress={() => navigation.navigate('Auth')}
+              >
+                <Text style={styles.guestBtnText}>Login to Connect</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          <View style={{ height: 120 }} />
+        </View>
+      </ScrollView>
 
       {renderFooter()}
 
@@ -482,6 +483,7 @@ export default function UserDetailScreen() {
         onRequestClose={() => setShowTrips(false)}
       >
         <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTrips(false)} />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Trip History</Text>
@@ -495,19 +497,19 @@ export default function UserDetailScreen() {
                 profile.completedTrips.map((trip: any, idx: number) => (
                   <View key={idx} style={styles.tripTimelineItem}>
                     <View style={styles.tripTimelineNode}>
-                       <View style={styles.tripDot} />
-                       {idx < profile.completedTrips.length - 1 && <View style={styles.tripLine} />}
+                      <View style={styles.tripDot} />
+                      {idx < profile.completedTrips.length - 1 && <View style={styles.tripLine} />}
                     </View>
                     <View style={styles.tripInfo}>
                       <Text style={styles.tripCities}>{trip.origin?.city} ✈️ {trip.destination?.city}</Text>
                       <View style={styles.tripMeta}>
-                          <Ionicons name="calendar-outline" size={14} color={theme.teal} />
-                          <Text style={styles.tripMetaText}>
-                            {new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}
-                          </Text>
-                          <View style={styles.metaDot} />
-                          <Ionicons name="time-outline" size={14} color={theme.teal} />
-                          <Text style={styles.tripMetaText}>{trip.duration} days</Text>
+                        <Ionicons name="calendar-outline" size={14} color={theme.teal} />
+                        <Text style={styles.tripMetaText}>
+                          {new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}
+                        </Text>
+                        <View style={styles.metaDot} />
+                        <Ionicons name="time-outline" size={14} color={theme.teal} />
+                        <Text style={styles.tripMetaText}>{trip.duration} days</Text>
                       </View>
                       {trip.details && (
                         <Text style={styles.tripDetailsText}>{trip.details}</Text>
@@ -526,13 +528,13 @@ export default function UserDetailScreen() {
         </View>
       </Modal>
       {/* Modals */}
-      <PostCommentsModal 
-        ref={commentsModalRef} 
-        postId={selectedPostId || ''} 
+      <PostCommentsModal
+        ref={commentsModalRef}
+        postId={selectedPostId || ''}
       />
-      <PostLikesModal 
-        ref={likesModalRef} 
-        postId={selectedPostId || ''} 
+      <PostLikesModal
+        ref={likesModalRef}
+        postId={selectedPostId || ''}
       />
     </View>
   );
@@ -575,9 +577,9 @@ const getStyles = (theme: any) => StyleSheet.create({
   lastSeenText: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
   locationTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   locationText: { fontSize: 13, color: theme.textWhite, fontWeight: '600' },
-  
+
   content: { marginTop: -25, backgroundColor: theme.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25 },
-  
+
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 20, backgroundColor: theme.card, borderRadius: 20, marginBottom: 25 },
   statItem: { alignItems: 'center', flex: 1 },
   statDivider: { borderLeftWidth: 1, borderRightWidth: 1, borderColor: theme.border },

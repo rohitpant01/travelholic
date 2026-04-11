@@ -263,7 +263,7 @@ export default function GroupDetailsScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={isEditingName} transparent animationType="fade">
+      <Modal visible={isEditingName} transparent animationType="fade" onRequestClose={() => setIsEditingName(false)}>
         <TouchableOpacity 
           style={styles.modalOverlay} 
           activeOpacity={1} 

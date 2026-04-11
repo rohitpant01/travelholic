@@ -363,7 +363,7 @@ export default function TripDetailScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={showJoinModal} animationType="slide" transparent>
+      <Modal visible={showJoinModal} animationType="slide" transparent onRequestClose={() => setShowJoinModal(false)}>
         <View style={styles.modalOverlay}>
           <Pressable 
             style={{ flex: 1 }} 

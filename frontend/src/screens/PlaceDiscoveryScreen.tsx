@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  Pressable,
   View, Text, StyleSheet, TextInput, FlatList, Image, ScrollView,
   TouchableOpacity, Dimensions, Animated, Modal,
   Keyboard, Platform, Linking, Easing
@@ -75,8 +76,8 @@ const MarqueeLine = ({ text }: { text: string }) => {
 
   return (
     <View style={[styles.marqueeContainer, { backgroundColor: theme.tealLight + '30' }]}>
-      <Animated.Text 
-        numberOfLines={1} 
+      <Animated.Text
+        numberOfLines={1}
         style={[styles.marqueeText, { color: theme.teal, transform: [{ translateX: animatedValue }] }]}
       >
         {text}
@@ -113,11 +114,11 @@ const SkeletonCategory = () => {
 const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void }) => {
   const theme = useAppTheme();
   const dispatch = useDispatch();
-  const photoUrl = place.image 
+  const photoUrl = place.image
     ? place.image
     : place.photoReference
-    ? `${apiClient.defaults.baseURL}/images/google-photo?ref=${place.photoReference}`
-    : 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80';
+      ? `${apiClient.defaults.baseURL}/images/google-photo?ref=${place.photoReference}`
+      : 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80';
 
   const [details, setDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -128,9 +129,9 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
     setLoading(true);
     try {
       const res = await placeService.getPlaceDetails(
-        place.id, 
-        place.name, 
-        place.address, 
+        place.id,
+        place.name,
+        place.address,
         place.types[0] || 'point_of_interest',
         place.rating,
         place.distanceKm
@@ -150,7 +151,7 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
   const handleSave = async (e: any) => {
     e.stopPropagation();
     if (isSaving) return;
-    
+
     setIsSaving(true);
     try {
       const payload = {
@@ -182,20 +183,20 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
   };
 
   return (
-    <FlipCard 
-      style={styles.flipCard} 
-      friction={8} 
-      perspective={1000} 
-      flipHorizontal={true} 
-      flipVertical={false} 
-      flip={isFlipped} 
+    <FlipCard
+      style={styles.flipCard}
+      friction={8}
+      perspective={1000}
+      flipHorizontal={true}
+      flipVertical={false}
+      flip={isFlipped}
       clickable={false}
     >
       {/* Front Side */}
-      <TouchableOpacity 
-        activeOpacity={1} 
-        style={styles.container} 
-        onPress={() => { setIsFlipped(true); if(!details) fetchDetails(); }}
+      <TouchableOpacity
+        activeOpacity={1}
+        style={styles.container}
+        onPress={() => { setIsFlipped(true); if (!details) fetchDetails(); }}
       >
         <View style={[styles.card, { backgroundColor: theme.card }]}>
           <Image source={{ uri: photoUrl }} style={styles.cardImage} />
@@ -203,8 +204,8 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
           <View style={styles.cardContent}>
             <Text style={styles.placeName} numberOfLines={2}>{place.name}</Text>
             <View style={styles.addressRow}>
-               <Ionicons name="map-outline" size={10} color="rgba(255,255,255,0.7)" />
-               <Text style={styles.addressText} numberOfLines={1}>{place.address}</Text>
+              <Ionicons name="map-outline" size={10} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.addressText} numberOfLines={1}>{place.address}</Text>
             </View>
             <View style={styles.infoRow}>
               <Ionicons name="location-outline" size={12} color="#FFF" />
@@ -226,7 +227,7 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
             <Ionicons name="chevron-down" size={12} color="#FFF" style={{ marginTop: 2, opacity: 0.8 }} />
           </LinearGradient>
         </TouchableOpacity>
-        
+
         <View style={styles.backBody}>
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -237,7 +238,7 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
             <View style={{ flex: 1 }}>
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={[styles.hookLine, { color: theme.text }]}>{details.hook_line}</Text>
-                
+
                 <View style={styles.quickInfoGrid}>
                   {details.quick_info?.map((info: string, idx: number) => (
                     <View key={idx} style={styles.infoPill}>
@@ -249,23 +250,23 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
                 <View style={styles.badgeRow}>
                   {details.badges?.filter((b: string) => !b.toUpperCase().includes('AI RECOMMENDED'))
                     .map((badge: string, idx: number) => (
-                    <View key={idx} style={[styles.badge, { backgroundColor: theme.tealLight + '20' }]}>
-                      <Text style={[styles.badgeText, { color: theme.teal }]}>{badge}</Text>
-                    </View>
-                  ))}
+                      <View key={idx} style={[styles.badge, { backgroundColor: theme.tealLight + '20' }]}>
+                        <Text style={[styles.badgeText, { color: theme.teal }]}>{badge}</Text>
+                      </View>
+                    ))}
                 </View>
               </ScrollView>
 
               <View style={styles.actionGrid}>
-                <TouchableOpacity 
-                  style={[styles.smallActionBtn, { backgroundColor: theme.teal }]} 
+                <TouchableOpacity
+                  style={[styles.smallActionBtn, { backgroundColor: theme.teal }]}
                   onPress={(e) => { e.stopPropagation(); onMapPress(); }}
                 >
                   <Ionicons name="navigate-outline" size={14} color="#FFF" />
                   <Text style={styles.smallActionText}>Go</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.smallActionBtn, { backgroundColor: theme.card, borderColor: theme.teal, borderWidth: 1 }]}
                   onPress={handleSave}
                   disabled={isSaving}
@@ -289,20 +290,20 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
 export default function PlaceDiscoveryScreen() {
   const theme = useAppTheme();
   const navigation = useNavigation<any>();
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [places, setPlaces] = useState<CategorizedPlaces | null>(null);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [locationName, setLocationName] = useState('Nearby');
   const [isMapView, setIsMapView] = useState(false);
-  const [searchCenter, setSearchCenter] = useState<{lat: number, lng: number} | null>(null);
+  const [searchCenter, setSearchCenter] = useState<{ lat: number, lng: number } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<string | null>('others');
-  
+
   const scrollRef = useRef<ScrollView>(null);
   const sectionPositions = useRef<Record<string, number>>({});
-  
+
   // Mood Selection Modal
   const [moodModalVisible, setMoodModalVisible] = useState(false);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
@@ -357,15 +358,15 @@ export default function PlaceDiscoveryScreen() {
       console.log(res.data.cached ? "📡 [EXPLORER] Loaded from DB (24h/20km Cache)" : "🚀 [EXPLORER] Fresh Discovery from AI Magic");
       setPlaces(res.data.results);
       setLocationName(res.data.locationName || (res.data.isCitySearch ? query : 'Nearby'));
-      
+
       // Persist to local cache for instant-on next time
       saveDiscoveryCache(res.data.results, res.data.locationName || (res.data.isCitySearch ? query : 'Nearby'));
 
       const firstArray = Object.values(res.data.results).find(arr => arr && arr.length > 0);
       if (firstArray && firstArray.length > 0 && res.data.isCitySearch) {
-         setSearchCenter(firstArray[0].location);
+        setSearchCenter(firstArray[0].location);
       } else {
-         setSearchCenter({ lat: sLat, lng: sLng });
+        setSearchCenter({ lat: sLat, lng: sLng });
       }
     } catch (err) {
       console.error(err);
@@ -406,7 +407,7 @@ export default function PlaceDiscoveryScreen() {
   const generateAIPlan = () => {
     if (selectedMoods.length === 0) return;
     setMoodModalVisible(false);
-    
+
     // Pass mandatory lat/lng from state
     const targetLat = searchCenter?.lat || location?.coords.latitude;
     const targetLng = searchCenter?.lng || location?.coords.longitude;
@@ -416,8 +417,8 @@ export default function PlaceDiscoveryScreen() {
       return;
     }
 
-    navigation.navigate('DayPlanner', { 
-      query: searchQuery || locationName || 'Nearby', 
+    navigation.navigate('DayPlanner', {
+      query: searchQuery || locationName || 'Nearby',
       moods: selectedMoods,
       lat: targetLat,
       lng: targetLng
@@ -451,8 +452,8 @@ export default function PlaceDiscoveryScreen() {
               </Animated.View>
             )}
             <View style={[styles.locationBadge, { backgroundColor: theme.tealLight + '20' }]}>
-               <Ionicons name="location" size={12} color={theme.teal} />
-               <Text style={[styles.locationBadgeText, { color: theme.teal }]}>{locationName}</Text>
+              <Ionicons name="location" size={12} color={theme.teal} />
+              <Text style={[styles.locationBadgeText, { color: theme.teal }]}>{locationName}</Text>
             </View>
           </View>
         </View>
@@ -478,8 +479,8 @@ export default function PlaceDiscoveryScreen() {
               </TouchableOpacity>
             )}
           </View>
-          <TouchableOpacity 
-            style={[styles.planBtnCircular, { backgroundColor: theme.teal }]} 
+          <TouchableOpacity
+            style={[styles.planBtnCircular, { backgroundColor: theme.teal }]}
             onPress={() => setMoodModalVisible(true)}
           >
             <Ionicons name="sparkles" size={18} color="#FFF" />
@@ -487,23 +488,23 @@ export default function PlaceDiscoveryScreen() {
         </View>
 
         {/* NEW SCROLLABLE CATEGORY BAR */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
           style={styles.categoryBar}
           contentContainerStyle={styles.categoryBarContent}
         >
           {CATEGORY_MAP.map((cat) => (
-            <TouchableOpacity 
-              key={cat.key} 
+            <TouchableOpacity
+              key={cat.key}
               style={[
-                styles.categoryTab, 
+                styles.categoryTab,
                 { backgroundColor: activeTab === cat.key ? theme.teal : theme.tealLight + '20' }
               ]}
               onPress={() => handleCategoryPress(cat)}
             >
               <Text style={[
-                styles.categoryTabText, 
+                styles.categoryTabText,
                 { color: activeTab === cat.key ? '#FFF' : theme.teal }
               ]}>{cat.emoji} {cat.label}</Text>
             </TouchableOpacity>
@@ -513,7 +514,7 @@ export default function PlaceDiscoveryScreen() {
         <MarqueeLine text={QUOTES[quoteIndex]} />
       </View>
 
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.floatingMapBtn, { backgroundColor: theme.teal }]}
         onPress={() => setIsMapView(!isMapView)}
       >
@@ -522,48 +523,48 @@ export default function PlaceDiscoveryScreen() {
       </TouchableOpacity>
 
       {isMapView && searchCenter ? (
-        <MapView 
-           style={styles.map}
-           showsUserLocation={true}
-           showsMyLocationButton={true}
-           followsUserLocation={false} // Don't snap back to user if they are exploring
-           initialRegion={{
-             latitude: searchCenter.lat,
-             longitude: searchCenter.lng,
-             latitudeDelta: 0.1,
-             longitudeDelta: 0.1,
-           }}
+        <MapView
+          style={styles.map}
+          showsUserLocation={true}
+          showsMyLocationButton={true}
+          followsUserLocation={false} // Don't snap back to user if they are exploring
+          initialRegion={{
+            latitude: searchCenter.lat,
+            longitude: searchCenter.lng,
+            latitudeDelta: 0.1,
+            longitudeDelta: 0.1,
+          }}
         >
           {allPlaces.map((p, idx) => (
-             <Marker 
-               key={p.id || `marker-${idx}`} 
-               coordinate={{ latitude: Number(p.location.lat), longitude: Number(p.location.lng) }}
-               title={p.name}
-               description={p.distanceText}
-             />
+            <Marker
+              key={p.id || `marker-${idx}`}
+              coordinate={{ latitude: Number(p.location.lat), longitude: Number(p.location.lng) }}
+              title={p.name}
+              description={p.distanceText}
+            />
           ))}
         </MapView>
       ) : (
-        <ScrollView 
+        <ScrollView
           ref={scrollRef}
-          style={styles.listContainer} 
+          style={styles.listContainer}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
         >
           {loading ? (
             <View>
-               <SkeletonCategory />
-               <SkeletonCategory />
-               <SkeletonCategory />
+              <SkeletonCategory />
+              <SkeletonCategory />
+              <SkeletonCategory />
             </View>
           ) : places ? (
             CATEGORY_MAP.map((cat) => {
               const catPlaces = (places as any)[cat.key];
               if (!catPlaces || catPlaces.length === 0) return null;
-              
+
               return (
-                <View 
-                  key={cat.key} 
+                <View
+                  key={cat.key}
                   style={styles.categorySection}
                   onLayout={(e) => {
                     sectionPositions.current[cat.key] = e.nativeEvent.layout.y;
@@ -574,14 +575,14 @@ export default function PlaceDiscoveryScreen() {
                       {cat.emoji} {cat.label}
                     </Text>
                     {cat.key === 'others' && (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         onPress={() => {
                           const visibleIds = Object.values(places as any)
                             .flatMap((arr: any) => (arr || []).slice(0, 6))
                             .map((p: any) => p.id);
-                          
-                          navigation.navigate('CategoryDetails', { 
-                            title: `${cat.emoji} ${cat.label}`, 
+
+                          navigation.navigate('CategoryDetails', {
+                            title: `${cat.emoji} ${cat.label}`,
                             places: catPlaces,
                             excludeIds: visibleIds
                           });
@@ -608,8 +609,9 @@ export default function PlaceDiscoveryScreen() {
       )}
 
       {/* Mood Selection Modal */}
-      <Modal visible={moodModalVisible} transparent animationType="slide">
+      <Modal visible={moodModalVisible} transparent animationType="slide" onRequestClose={() => setMoodModalVisible(false)}>
         <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMoodModalVisible(false)} />
           <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>How's your mood today? ✨</Text>
@@ -625,10 +627,10 @@ export default function PlaceDiscoveryScreen() {
               {MOODS_LIST.map((mood) => {
                 const isSelected = selectedMoods.includes(mood.id);
                 return (
-                  <TouchableOpacity 
-                    key={mood.id} 
+                  <TouchableOpacity
+                    key={mood.id}
                     style={[
-                      styles.moodItem, 
+                      styles.moodItem,
                       { backgroundColor: isSelected ? theme.teal : theme.background, borderColor: theme.border }
                     ]}
                     onPress={() => toggleMood(mood.id)}
@@ -640,7 +642,7 @@ export default function PlaceDiscoveryScreen() {
               })}
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.modalActionBtn, { backgroundColor: selectedMoods.length > 0 ? theme.teal : theme.borderLight }]}
               onPress={generateAIPlan}
               disabled={selectedMoods.length === 0}
@@ -665,40 +667,40 @@ const styles = StyleSheet.create({
   marqueeContainer: { height: 32, justifyContent: 'center', borderRadius: 8, overflow: 'hidden', marginTop: 4, paddingHorizontal: 10 },
   marqueeText: { fontSize: 13, fontWeight: '700', lineHeight: 20, textAlignVertical: 'center' },
   searchRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  searchContainer: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingLeft: 12, 
-    paddingRight: 6, 
-    height: 52, 
-    borderRadius: 15, 
-    borderWidth: 1.5 
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 12,
+    paddingRight: 6,
+    height: 52,
+    borderRadius: 15,
+    borderWidth: 1.5
   },
   searchInput: { flex: 1, marginLeft: 8, fontSize: 13, height: '100%' },
-  planBtnCircular: { 
-    width: 52, 
-    height: 52, 
-    borderRadius: 26, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    ...SHADOW.md 
+  planBtnCircular: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW.md
   },
-  
+
   floatingMapBtn: {
     position: 'absolute', bottom: 30, right: 20, zIndex: 99,
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12,
     borderRadius: 30, ...SHADOW.lg
   },
   floatingMapBtnText: { color: '#FFF', fontWeight: '800', marginLeft: 8, fontSize: 14 },
-  
+
   categoryBar: { marginTop: 12, marginBottom: 8 },
   categoryBarContent: { paddingRight: 20 },
   categoryTab: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginRight: 10 },
   categoryTabText: { fontSize: 13, fontWeight: '800' },
 
   map: { width: '100%', height: '100%' },
-  
+
   listContainer: { flex: 1, paddingTop: 10 },
   categorySection: { marginBottom: 25 },
   categoryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, marginBottom: 12 },
@@ -707,7 +709,7 @@ const styles = StyleSheet.create({
   horizontalList: { paddingHorizontal: 15 },
   skeletonTitle: { width: 150, height: 24, borderRadius: 12, marginLeft: 20, marginBottom: 12 },
   skeletonCard: { width: width * 0.65, height: 220, marginLeft: 15 },
-  
+
   flipCard: { width: width * 0.75, height: 380, marginHorizontal: 8 },
   card: { flex: 1, borderRadius: 24, overflow: 'hidden', ...SHADOW.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   cardBack: { padding: 0 },
@@ -715,29 +717,29 @@ const styles = StyleSheet.create({
   backTitle: { color: '#FFF', fontSize: 14, fontWeight: '900', textAlign: 'center' },
   backSubTitle: { color: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: '700' },
   backBody: { padding: 15, flex: 1 },
-  
+
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   magicText: { fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
-  
+
   hookLine: { fontSize: 13, fontWeight: '700', fontStyle: 'italic', textAlign: 'center', marginBottom: 8, lineHeight: 18 },
   quickInfoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
   infoPill: { backgroundColor: 'rgba(0,0,0,0.05)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   infoPillText: { fontSize: 10, fontWeight: '700' },
-  
+
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 15 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   badgeText: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
-  
+
   actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
-  smallActionBtn: { 
-    flex: 1, 
-    minWidth: '45%', 
-    height: 36, 
-    borderRadius: 10, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    gap: 5 
+  smallActionBtn: {
+    flex: 1,
+    minWidth: '45%',
+    height: 36,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5
   },
   smallActionText: { fontSize: 11, fontWeight: '800' },
 

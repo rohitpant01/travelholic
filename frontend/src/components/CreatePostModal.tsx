@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import {
+import { Pressable, 
   View, Text, StyleSheet, Modal,
   TouchableOpacity, TextInput, Image,
   ScrollView, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform,
   Switch
-} from 'react-native';
+ } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -228,7 +228,7 @@ export default function CreatePostModal({ visible, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false} presentationStyle="fullScreen">
+    <Modal visible={visible} animationType="slide" transparent={false} presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={styles.container}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}

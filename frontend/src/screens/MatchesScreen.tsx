@@ -360,10 +360,7 @@ export default function MatchesScreen() {
         visible={isSheetVisible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => {
-          setIsSheetVisible(false);
-          setSelectedMatch(null);
-        }}
+        onRequestClose={() => setIsSheetVisible(false)}
       >
         <Pressable 
           style={styles.modalBackdrop} 

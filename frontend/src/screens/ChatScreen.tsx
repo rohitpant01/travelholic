@@ -12,7 +12,18 @@ import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { cacheDirectory, downloadAsync } from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+import { audioSystem } from '../utils/audioSystem';
+
+// Import expo-audio hooks at top level (hooks MUST be called unconditionally)
+let useAudioRecorderHook: any = null;
+let RecordingPresetsConst: any = null;
+try {
+  const expoAudio = require('expo-audio');
+  useAudioRecorderHook = expoAudio.useAudioRecorder;
+  RecordingPresetsConst = expoAudio.RecordingPresets;
+} catch (e) {
+  console.warn('[ChatScreen] expo-audio not available:', (e as any)?.message);
+}
 
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
@@ -379,11 +390,16 @@ export default function ChatScreen() {
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [replyMsg, setReplyMsg] = useState<Message | null>(null);
   
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  // Audio recorder hook — MUST be called unconditionally (Rules of Hooks)
+  // If expo-audio isn't available, useAudioRecorderHook will be null and we use a no-op fallback
+  const noopRecorder = useRef({ isRecording: false, record: () => {}, stop: () => Promise.resolve(), prepareToRecordAsync: () => Promise.resolve(), uri: null }).current;
+  const audioRecorder = useAudioRecorderHook && RecordingPresetsConst
+    ? useAudioRecorderHook(RecordingPresetsConst.HIGH_QUALITY)
+    : noopRecorder;
+
   const [isRecording, setIsRecording] = useState(false);
   const [isCancelled, setIsCancelled] = useState(false);
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const soundRef = useRef<any>(null);
   const isPressingVoice = useRef(false);
   const isCancelledRef = useRef(false);
   const [selectedMsg, setSelectedMsg] = useState<any | null>(null);
@@ -657,19 +673,28 @@ export default function ChatScreen() {
     dispatch(setActiveChat(chatId));
     loadMessages();
 
-    // Proactive Audio Setup
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    }).catch(e => console.warn('Audio initial setup failed', e));
+    // Proactive Audio Setup — request permission & configure audio mode
+    (async () => {
+      try {
+        // Request microphone permission
+        await audioSystem.requestRecordingPermissionsAsync();
+        // Configure audio mode for recording + playback
+        await audioSystem.setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+          interruptionMode: 'duckOthers'
+        });
+      } catch (e) {
+        console.warn('Audio initial setup failed', e);
+      }
+    })();
 
     return () => {
       dispatch(setActiveChat(null));
-      if (soundRef.current) soundRef.current.unloadAsync();
-      if (recordingRef.current) recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      if (soundRef.current) {
+        try { soundRef.current.release?.(); } catch(e) {}
+        soundRef.current = null;
+      }
     };
   }, [chatId]); // chatId dependency to update active state safely
 
@@ -794,57 +819,53 @@ export default function ChatScreen() {
   const startRecording = async () => {
     try {
       isPressingVoice.current = true;
+
+      // 0. Check if audio module loaded
+      if (!useAudioRecorderHook) {
+        isPressingVoice.current = false;
+        Alert.alert('Old Version', 'Voice messages require a newer version of the app. Please rebuild or update.');
+        return;
+      }
       
-      // 1. Rigorous Cleanup
-      if (recordingRef.current) {
-        try {
-          await recordingRef.current.stopAndUnloadAsync();
-        } catch (e) {}
-        recordingRef.current = null;
-        setRecording(null);
+      // 1. Cleanup old state if somehow left
+      if (audioRecorder.isRecording) {
+        await audioRecorder.stop().catch(() => {});
       }
 
       // 2. Permissions
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
+      const permission = await audioSystem.requestRecordingPermissionsAsync();
+      if (!permission.granted && permission.status !== 'granted') {
         isPressingVoice.current = false;
         Alert.alert('Permission Required', 'EkalGo needs microphone access to send voice messages.');
         return;
       }
 
-      // 3. Audio Mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false
+      // 3. Audio Mode — enable recording
+      await audioSystem.setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        interruptionMode: 'duckOthers'
       });
 
-      // 4. Create & Prepare (Manual Flow)
-      const recordingInstance = new Audio.Recording();
-      await recordingInstance.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      // 4. Prepare & Record
+      await audioRecorder.prepareToRecordAsync();
       
       // Check if user released while preparing
       if (!isPressingVoice.current) {
-        await recordingInstance.stopAndUnloadAsync().catch(() => {});
+        await audioRecorder.stop().catch(() => {});
         return;
       }
 
-      await recordingInstance.startAsync();
-      recordingRef.current = recordingInstance;
-      setRecording(recordingInstance);
+      audioRecorder.record();
       setIsRecording(true);
 
-    } catch (err) { 
+    } catch (err: any) { 
       isPressingVoice.current = false;
       console.error('Recording failed to start:', err);
-      Alert.alert('Error', 'Could not start recording. Please try again.'); 
+      Alert.alert('Error', `Could not start recording: ${err?.message || 'Unknown error'}`); 
       
-      // Ensure cleanup on failure
-      if (recordingRef.current) {
-        await recordingRef.current.stopAndUnloadAsync().catch(() => {});
-        recordingRef.current = null;
+      if (audioRecorder.isRecording) {
+        await audioRecorder.stop().catch(() => {});
       }
     }
   };
@@ -853,20 +874,16 @@ export default function ChatScreen() {
     isPressingVoice.current = false;
     setIsRecording(false);
     setIsCancelled(false);
-    const rec = recordingRef.current;
-    if (!rec) return;
 
     try {
-      recordingRef.current = null;
-      setRecording(null);
-      await rec.stopAndUnloadAsync();
+      await audioRecorder.stop();
       
       if (cancel) {
         console.log('[VOICE] Recording cancelled by user gesture');
         return;
       }
 
-      const uri = rec.getURI();
+      const uri = audioRecorder.uri;
       if (uri) uploadVoice(uri);
     } catch (err) { 
       console.warn('Stop recording failed', err); 
@@ -950,19 +967,53 @@ export default function ChatScreen() {
   };
 
   const playVoice = async (url: string, id: string) => {
+    // If playing the same file, stop it 
     if (playingVoiceId === id) {
-      await soundRef.current?.pauseAsync();
+      try { soundRef.current?.pause(); } catch(e) {}
       setPlayingVoiceId(null);
       return;
     }
-    if (soundRef.current) await soundRef.current.unloadAsync();
-    const { sound } = await Audio.Sound.createAsync({ uri: url });
-    soundRef.current = sound;
-    setPlayingVoiceId(id);
-    await sound.playAsync();
-    sound.setOnPlaybackStatusUpdate((status: any) => {
-      if (status.didJustFinish) setPlayingVoiceId(null);
-    });
+    // Release previously existing player
+    if (soundRef.current) {
+      try { soundRef.current.release?.(); } catch(e) {}
+      soundRef.current = null;
+    }
+
+    try {
+      // Set audio mode for playback (disable recording mode so playback works)
+      await audioSystem.setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        interruptionMode: 'duckOthers'
+      });
+
+      const player = audioSystem.createAudioPlayer(url);
+      if (!player) {
+        Alert.alert('Unsupported', 'Audio playback is not supported on this version of the app.');
+        return;
+      }
+      soundRef.current = player;
+      setPlayingVoiceId(id);
+      player.play();
+
+      // expo-audio uses 'playbackStatusUpdate' event on the player
+      // The status object has: playing, currentTime, duration, didJustFinish
+      const onStatus = (status: any) => {
+        if (status.didJustFinish || (!status.playing && status.currentTime > 0 && status.currentTime >= status.duration && status.duration > 0)) {
+          setPlayingVoiceId(null);
+          try { player.removeAllListeners?.('playbackStatusUpdate'); } catch(e) {}
+        }
+      };
+
+      // Try the addListener approach first (expo-audio supports this)
+      if (typeof player.addListener === 'function') {
+        player.addListener('playbackStatusUpdate', onStatus);
+      }
+    } catch (e) {
+      console.error('[ChatScreen] playVoice error:', e);
+      Alert.alert('Error', 'Could not play voice message.');
+      setPlayingVoiceId(null);
+    }
   };
 
   const handleDelete = async (msgId: string) => {
