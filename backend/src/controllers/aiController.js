@@ -29,10 +29,11 @@ const INSIGHT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
 
 // [A] FIX: These were referenced throughout but never defined.
-const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_KEYS = [
   process.env.GOOGLE_GEMINI_API_KEY,
-  process.env.GOOGLE_GEMINI_API_KEY_2, // optional second key; undefined keys are skipped below
+  process.env.GOOGLE_GEMINI_REC_API_KEY,
+  process.env.GOOGLE_GEMINI_FALLBACK_KEY,
 ].filter(Boolean);
 
 // OpenAI Initialization
@@ -248,11 +249,14 @@ const runOpenAIJSON = async (prompt, model = OPENAI_MODEL, retries = 2) => {
  * Run a Gemini generation and return parsed JSON.
  */
 const runGeminiJSON = async (prompt, retries = 1) => {
-  for (const key of GEMINI_KEYS) {
+  if (GEMINI_KEYS.length === 0) throw new Error("No Gemini keys found.");
+  
+  for (const [keyIdx, key] of GEMINI_KEYS.entries()) {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const genAI = new GoogleGenerativeAI(key, { apiVersion: 'v1' });
-        const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+        console.log(`[Gemini] Using key index ${keyIdx}, attempt ${attempt + 1}...`);
+        const genAI = new GoogleGenerativeAI(key);
+        const model = genAI.getGenerativeModel({ model: GEMINI_MODEL }, { apiVersion: 'v1' });
         const result = await model.generateContent(prompt);
         const raw = (await result.response)
           .text()
@@ -263,10 +267,10 @@ const runGeminiJSON = async (prompt, retries = 1) => {
         return JSON.parse(raw);
       } catch (e) {
         if (attempt === retries) {
-          console.warn(`[Gemini] Key exhausted: ${e.message}`);
-          break;
+          console.warn(`[Gemini] Key index ${keyIdx} exhausted or failed: ${e.message}`);
+          break; // move to next key
         }
-        await sleep(800 * (attempt + 1));
+        await sleep(1000 * (attempt + 1));
       }
     }
   }
@@ -929,8 +933,8 @@ exports.generateQuote = async (req, res) => {
   try {
     const destination = (req.body.destination || "adventure").trim();
     // [A] FIX: GEMINI_MODEL is now defined at the top of the file
-    const genAI = new GoogleGenerativeAI(GEMINI_KEYS[0], { apiVersion: 'v1' });
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const genAI = new GoogleGenerativeAI(GEMINI_KEYS[0]);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL }, { apiVersion: 'v1' });
     const result = await model.generateContent(
       `Write one inspiring travel quote about ${destination}. Max 15 words. No quotation marks around it.`
     );
@@ -969,74 +973,43 @@ nearest_airport, nearest_city, travel_tip, why_love_this, search_query, unsplash
 Return ONLY the JSON array. No markdown, no extra text.
 `.trim();
 
-  // [D] Process coordinates sequentially to avoid Places API bursts
-  for (const key of GEMINI_KEYS) {
+  let places = null;
+
+  // --- Attempt Gemini first ---
+  try {
+    console.log("[fetchFromGemini] Attempting Gemini (latest)...");
+    places = await runGeminiJSON(prompt);
+  } catch (geminiErr) {
+    console.warn(`[fetchFromGemini] Gemini failed: ${geminiErr.message}. Falling back to Groq...`);
+    
+    // --- Fallback to Groq ---
     try {
-      const model = new GoogleGenerativeAI(key, { apiVersion: 'v1' }).getGenerativeModel({
-        model: GEMINI_MODEL,
-      });
-      const result = await model.generateContent(prompt);
-      let text = (await result.response)
-        .text()
-        .replace(/```json/gi, "")
-        .replace(/```/g, "")
-        .replace(/[\r\n\t]+/g, " ")
-        .replace(/\s{2,}/g, " ")
-        .trim();
-      const places = JSON.parse(text);
-
-      const enriched = [];
-      const apiKeyForPhotos = process.env.GOOGLE_PLACES_API_KEY;
-
-      for (const p of (Array.isArray(places) ? places : (places.destinations || places.places || [])).slice(0, 6)) {
-        await sleep(150); // [D] avoid concurrent Places calls
-        const coords = await getCoordinates(p.search_query || p.name, true);
-        
-        // 📸 REAL IMAGE FETCH from Google Places
-        let image = "https://images.unsplash.com/photo-1488646953014-85cb44e25828"; // default fallback
-        if (coords.photo_reference) {
-          image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${coords.photo_reference}&key=${apiKeyForPhotos}`;
-        } else if (p.unsplash_query || p.name) {
-          // Fallback to our proxy
-          image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.unsplash_query || p.name)}`;
-        }
-
-        enriched.push({
-          ...p,
-          title: p.name,
-          location: `${p.district}, ${p.state}`,
-          lat: coords.lat,
-          lng: coords.lng,
-          image: image,
-        });
-      }
-      return enriched;
-    } catch (e) {
-      console.error(`[fetchFromGemini] Gemini attempt failed: ${e.message}`);
+      const groqData = await runGroqJSON(prompt);
+      // Groq often returns an object { destinations: [...] } instead of a direct array
+      places = Array.isArray(groqData) ? groqData : (groqData.destinations || groqData.places || groqData.destinations_list || []);
+    } catch (groqErr) {
+      console.error(`[fetchFromGemini] Groq fallback also failed: ${groqErr.message}`);
+      throw new Error("Both Gemini and Groq failed to generate Hidden Gems.");
     }
   }
 
-  // Fallback to Groq if all Gemini keys fail
-  console.log("[fetchFromGemini] Falling back to Groq…");
-  try {
-    const groqData = await runGroqJSON(prompt);
-    const enriched = [];
-    const apiKeyForPhotos = process.env.GOOGLE_PLACES_API_KEY;
-    
-    // [FIX] Groq often returns an object { destinations: [...] } instead of a direct array
-    const placesArray = Array.isArray(groqData) ? groqData : (groqData.destinations || groqData.places || []);
-    
-    if (!Array.isArray(placesArray)) {
-        throw new Error("Groq returned data in an unexpected format (not an array).");
-    }
+  if (!Array.isArray(places) || places.length === 0) {
+    throw new Error("AI returned no results in Hidden Gems generation.");
+  }
 
-    for (const p of placesArray.slice(0, 6)) {
-      await sleep(150);
+  // --- Enrichment Layer ---
+  const enriched = [];
+  const apiKeyForPhotos = process.env.GOOGLE_PLACES_API_KEY;
+
+  for (const p of places.slice(0, 6)) {
+    await sleep(150); // avoid concurrent Places calls
+    try {
       const coords = await getCoordinates(p.search_query || p.name, true);
       
+      // 📸 REAL IMAGE FETCH from Google Places
       let image = "https://images.unsplash.com/photo-1488646953014-85cb44e25828";
       if (coords.photo_reference) {
-        image = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${coords.photo_reference}`;
+        image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${coords.photo_reference}&key=${apiKeyForPhotos}`;
       } else if (p.unsplash_query || p.name) {
         image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.unsplash_query || p.name)}`;
       }
@@ -1049,12 +1022,13 @@ Return ONLY the JSON array. No markdown, no extra text.
         lng: coords.lng,
         image: image,
       });
+    } catch (enrichErr) {
+      console.warn(`[fetchFromGemini] Failed to enrich "${p.name}": ${enrichErr.message}`);
+      // Add without full enrichment if necessary or skip
     }
-    return enriched;
-  } catch (groqErr) {
-    console.error(`[fetchFromGemini] Groq fallback also failed: ${groqErr.message}`);
-    throw new Error("Both Gemini and Groq failed to generate Hidden Gems.");
   }
+
+  return enriched;
 }
 
 exports.generateDestinations = async (req, res) => {
