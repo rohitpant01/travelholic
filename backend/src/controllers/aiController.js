@@ -50,6 +50,76 @@ const groqHotel = new Groq({ apiKey: process.env.GROQ_HOTEL_API_KEY || process.e
 // ─── SIMPLE IN-MEMORY LOCK ────────────────────────────────────
 const _locks = new Set();
 
+// ─── RESCUE FALLBACK DATA ─────────────────────────────────────
+const STATIC_FALLBACK_GEMS = [
+  {
+    name: "Ziro Valley",
+    district: "Lower Subansiri",
+    state: "Arunachal Pradesh",
+    location: "Lower Subansiri, Arunachal Pradesh",
+    description: "A stunning plateau famous for its pine hills and rice fields.",
+    image: "https://images.unsplash.com/photo-1548013146-72479768bbaa",
+    lat: 27.5922,
+    lng: 93.8484,
+    tags: ["Nature", "Offbeat", "Culture"]
+  },
+  {
+    name: "Majuli",
+    district: "Jorhat",
+    state: "Assam",
+    location: "Jorhat, Assam",
+    description: "The world's largest river island, known for its vibrant culture.",
+    image: "https://images.unsplash.com/photo-1501785888041-af3ef285b470",
+    lat: 26.9632,
+    lng: 94.1950,
+    tags: ["Culture", "River", "Serene"]
+  },
+  {
+    name: "Tirthan Valley",
+    district: "Kullu",
+    state: "Himachal Pradesh",
+    location: "Kullu, Himachal Pradesh",
+    description: "A hidden paradise for nature lovers and trout fishing.",
+    image: "https://images.unsplash.com/photo-1470770841072-f978cf4d019e",
+    lat: 31.6425,
+    lng: 77.3486,
+    tags: ["Adventure", "Cold", "Nature"]
+  },
+  {
+    name: "Dhanushkodi",
+    district: "Rameswaram",
+    state: "Tamil Nadu",
+    location: "Rameswaram, Tamil Nadu",
+    description: "A ghost town at the edge of the Indian peninsula.",
+    image: "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2",
+    lat: 9.1764,
+    lng: 79.4048,
+    tags: ["History", "Beach", "Ruins"]
+  },
+  {
+    name: "Spiti Valley",
+    district: "Lahaul and Spiti",
+    state: "Himachal Pradesh",
+    location: "Lahaul and Spiti, Himachal Pradesh",
+    description: "A cold desert mountain valley high in the Himalayas.",
+    image: "https://images.unsplash.com/photo-1506461883276-594a12b11cf3",
+    lat: 32.2461,
+    lng: 78.0349,
+    tags: ["Adventure", "Cold", "Mountain"]
+  },
+  {
+    name: "Gokarna",
+    district: "Uttara Kannada",
+    state: "Karnataka",
+    location: "Uttara Kannada, Karnataka",
+    description: "A relaxed alternative to Goa with pristine beaches.",
+    image: "https://images.unsplash.com/photo-1519046904884-53103b34b206",
+    lat: 14.5479,
+    lng: 74.3188,
+    tags: ["Beach", "Spiritual", "Peaceful"]
+  }
+];
+
 // ─── HELPERS ─────────────────────────────────────────────────
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -249,12 +319,15 @@ const runOpenAIJSON = async (prompt, model = OPENAI_MODEL, retries = 2) => {
  * Run a Gemini generation and return parsed JSON.
  */
 const runGeminiJSON = async (prompt, retries = 1) => {
-  if (GEMINI_KEYS.length === 0) throw new Error("No Gemini keys found.");
+  if (GEMINI_KEYS.length === 0) {
+    console.error("[Gemini] No Gemini keys available in environment.");
+    throw new Error("No Gemini keys found.");
+  }
   
   for (const [keyIdx, key] of GEMINI_KEYS.entries()) {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        console.log(`[Gemini] Using key index ${keyIdx}, attempt ${attempt + 1}...`);
+        console.log(`[Gemini] Requesting via Key Index ${keyIdx} (Attempt ${attempt + 1})...`);
         const genAI = new GoogleGenerativeAI(key);
         const model = genAI.getGenerativeModel({ model: GEMINI_MODEL }, { apiVersion: 'v1' });
         const result = await model.generateContent(prompt);
@@ -266,8 +339,9 @@ const runGeminiJSON = async (prompt, retries = 1) => {
           .trim();
         return JSON.parse(raw);
       } catch (e) {
+        console.warn(`[Gemini] Key Index ${keyIdx} FAILED: ${e.message}`);
         if (attempt === retries) {
-          console.warn(`[Gemini] Key index ${keyIdx} exhausted or failed: ${e.message}`);
+          console.error(`[Gemini] Out of retries for Key Index ${keyIdx}.`);
           break; // move to next key
         }
         await sleep(1000 * (attempt + 1));
@@ -283,6 +357,7 @@ const runGeminiJSON = async (prompt, retries = 1) => {
 const runGroqJSON = async (prompt, model = GROQ_MODEL, retries = 2) => {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      console.log(`[Groq] Requesting (Attempt ${attempt + 1})...`);
       const completion = await groq.chat.completions.create({
         messages: [
           {
@@ -296,8 +371,11 @@ const runGroqJSON = async (prompt, model = GROQ_MODEL, retries = 2) => {
       });
       return JSON.parse(completion.choices[0].message.content);
     } catch (e) {
-      if (attempt === retries) throw e;
-      console.warn(`[Groq] Attempt ${attempt + 1} failed: ${e.message}. Retrying…`);
+      console.warn(`[Groq] Attempt ${attempt + 1} FAILED: ${e.message}`);
+      if (attempt === retries) {
+        console.error("[Groq] FATAL: Groq exhausted retries.");
+        throw e;
+      }
       await sleep(1000 * (attempt + 1));
     }
   }
@@ -1042,11 +1120,15 @@ exports.generateDestinations = async (req, res) => {
   try {
     let doc = await GlobalDestination.findOne();
     const isForce = req.query.force === "true";
+    const now = Date.now();
     const lastUpdate = doc ? new Date(doc.createdAt).getTime() : 0;
-    const isStale = !doc || (Date.now() - lastUpdate > HOURS_12);
+    const diffHours = (now - lastUpdate) / 3600000;
+    const isStale = !doc || (diffHours > 12);
 
-    if (isStale) {
-      console.log(`[generateDestinations] Data is stale (${Math.round((Date.now() - lastUpdate) / 3600000)}h since last refresh). Fetching new gems from AI...`);
+    console.log(`[generateDestinations] Check - Force: ${isForce}, LastUpdate: ${new Date(lastUpdate).toISOString()}, Diff: ${diffHours.toFixed(2)}h, Threshold: 12h, Result: ${isStale ? 'STALE' : 'FRESH'}`);
+
+    if (isStale || isForce) {
+      console.log(`[generateDestinations] Action: ${isForce ? 'Shuffle forced' : 'Data stale'} -> Regenerating via AI...`);
       try {
         const fresh = await fetchFromGemini(doc?.previousTitles || []);
         
@@ -1062,30 +1144,33 @@ exports.generateDestinations = async (req, res) => {
           },
           { upsert: true, new: true }
         );
-        console.log(`[generateDestinations] Successfully refreshed destinations via AI.`);
+        console.log(`[generateDestinations] SUCCESS: Refreshed destinations via AI.`);
       } catch (aiErr) {
-        console.error(`[generateDestinations] AI Regeneration failed: ${aiErr.message}`);
+        console.error(`[generateDestinations] AI ERROR: ${aiErr.message}`);
         if (doc) {
-          console.log(`[generateDestinations] Falling back to existing cached destinations from DB.`);
+          console.warn(`[generateDestinations] FALLBACK: Regeneration failed, using existing DB data.`);
         } else {
-          throw aiErr;
+          console.error(`[generateDestinations] CRITICAL: AI failed and DB is empty. Using STATIC_FALLBACK_GEMS.`);
+          return res.json({ destinations: STATIC_FALLBACK_GEMS });
         }
       }
     } else {
-      console.log(`[generateDestinations] Serving from DB. ${isForce ? 'Shuffle requested - reordering locally.' : 'Stable view.'}`);
+      console.log(`[generateDestinations] Action: Serving stable data from DB.`);
     }
 
-    let destinations = doc ? doc.destinations : [];
+    let destinations = doc ? doc.destinations : STATIC_FALLBACK_GEMS;
     
-    // If shuffle is requested but data is NOT stale, we just reorder the existing items locally
+    // Manual shuffle reorders existing data without hitting AI
     if (isForce && destinations.length > 0) {
+      console.log(`[generateDestinations] Local Shuffle: Reordering current list.`);
       destinations = [...destinations].sort(() => Math.random() - 0.5);
     }
 
     return res.json({ destinations });
   } catch (e) {
-    console.error("[generateDestinations] Fatal Error:", e.message);
-    return res.status(500).json({ error: e.message });
+    console.error(`[generateDestinations] FATAL FATAL ERROR: ${e.message}`, e.stack);
+    // Absolute Last Resort
+    return res.json({ destinations: STATIC_FALLBACK_GEMS });
   } finally {
     _locks.delete("generateDestinations");
   }
