@@ -1045,10 +1045,10 @@ async function fetchFromGemini(previousTitles = []) {
 Suggest 6 unique Indian hidden gem travel destinations for ${currentMonth}.
 ${avoidClause}
 Focus on offbeat, lesser-known places — not mainstream tourist spots.
-Return a JSON array of objects with these exact fields:
-name, district, state, country, description, tags (array), bestTime,
-nearest_airport, nearest_city, travel_tip, why_love_this, search_query, unsplash_query
-Return ONLY the JSON array. No markdown, no extra text.
+Return ONLY a JSON object: { "destinations": [ ...array... ] }
+Each item must have: name, district, state, country, description, tags (array), bestTime,
+nearest_airport, nearest_city, travel_tip, why_love_this, search_query, unsplash_query.
+No markdown, no extra text.
 `.trim();
 
   let places = null;
@@ -1063,8 +1063,7 @@ Return ONLY the JSON array. No markdown, no extra text.
     // --- Fallback to Groq ---
     try {
       const groqData = await runGroqJSON(prompt);
-      // Groq often returns an object { destinations: [...] } instead of a direct array
-      places = Array.isArray(groqData) ? groqData : (groqData.destinations || groqData.places || groqData.destinations_list || []);
+      places = groqData.destinations || groqData.places || groqData.items || (Array.isArray(groqData) ? groqData : []);
     } catch (groqErr) {
       console.error(`[fetchFromGemini] Groq fallback also failed: ${groqErr.message}`);
       throw new Error("Both Gemini and Groq failed to generate Hidden Gems.");
@@ -1087,7 +1086,7 @@ Return ONLY the JSON array. No markdown, no extra text.
       // 📸 REAL IMAGE FETCH from Google Places
       let image = "https://images.unsplash.com/photo-1488646953014-85cb44e25828";
       if (coords.photo_reference) {
-        image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${coords.photo_reference}&key=${apiKeyForPhotos}`;
+        image = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${coords.photo_reference}`;
       } else if (p.unsplash_query || p.name) {
         image = `${process.env.EXPO_PUBLIC_API_URL || ''}/api/images/unsplash?query=${encodeURIComponent(p.unsplash_query || p.name)}`;
       }
@@ -1104,6 +1103,11 @@ Return ONLY the JSON array. No markdown, no extra text.
       console.warn(`[fetchFromGemini] Failed to enrich "${p.name}": ${enrichErr.message}`);
       // Add without full enrichment if necessary or skip
     }
+  }
+
+  if (enriched.length === 0) {
+    console.warn("[fetchFromGemini] Enrichment resulted in 0 items. Using fallback gems.");
+    return STATIC_FALLBACK_GEMS;
   }
 
   return enriched;
