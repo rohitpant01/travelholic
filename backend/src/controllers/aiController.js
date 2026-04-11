@@ -29,7 +29,7 @@ const INSIGHT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
 
 // [A] FIX: These were referenced throughout but never defined.
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_KEYS = [
   process.env.GOOGLE_GEMINI_API_KEY,
   process.env.GOOGLE_GEMINI_REC_API_KEY,
