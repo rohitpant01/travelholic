@@ -1043,10 +1043,10 @@ exports.generateDestinations = async (req, res) => {
     let doc = await GlobalDestination.findOne();
     const isForce = req.query.force === "true";
     const lastUpdate = doc ? new Date(doc.createdAt).getTime() : 0;
-    const isStale = !doc || isForce || (Date.now() - lastUpdate > HOURS_12);
+    const isStale = !doc || (Date.now() - lastUpdate > HOURS_12);
 
     if (isStale) {
-      console.log(`[generateDestinations] ${isForce ? 'Shuffle requested.' : 'Data is stale.'} Fetching from AI...`);
+      console.log(`[generateDestinations] Data is stale (${Math.round((Date.now() - lastUpdate) / 3600000)}h since last refresh). Fetching new gems from AI...`);
       try {
         const fresh = await fetchFromGemini(doc?.previousTitles || []);
         
@@ -1058,7 +1058,7 @@ exports.generateDestinations = async (req, res) => {
               ...(doc?.previousTitles || []),
               ...fresh.map((d) => d.name),
             ].slice(-18),
-            createdAt: new Date(), // Explicitly update timestamp
+            createdAt: new Date(),
           },
           { upsert: true, new: true }
         );
@@ -1066,16 +1066,23 @@ exports.generateDestinations = async (req, res) => {
       } catch (aiErr) {
         console.error(`[generateDestinations] AI Regeneration failed: ${aiErr.message}`);
         if (doc) {
-          console.log(`[generateDestinations] Falling back to existing cached destinations from DB to avoid error.`);
+          console.log(`[generateDestinations] Falling back to existing cached destinations from DB.`);
         } else {
-          throw aiErr; // No cache available, must error
+          throw aiErr;
         }
       }
     } else {
-      console.log(`[generateDestinations] Fetching from DB (Using cached data, last updated ${Math.round((Date.now() - lastUpdate) / 60000)} mins ago).`);
+      console.log(`[generateDestinations] Serving from DB. ${isForce ? 'Shuffle requested - reordering locally.' : 'Stable view.'}`);
     }
 
-    return res.json({ destinations: doc ? doc.destinations : [] });
+    let destinations = doc ? doc.destinations : [];
+    
+    // If shuffle is requested but data is NOT stale, we just reorder the existing items locally
+    if (isForce && destinations.length > 0) {
+      destinations = [...destinations].sort(() => Math.random() - 0.5);
+    }
+
+    return res.json({ destinations });
   } catch (e) {
     console.error("[generateDestinations] Fatal Error:", e.message);
     return res.status(500).json({ error: e.message });
