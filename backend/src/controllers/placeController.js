@@ -198,7 +198,7 @@ exports.searchPlaces = async (req, res) => {
             rating: p.rating,
             totalRatings: p.user_ratings_total,
             location: p.geometry.location,
-            photoReference: ref,
+            photoReference: ref ? `${ref}&key=${apiKey || process.env.GOOGLE_PLACES_API_KEY}#` : null,
             image: imgUrl, // 🔥 NEW: Real image URL
             whyThisPlace: p.rating > 4.5 ? `Highly recommended spot! ★` : `${config.insight} ${config.emoji}`,
             types: p.types,
@@ -245,7 +245,7 @@ exports.searchPlaces = async (req, res) => {
           rating: p.rating,
           totalRatings: p.user_ratings_total,
           location: p.geometry.location,
-          photoReference: ref,
+          photoReference: ref ? `${ref}&key=${apiKey || process.env.GOOGLE_PLACES_API_KEY}#` : null,
           image: imgUrl,
           whyThisPlace: `Highly recommended spot! 🪄`,
           types: p.types,

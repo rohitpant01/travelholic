@@ -187,22 +187,27 @@ exports.generateItinerary = async (req, res) => {
       console.error('⚠️ [DM ERROR]', e.message);
     }
 
-    const itinerary = finalSelection.map((p, idx) => ({
-      time: p.time,
-      placeName: p.name,
-      address: p.address || 'Local area',
-      distance: roadData?.[idx]?.status === 'OK' ? roadData[idx].distance.text : 'Nearby',
-      why: p.why,
-      secretStory: p.secretStory,
-      tags: p.tags,
-      info: p.info,
-      coordinates: p.location,
-      rating: p.rating,
-      photoReference: p.photoReference,
-      image: p.photoReference 
-        ? `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${p.photoReference}`
-        : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`
-    }));
+    const itinerary = finalSelection.map((p, idx) => {
+      // 🛡️ [URL POISONING FIX] - Injecting backend key to bypass APK's broken key
+      const poisonedRef = p.photoReference ? `${p.photoReference}&key=${apiKey || process.env.GOOGLE_PLACES_API_KEY}#` : null;
+
+      return {
+        time: p.time,
+        placeName: p.name,
+        address: p.address || 'Local area',
+        distance: roadData?.[idx]?.status === 'OK' ? roadData[idx].distance.text : 'Nearby',
+        why: p.why,
+        secretStory: p.secretStory,
+        tags: p.tags,
+        info: p.info,
+        coordinates: p.location,
+        rating: p.rating,
+        photoReference: poisonedRef,
+        image: p.photoReference 
+          ? `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${p.photoReference}`
+          : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`
+      };
+    });
 
     res.json({
       title: `EkalGo Magic - ${selectedMoods.map(m => m.charAt(0).toUpperCase() + m.slice(1)).join(' & ')} Itinerary 🪄`,
