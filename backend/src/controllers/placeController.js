@@ -42,10 +42,10 @@ const CATEGORY_MAP = {
  */
 const fetchRoadDistances = async (originLat, originLng, places, mapsKey) => {
   if (places.length === 0) return places;
-  
+
   const destinations = places.map(p => `${p.location.lat},${p.location.lng}`).join('|');
   const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originLat},${originLng}&destinations=${destinations}&key=${mapsKey}`;
-  
+
   try {
     const res = await axios.get(url);
     if (res.data.status === 'OK' && res.data.rows?.[0]?.elements) {
@@ -82,8 +82,8 @@ exports.searchPlaces = async (req, res) => {
     // ── 1. SMART PROXIMITY & TIME GATE ──
     // Find the latest discovery cache in this area (within 20km)
     // We search broadly by query first
-    const existingCache = await PlaceCache.findOne({ 
-      query: query || '', 
+    const existingCache = await PlaceCache.findOne({
+      query: query || '',
       // Basic bounding box check for performance before haversine
       lat: { $gte: userLat - 0.3, $lte: userLat + 0.3 },
       lng: { $gte: userLng - 0.3, $lte: userLng + 0.3 }
@@ -96,7 +96,7 @@ exports.searchPlaces = async (req, res) => {
 
       // If user is within 20km AND data is < 24h old → SERVE INSTANTLY
       if (dist < 20 && age < HOURS_24) {
-        console.log(`📡 [EXPLORER] Cache Hit! (Dist: ${dist.toFixed(1)}km, Age: ${Math.round(age/3600000)}h)`);
+        console.log(`📡 [EXPLORER] Cache Hit! (Dist: ${dist.toFixed(1)}km, Age: ${Math.round(age / 3600000)}h)`);
         return res.json({
           success: true,
           cached: true, // 📡 Explicitly set as cached
@@ -129,7 +129,7 @@ exports.searchPlaces = async (req, res) => {
           const loc = geoRes.data.results[0].geometry.location;
           const types = geoRes.data.results[0].types;
           const isLocality = types.some(t => ['locality', 'administrative_area_level_1', 'administrative_area_level_2', 'country'].includes(t));
-          
+
           if (isLocality || calculateHaversine(userLat, userLng, loc.lat, loc.lng) > 15) {
             searchCenterLat = loc.lat;
             searchCenterLng = loc.lng;
@@ -137,14 +137,14 @@ exports.searchPlaces = async (req, res) => {
             isCitySearch = true;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const distRefLabel = isCitySearch ? `from your location` : 'away';
 
     const categorizedResults = {};
     let totalFound = 0;
-    let masterPool = new Map(); 
+    let masterPool = new Map();
 
     const fetchCategory = async (catKey) => {
       const config = CATEGORY_MAP[catKey];
@@ -158,11 +158,11 @@ exports.searchPlaces = async (req, res) => {
 
       const searchRadius = catKey === 'others' ? 25000 : 15000;
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${searchCenterLat},${searchCenterLng}&radius=${searchRadius}&type=${config.type}&keyword=${encodeURIComponent(finalKeyword)}&key=${apiKey}`;
-      
+
       try {
         const response = await axios.get(url);
         let spots = [];
-        
+
         if (response.data.status === 'OK') {
           // 🔥 DEDUPLICATION FILTER: Remove places this user has already seen!
           const filtered = response.data.results.filter(p => !p.types.some(t => BLACKLIST_TYPES.includes(t)) && !seenPlaceIds.has(p.place_id));
@@ -174,12 +174,12 @@ exports.searchPlaces = async (req, res) => {
           const fbUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${searchCenterLat},${searchCenterLng}&radius=20000&type=tourist_attraction&key=${apiKey}`;
           const fbRes = await axios.get(fbUrl);
           if (fbRes.data.status === 'OK') {
-             const extra = fbRes.data.results.filter(p => 
-               !spots.some(s => s.place_id === p.place_id) && 
-               !p.types.some(t => BLACKLIST_TYPES.includes(t)) &&
-               !seenPlaceIds.has(p.place_id)
-             ).slice(0, 5);
-             spots = [...spots, ...extra];
+            const extra = fbRes.data.results.filter(p =>
+              !spots.some(s => s.place_id === p.place_id) &&
+              !p.types.some(t => BLACKLIST_TYPES.includes(t)) &&
+              !seenPlaceIds.has(p.place_id)
+            ).slice(0, 5);
+            spots = [...spots, ...extra];
           }
         }
 
@@ -187,7 +187,7 @@ exports.searchPlaces = async (req, res) => {
         const limit = catKey === 'others' ? 40 : 15;
         let processed = spots.slice(0, limit).map(p => {
           const ref = p.photos?.[0]?.photo_reference;
-          const imgUrl = ref 
+          const imgUrl = ref
             ? `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${ref}`
             : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`; // Fallback
 
@@ -208,15 +208,15 @@ exports.searchPlaces = async (req, res) => {
         });
 
         if (processed.length > 0) {
-           const roadData = await fetchRoadDistances(userLat, userLng, processed.slice(0, 12), mapsKey);
-           processed = processed.map((p, idx) => {
-             if (idx < 12 && roadData[idx]) {
-               return { ...roadData[idx], distanceText: `${roadData[idx].distanceText} ${distRefLabel}` };
-             } else {
-               const hKm = calculateHaversine(userLat, userLng, p.location.lat, p.location.lng);
-               return { ...p, distanceKm: parseFloat(hKm.toFixed(1)), distanceText: `${hKm.toFixed(1)} km ${distRefLabel}` };
-             }
-           });
+          const roadData = await fetchRoadDistances(userLat, userLng, processed.slice(0, 12), mapsKey);
+          processed = processed.map((p, idx) => {
+            if (idx < 12 && roadData[idx]) {
+              return { ...roadData[idx], distanceText: `${roadData[idx].distanceText} ${distRefLabel}` };
+            } else {
+              const hKm = calculateHaversine(userLat, userLng, p.location.lat, p.location.lng);
+              return { ...p, distanceKm: parseFloat(hKm.toFixed(1)), distanceText: `${hKm.toFixed(1)} km ${distRefLabel}` };
+            }
+          });
         }
         categorizedResults[catKey] = processed;
         totalFound += processed.length;
@@ -234,7 +234,7 @@ exports.searchPlaces = async (req, res) => {
     if (uncategorizedItems.length > 0) {
       const catchAllFormatted = uncategorizedItems.map(p => {
         const ref = p.photos?.[0]?.photo_reference;
-        const imgUrl = ref 
+        const imgUrl = ref
           ? `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${ref}`
           : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`;
 

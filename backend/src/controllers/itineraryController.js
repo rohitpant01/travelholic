@@ -21,9 +21,9 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const BLACKLIST_TYPES = [
-  'atm', 'bank', 'finance', 'money_transfer', 'political', 'embassy', 
+  'atm', 'bank', 'finance', 'money_transfer', 'political', 'embassy',
   'post_office', 'electronics_store', 'car_repair', 'car_dealer',
-  'gas_station', 'hardware_store', 'laundry', 'locksmith', 'storage', 
+  'gas_station', 'hardware_store', 'laundry', 'locksmith', 'storage',
   'veterinary_care', 'doctor', 'hospital', 'dentist', 'pharmacy'
 ];
 
@@ -52,7 +52,7 @@ const fetchNearby = async (lat, lng, radius, keywords, apiKey) => {
   try {
     const response = await axios.get(url);
     if (response.data.status === 'OK') {
-      const filtered = response.data.results.filter(p => 
+      const filtered = response.data.results.filter(p =>
         !p.types.some(t => BLACKLIST_TYPES.includes(t)) &&
         p.business_status !== 'CLOSED_PERMANENTLY' &&
         p.rating > 0
@@ -86,19 +86,19 @@ exports.generateItinerary = async (req, res) => {
     if (!combinedKeywords) combinedKeywords = 'tourist_attraction|point_of_interest';
 
     let spots = await fetchNearby(userLat, userLng, 20000, combinedKeywords, apiKey);
-    
+
     // --- PHASE 2: AUGMENTATION (If low results) ---
     if (spots.length < 5) {
       console.log('🔄 [AUGMENTING SEARCH] Low results for primary moods...');
       let fallbackKeywords = 'tourist_attraction|landmark|museum';
-      
+
       // Special handle for family/landmark preference as requested
       if (selectedMoods.includes('family') || selectedMoods.includes('spiritual')) {
         fallbackKeywords += '|temple|shrine|park|religious';
       }
 
       const extraSpots = await fetchNearby(userLat, userLng, 20000, fallbackKeywords, apiKey);
-      
+
       // Merge and deduplicate
       const existingIds = new Set(spots.map(s => s.place_id));
       extraSpots.forEach(s => {
@@ -113,7 +113,7 @@ exports.generateItinerary = async (req, res) => {
     if (spots.length < 3) {
       console.log('🌐 [BROADENING RADIUS] Still low results, searching broadly...');
       const finalResort = await fetchNearby(userLat, userLng, 35000, 'point_of_interest|establishment', apiKey);
-      
+
       const existingIds = new Set(spots.map(s => s.place_id));
       finalResort.forEach(s => {
         if (!existingIds.has(s.place_id)) {
@@ -144,7 +144,7 @@ exports.generateItinerary = async (req, res) => {
 
     // --- AI REASONING ---
     const aiResult = await generateSmartItinerary(candidates, selectedMoods);
-    
+
     let finalSelection = [];
     let summaryStory = "";
 
@@ -178,7 +178,7 @@ exports.generateItinerary = async (req, res) => {
     // Distance Matrix Pass
     const dest = finalSelection.map(p => `${p.location.lat},${p.location.lng}`).join('|');
     const dmUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${userLat},${userLng}&destinations=${dest}&key=${mapsKey}`;
-    
+
     let roadData = null;
     try {
       const dmRes = await axios.get(dmUrl);
@@ -203,7 +203,7 @@ exports.generateItinerary = async (req, res) => {
         coordinates: p.location,
         rating: p.rating,
         photoReference: poisonedRef,
-        image: p.photoReference 
+        image: p.photoReference
           ? `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${p.photoReference}`
           : `https://images.unsplash.com/photo-1488646953014-85cb44e25828`
       };
@@ -242,25 +242,25 @@ exports.getLyraItinerary = async (req, res) => {
   try {
     const { caption, location, tags, lat, lng } = req.body;
     console.log(`[LYRA] Incoming request — caption: "${(caption || '').substring(0, 50)}...", location: "${location}", lat: ${lat}, lng: ${lng}`);
-    
+
     if (!caption) return res.status(400).json({ error: 'Caption is required for Lyra to work her magic! ✨' });
-    
+
     // --- RATE LIMIT CHECK (2 generations per 12 hours) ---
     const user = await User.findById(req.user._id);
     const TWELVE_HOURS = 12 * 60 * 60 * 1000;
     const now = new Date();
-    
+
     // Clean up old timestamps and check limit
     const recentGenerations = (user.travelMemory?.lyraGenerationTimestamps || [])
       .filter(ts => (now - new Date(ts)) < TWELVE_HOURS);
-      
+
     if (recentGenerations.length >= 2) {
       const oldestTs = new Date(recentGenerations[0]);
       const nextAvailableAt = new Date(oldestTs.getTime() + TWELVE_HOURS);
-      return res.status(429).json({ 
-        error: 'Generation limit reached', 
+      return res.status(429).json({
+        error: 'Generation limit reached',
         message: 'Lyra needs a break! You can generate 2 itineraries every 12 hours.',
-        nextAvailableAt 
+        nextAvailableAt
       });
     }
 
@@ -298,23 +298,23 @@ exports.getLyraItinerary = async (req, res) => {
     for (let i = 0; i < 2; i++) {
       try {
         console.log(`[LYRA] Attempt ${i + 1} for: ${caption.substring(0, 30)}...`);
-        
+
         const aiResponse = await generateLyraItinerary(caption, location, tags, realCandidates, userPrefs);
-        
+
         if (validateLyraResponse(aiResponse)) {
           console.log(`✅ [LYRA] Success on attempt ${i + 1}! (Confidence: ${aiResponse.confidence})`);
-          
+
           // 🗺️ Phase 4: Google Places Post-Processing Enrichment
           try {
             console.log(`📍 [LYRA-ENRICH] Starting Enrichment biased to (${lat || location})`);
             const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-            
+
             if (apiKey) {
               // 🧪 Enhanced Geocode with Spatial Biasing
               const geocodePlace = async (placeName) => {
                 try {
                   let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(placeName + ' in ' + location)}&key=${apiKey}`;
-                  
+
                   // 🔥 Spatial Biasing: Find exactly the Malaynath temple near THIS user
                   if (lat && lng) {
                     url += `&location=${lat},${lng}&radius=50000`; // 50km radius bias
@@ -340,10 +340,10 @@ exports.getLyraItinerary = async (req, res) => {
                       if (nameToSearch) {
                         const geo = await geocodePlace(nameToSearch);
                         if (geo) {
-                          day.places[idx] = { 
-                            name: geo.name || nameToSearch, 
-                            latitude: geo.geometry.location.lat, 
-                            longitude: geo.geometry.location.lng, 
+                          day.places[idx] = {
+                            name: geo.name || nameToSearch,
+                            latitude: geo.geometry.location.lat,
+                            longitude: geo.geometry.location.lng,
                             rating: geo.rating,
                             user_ratings_total: geo.user_ratings_total,
                             address: geo.formatted_address
@@ -352,11 +352,11 @@ exports.getLyraItinerary = async (req, res) => {
                       }
                     }));
                   }
-                  
+
                   // 🔥 Cache Day Level Coords for Quick UI Rendering
                   if (day.places && day.places[0] && day.places[0].latitude) {
-                     day.latitude = day.places[0].latitude;
-                     day.longitude = day.places[0].longitude;
+                    day.latitude = day.places[0].latitude;
+                    day.longitude = day.places[0].longitude;
                   }
                 }
               }
@@ -368,9 +368,9 @@ exports.getLyraItinerary = async (req, res) => {
                   if (nameToSearch) {
                     const geo = await geocodePlace(nameToSearch);
                     if (geo) {
-                      aiResponse.nearby_recommendations[idx] = { 
-                        name: geo.name || nameToSearch, 
-                        latitude: geo.geometry.location.lat, 
+                      aiResponse.nearby_recommendations[idx] = {
+                        name: geo.name || nameToSearch,
+                        latitude: geo.geometry.location.lat,
                         longitude: geo.geometry.location.lng,
                         rating: geo.rating
                       };
@@ -406,12 +406,12 @@ exports.getLyraItinerary = async (req, res) => {
                       longitude: geo.geometry.location.lng,
                       address: geo.formatted_address,
                       rating: geo.rating,
-                      price_range: mapPrice(geo.price_level, stay.type || stay.stay_type) 
+                      price_range: mapPrice(geo.price_level, stay.type || stay.stay_type)
                     };
                   }
                 }));
               }
-              
+
               console.log('✅ [LYRA-ENRICH] Successfully mapped precise real-world coordinates');
             }
           } catch (enrichErr) {
@@ -430,9 +430,9 @@ exports.getLyraItinerary = async (req, res) => {
       } catch (err) {
         console.error(`❌ [LYRA] Error on attempt ${i + 1}:`, err.message);
         if (i === 1) {
-          return res.status(500).json({ 
+          return res.status(500).json({
             error: 'Lyra is feeling a bit shy right now. Please try again in a moment!',
-            details: err.message 
+            details: err.message
           });
         }
       }
@@ -452,23 +452,23 @@ exports.getLyraItinerary = async (req, res) => {
  */
 exports.saveLyraItinerary = async (req, res) => {
   try {
-    const { 
-      sourcePostId, 
-      travel_type, 
-      itinerary, 
-      stay_suggestions, 
-      estimated_cost, 
+    const {
+      sourcePostId,
+      travel_type,
+      itinerary,
+      stay_suggestions,
+      estimated_cost,
       nearby_recommendations,
       confidence,
       locationName,
       coordinates,
-      visibility 
+      visibility
     } = req.body;
 
     const isValidObjectId = require('mongoose').Types.ObjectId.isValid;
     const finalSourcePostId = isValidObjectId(sourcePostId) ? sourcePostId : undefined;
 
-    const finalCoordinates = (coordinates && typeof coordinates.lng === 'number' && typeof coordinates.lat === 'number') 
+    const finalCoordinates = (coordinates && typeof coordinates.lng === 'number' && typeof coordinates.lat === 'number')
       ? { type: 'Point', coordinates: [coordinates.lng, coordinates.lat] }
       : (itinerary && itinerary[0]?.latitude && itinerary[0]?.longitude)
         ? { type: 'Point', coordinates: [itinerary[0].longitude, itinerary[0].latitude] }
@@ -523,7 +523,7 @@ exports.getMyLyraItineraries = async (req, res) => {
     const itineraries = await LyraItinerary.find({ userId: req.user._id })
       .sort({ createdAt: -1 })
       .populate('sourcePostId', 'content images');
-    
+
     res.json(itineraries);
   } catch (err) {
     console.error('[FETCH MY LYRA ERROR]', err);
@@ -606,7 +606,7 @@ exports.cloneItinerary = async (req, res) => {
 exports.deleteLyraItinerary = async (req, res) => {
   try {
     const itinerary = await LyraItinerary.findOne({ _id: req.params.id, userId: req.user._id });
-    
+
     if (!itinerary) {
       return res.status(404).json({ error: 'Itinerary not found or unauthorized' });
     }
@@ -630,7 +630,7 @@ exports.locationAutocomplete = async (req, res) => {
 
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
     const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&key=${apiKey}&components=country:in`;
-    
+
     const response = await axios.get(url);
     res.json(response.data);
   } catch (err) {
@@ -646,7 +646,7 @@ exports.locationAutocomplete = async (req, res) => {
 exports.reverseGeocode = async (req, res) => {
   try {
     const { lat, lng, address } = req.query;
-    
+
     let url;
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 
@@ -657,11 +657,11 @@ exports.reverseGeocode = async (req, res) => {
     } else {
       return res.status(400).json({ error: 'Coordinates or address required' });
     }
-    
+
     const response = await axios.get(url);
     if (response.data.status === 'OK' && response.data.results.length > 0) {
       const result = response.data.results[0];
-      
+
       // Attempt to extract a clean city or neighborhood name
       const getCity = (components) => {
         for (const type of ['locality', 'sublocality', 'administrative_area_level_3', 'administrative_area_level_2']) {
@@ -672,7 +672,7 @@ exports.reverseGeocode = async (req, res) => {
       };
 
       let bestName = getCity(result.address_components) || result.address_components[0].long_name;
-      
+
       // If it's still a plus code, try to grab the next part of the formatted address
       if (bestName.includes('+')) {
         const parts = result.formatted_address.split(',');

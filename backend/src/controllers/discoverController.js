@@ -67,19 +67,24 @@ const handleMatch = async (userId1, userId2, isSuperLike = false) => {
  */
 const calculateMatchingScore = (user, currentUser) => {
   let score = 0;
+  if (!user || !currentUser) return 0;
 
   // Priority 1 & 2: Same Destination (+50)
   if (user.destination?.city && currentUser.destination?.city && 
-      user.destination.city.toLowerCase() === currentUser.destination.city.toLowerCase()) {
+      String(user.destination.city).toLowerCase() === String(currentUser.destination.city).toLowerCase()) {
     score += 50;
 
     // Priority 1: Same Travel Date (+30)
     if (user.travelDate && currentUser.travelDate) {
-      const d1 = new Date(user.travelDate).toISOString().split('T')[0];
-      const d2 = new Date(currentUser.travelDate).toISOString().split('T')[0];
-      if (d1 === d2) score += 30;
+      try {
+        const d1 = new Date(user.travelDate).toISOString().split('T')[0];
+        const d2 = new Date(currentUser.travelDate).toISOString().split('T')[0];
+        if (d1 === d2) score += 30;
+      } catch (e) {
+        // Safe skip
+      }
     }
-  } else if (user.destination?.location?.coordinates && currentUser.destination?.location?.coordinates) {
+  } else if (user.destination?.location?.coordinates?.length >= 2 && currentUser.destination?.location?.coordinates?.length >= 2) {
     // Priority 3: Nearby Destination (50-100km) (+20)
     const dist = calculateDistance(
       user.destination.location.coordinates[1],
@@ -87,23 +92,26 @@ const calculateMatchingScore = (user, currentUser) => {
       currentUser.destination.location.coordinates[1],
       currentUser.destination.location.coordinates[0]
     );
-    if (dist <= 100) score += 20;
+    if (!isNaN(dist) && dist <= 100) score += 20;
   }
 
   // Priority 4: Same Route (Origin + Destination) (+25)
   if (user.origin?.city && currentUser.origin?.city && 
-      user.origin.city.toLowerCase() === currentUser.origin.city.toLowerCase()) {
+      String(user.origin.city).toLowerCase() === String(currentUser.origin.city).toLowerCase()) {
     score += 25;
   }
 
   // Priority 5: Shared Interests (+10 each)
-  const commonInterests = user.interests.filter(i => currentUser.interests.includes(i));
+  const userInterests = Array.isArray(user.interests) ? user.interests : [];
+  const currentUserInterests = Array.isArray(currentUser.interests) ? currentUser.interests : [];
+  const commonInterests = userInterests.filter(i => i && currentUserInterests.includes(i));
   score += commonInterests.length * 10;
 
-  return score;
+  return score || 0;
 };
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) return NaN;
   const R = 6371; // km
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -218,15 +226,18 @@ const getDiscoverProfiles = async (req, res) => {
     const totalCount = await User.countDocuments(pipeline[0]?.$geoNear ? pipeline[0].$geoNear.query : (pipeline[0]?.$match || {}));
 
     const enriched = profiles.map(p => {
+      if (!p || typeof p !== 'object') return null;
       const matchScore = calculateMatchingScore(p, currentUser);
-      const profilePhoto = p.photos?.find(photo => photo.isProfile)?.url || p.photos?.[0]?.url || null;
+      const photos = Array.isArray(p.photos) ? p.photos : [];
+      const profilePhoto = photos.find(photo => photo.isProfile)?.url || photos[0]?.url || null;
+      
       return {
         ...p,
         profilePhoto,
-        distanceKm: Math.round(p.distanceMet / 1000),
-        matchScore
+        distanceKm: Math.round(p.distanceMet / 1000) || 0,
+        matchScore: matchScore || 0
       };
-    });
+    }).filter(p => p !== null && p._id);
 
     // Sort by match score descending OR distance ascending
     if (req.query.sortBy === 'distance') {
@@ -507,7 +518,7 @@ const updateLocation = async (req, res) => {
     await User.findByIdAndUpdate(req.user._id, {
       location: { type: 'Point', coordinates: [lng, lat] }
     });
-    res.json({ message: 'Location updated' });
+    res.json({ success: true, message: 'Location updated' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
