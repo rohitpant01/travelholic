@@ -11,7 +11,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, SHADOW } from '../utils/theme';
-import ShimmerPlaceholder from 'react-native-shimmer-placeholder';
+import { LinearGradient } from 'expo-linear-gradient';
+import { createShimmerPlaceholder } from 'react-native-shimmer-placeholder';
+const ShimmerPlaceholder = createShimmerPlaceholder(LinearGradient);
+
 
 const { width } = Dimensions.get('window');
 
@@ -57,15 +60,15 @@ const NearbyTravelersView = ({
   const sections = [
     {
       title: 'Nearby You (< 10km)',
-      data: profiles.filter((p) => p.distanceKm < 10),
+      data: (profiles || []).filter((p) => p && typeof p.distanceKm === 'number' && p.distanceKm < 10),
     },
     {
       title: 'A Bit Further (10-100km)',
-      data: profiles.filter((p) => p.distanceKm >= 10 && p.distanceKm <= 100),
+      data: (profiles || []).filter((p) => p && typeof p.distanceKm === 'number' && p.distanceKm >= 10 && p.distanceKm <= 100),
     },
     {
       title: 'Global Explorers (> 100km)',
-      data: profiles.filter((p) => p.distanceKm > 100),
+      data: (profiles || []).filter((p) => p && typeof p.distanceKm === 'number' && p.distanceKm > 100),
     },
   ].filter((s) => s.data.length > 0);
 

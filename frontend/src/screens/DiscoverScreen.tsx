@@ -13,7 +13,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { discoverAPI } from '../api/services';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import { requestLocationPermission } from '../utils/permissionUtils';
-import ShimmerPlaceholder from 'react-native-shimmer-placeholder';
+import { createShimmerPlaceholder } from 'react-native-shimmer-placeholder';
+const ShimmerPlaceholder = createShimmerPlaceholder(LinearGradient);
+
 
 import Swiper from 'react-native-deck-swiper';
 
@@ -270,6 +272,7 @@ export default function DiscoverScreen() {
           <View style={styles.listContainer}>
             {viewMode === 'swipe' ? (
               <Swiper
+                key={`swiper-${profiles.length}-${viewMode}`}
                 ref={swiperRef}
                 cards={profiles}
                 renderCard={useCallback((profile: any) => (
