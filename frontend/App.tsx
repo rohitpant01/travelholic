@@ -25,6 +25,7 @@ import { setUser, setToken, setLoading, updateUser } from './src/store/slices/au
 import { upsertMessage, upsertTripMessage, updateMatchOnlineStatus, setUnreadCounts, addMatch, setTotalUnread, setMatches, removeMatch } from './src/store/slices/chatSlice';
 import { fetchNotifications, addNotification, setUnreadCount, markAllRead } from './src/store/slices/notificationSlice';
 import { updatePostInteraction } from './src/store/slices/feedSlice';
+import { fetchDiscoveryProfiles } from './src/store/slices/discoverSlice';
 import { userAPI, chatAPI, matchAPI, tripAPI } from './src/api/services';
 import { API_BASE_URL } from './src/api/client';
 import { useSocket, SocketProvider } from './src/context/SocketContext';
@@ -272,7 +273,9 @@ function AppNavigator() {
               chatAPI.getUnreadCount(),
               matchAPI.getMatches(),
               tripAPI.getMyTrips(),
-              dispatch(fetchNotifications())
+              dispatch(fetchNotifications()),
+              // 🚀 PRE-FETCH Discovery Cache
+              dispatch(fetchDiscoveryProfiles({ page: 1 }))
             ]);
 
             const privateMatches = matchesRes.data.matches.map((m: any) => ({ ...m, type: 'private' }));

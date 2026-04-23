@@ -10,6 +10,7 @@ import storyReducer from './slices/storySlice';
 import checklistReducer from './slices/checklistSlice';
 import uploadReducer from './slices/uploadSlice';
 import commentReducer from './slices/commentSlice';
+import discoverReducer from './slices/discoverSlice';
 
 const store = configureStore({
   reducer: {
@@ -24,6 +25,7 @@ const store = configureStore({
     uploads: uploadReducer,
     comments: commentReducer,
     checklist: checklistReducer,
+    discover: discoverReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }),

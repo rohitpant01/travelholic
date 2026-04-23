@@ -78,12 +78,18 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => {
+    // 1. Instant render from Redux happens automatically via useSelector(user)
+    
+    // 2. Background Sync
     if (user?._id) {
       dispatch(fetchUserPosts({ userId: user._id, page: 1 }));
+      // Silent refresh of profile stats (views, matches, etc)
+      userAPI.getProfile().then(res => {
+        if (res.data.user) {
+          dispatch(setUser(res.data.user));
+        }
+      }).catch(e => console.log('[PROFILE SYNC] Silent refresh failed', e));
     }
-    return () => {
-      dispatch(clearUserPosts());
-    };
   }, [user?._id]);
 
   const refreshProfile = async () => {

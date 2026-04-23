@@ -42,15 +42,10 @@ export default function DiscoverScreen() {
 
   const { user } = useSelector((state: RootState) => state.auth);
   const { unreadCount } = useSelector((state: RootState) => state.notification);
-
-  // Discovery State
-  const [profiles, setProfiles] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const { profiles, loading, hasMore, page } = useSelector((state: RootState) => state.discover);
 
   // UI State
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'discover' | 'feed'>('feed');
   const [viewMode, setViewMode] = useState<'swipe' | 'list'>('swipe');
   const [matchPopup, setMatchPopup] = useState<{ name: string; photo?: string } | null>(null);
@@ -149,6 +144,9 @@ export default function DiscoverScreen() {
       setRefreshing(true);
     }
 
+  const fetchProfiles = useCallback(async (reset = false) => {
+    if (!hasMore && !reset) return;
+
     try {
       const targetPage = reset ? 1 : page;
       let lat: number | undefined;
@@ -167,56 +165,33 @@ export default function DiscoverScreen() {
           if (lastLoc) {
             lat = lastLoc.coords.latitude;
             lng = lastLoc.coords.longitude;
-          } else {
-            const currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            lat = currentLoc.coords.latitude;
-            lng = currentLoc.coords.longitude;
           }
         }
       }
 
-      console.log(`[DISCOVER] Fetching profiles - Page: ${targetPage}, Mode: ${travelModeCity ? 'Travel' : 'Near'}, City: ${travelModeCity || 'GPS'}`);
-
-      const res = await discoverAPI.getProfiles(
-        lat, 
-        lng, 
-        'default', 
-        viewMode === 'list' ? 'distance' : undefined,
-        targetPage,
-        20,
-        travelModeCity
-      );
-
-      const newProfiles = res.data.profiles || [];
-      
-      setProfiles(prev => {
-        const combined = reset ? newProfiles : [...prev, ...newProfiles];
-        const unique = Array.from(new Map(combined.map(p => [p._id, p])).values());
-        return unique;
-      });
-
-      setPage(targetPage + 1);
-      setHasMore(res.data.hasMore);
+      dispatch(fetchDiscoveryProfiles({ 
+        page: targetPage, 
+        location: { lat: lat || 0, lng: lng || 0 }, 
+        maxDistance 
+      }));
     } catch (e) {
       console.error('[FETCH PROFILES ERROR]', e);
-      if (reset) Alert.alert('Error', 'Could not load profiles');
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  }, [loading, hasMore, page, manualCoords, viewMode, travelModeCity]);
+  }, [hasMore, page, manualCoords, maxDistance]);
 
 
   useEffect(() => {
     fetchProfiles(true);
     dispatch(fetchNotifications());
-  }, [viewMode, manualCoords, travelModeCity]); 
+  }, [manualCoords, travelModeCity, maxDistance]); 
 
   // ✅ SYNC: Handle user removal after action in Detail screen (Serializable fix)
   useEffect(() => {
     const actId = route.params?.lastActionUserId;
     if (actId) {
-      setProfiles(prev => prev.filter(p => p._id !== actId));
+      dispatch(removeProfile(actId));
       // Clear param so it doesn't trigger again on next focus
       navigation.setParams({ lastActionUserId: undefined });
     }
@@ -228,7 +203,7 @@ export default function DiscoverScreen() {
     
     // Optimistic remove for List View
     if (viewMode === 'list') {
-      setProfiles(prev => prev.filter(p => p._id !== profile._id));
+      dispatch(removeProfile(profile._id));
     }
 
     try {
@@ -245,7 +220,7 @@ export default function DiscoverScreen() {
     if (!profile) return;
 
     if (viewMode === 'list') {
-      setProfiles(prev => prev.filter(p => p._id !== profile._id));
+      dispatch(removeProfile(profile._id));
     }
 
     try { await discoverAPI.skip(profile._id); } catch (e) { }
@@ -256,7 +231,7 @@ export default function DiscoverScreen() {
     if (!profile) return;
 
     if (viewMode === 'list') {
-      setProfiles(prev => prev.filter(p => p._id !== profile._id));
+      dispatch(removeProfile(profile._id));
     }
 
     try {
@@ -269,7 +244,7 @@ export default function DiscoverScreen() {
   };
 
   const handleSwipedAll = () => {
-    setProfiles([]); // Triggers the empty state UI
+    dispatch(clearDiscovery());
   };
 
   const renderDiscoveryCard = useCallback((profile: any) => (
