@@ -147,6 +147,15 @@ const NotificationsScreen = () => {
       return;
     }
 
+    // 🎯 PRIORITY 8: Profile Views
+    if (type === 'profile_view') {
+       const visitorId = data.viewerId || senderId;
+       if (visitorId) {
+         navigation.navigate('UserDetail', { userId: String(visitorId) });
+         return;
+       }
+    }
+
     console.warn('[DEBUG] Notification fallthrough or unhandled type! Type:', type, 'Data:', data);
   };
 
@@ -198,6 +207,8 @@ const NotificationsScreen = () => {
       case 'content_restored':
       case 'report_resolved':
         return { name: 'checkmark-circle', color: theme.teal };
+      case 'profile_view':
+        return { name: 'eye', color: theme.teal };
       default:
         return { name: 'notifications', color: theme.teal };
     }

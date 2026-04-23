@@ -16,7 +16,7 @@ const notificationSchema = new mongoose.Schema({
     type: String,
     enum: ['like', 'comment', 'match', 'trip_join_request', 'trip_accepted', 'trip_member_joined', 'nearby_travelers', 'trending_trip', 'message',
            'content_reported', 'content_hidden', 'content_removed', 'content_restored',
-           'warning_received', 'suspension_received', 'ban_received', 'report_resolved'],
+           'warning_received', 'suspension_received', 'ban_received', 'report_resolved', 'profile_view'],
     required: true,
   },
   title: String,
@@ -45,6 +45,7 @@ const notificationSchema = new mongoose.Schema({
     tripId: mongoose.Schema.Types.ObjectId,
     matchId: mongoose.Schema.Types.ObjectId,
     reportId: mongoose.Schema.Types.ObjectId,
+    viewerId: mongoose.Schema.Types.ObjectId,
   },
   isRead: {
     type: Boolean,
