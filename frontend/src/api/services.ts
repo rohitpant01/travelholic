@@ -80,19 +80,23 @@ export const userAPI = {
 // DISCOVER API
 // ============================================================
 export const discoverAPI = {
-  getProfiles: (options: { 
-    lat?: number; 
-    lng?: number; 
-    mode?: string; 
-    sortBy?: string; 
-    page?: number; 
-    limit?: number; 
-    searchCity?: string; 
-    travelBuddy?: boolean;
-  }) => {
-    return apiClient.get('/nearby-users', {
-      params: options
-    });
+  getProfiles: (latOrOptions?: any, lng?: number, mode?: string, sortBy?: string, page = 1, limit = 20, searchCity?: string) => {
+    let params: any = {};
+    
+    if (typeof latOrOptions === 'object' && latOrOptions !== null) {
+      // New style: options object
+      params = { ...latOrOptions };
+    } else {
+      // Legacy style: individual arguments
+      params = { lat: latOrOptions, lng, mode, sortBy, page, limit, searchCity };
+    }
+
+    // Ensure travelBuddy is set if searchCity is present
+    if (params.searchCity) {
+      params.travelBuddy = true;
+    }
+
+    return apiClient.get('/nearby-users', { params });
   },
   like: (targetUserId: string) => apiClient.post('/discover/like', { targetUserId }),
   skip: (targetUserId: string) => apiClient.post('/discover/skip', { targetUserId }),

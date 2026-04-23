@@ -129,16 +129,16 @@ const getDiscoverProfiles = async (req, res) => {
   try {
     const currentUser = await User.findById(req.user._id);
     const maxDistance = currentUser.maxDiscoveryDistance || 200; // km
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    // ── NORMALIZE PARAMS (Handle potential nesting from various client versions) ──
+    const q = req.query;
+    let reqLat = parseFloat(q.lat?.lat || q.lat);
+    let reqLng = parseFloat(q.lng?.lng || q.lng || q.lat?.lng);
+    const searchCity = q.searchCity || q.lat?.searchCity;
+    const isTravelBuddySearch = q.travelBuddy === 'true' || q.lat?.travelBuddy === 'true' || !!searchCity;
+    const page = parseInt(q.page || q.lat?.page) || 1;
+    const limit = parseInt(q.limit || q.lat?.limit) || 20;
+    const isMapMode = (q.mode || q.lat?.mode) === 'map';
     const skip = (page - 1) * limit;
-
-    let reqLat = parseFloat(req.query.lat);
-    let reqLng = parseFloat(req.query.lng);
-    const searchCity = req.query.searchCity; // String city search
-    const isTravelBuddySearch = req.query.travelBuddy === 'true' || !!searchCity;
-
-    const isMapMode = req.query.mode === 'map';
     const swipedUsers = await Swipe.find({ swiper: req.user._id }).select('swiped');
     const swipedIds = swipedUsers.map(s => s.swiped);
 
