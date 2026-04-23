@@ -524,10 +524,30 @@ const updateLocation = async (req, res) => {
   }
 };
 
+// @desc    Update user visibility (public/ghost mode)
+// @route   PUT /api/discover/visibility
+// @access  Private
+const updateVisibility = async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['public', 'ghost'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be "public" or "ghost"' });
+    }
+
+    await User.findByIdAndUpdate(req.user._id, { visibilityStatus: status });
+
+    res.json({ success: true, message: `Visibility set to ${status}`, visibilityStatus: status });
+  } catch (error) {
+    console.error('[VISIBILITY ERROR]', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = { 
   getDiscoverProfiles, 
   likeUser, 
   skipUser, 
   superLikeUser,
-  updateLocation
+  updateLocation,
+  updateVisibility
 };

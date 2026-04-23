@@ -716,16 +716,18 @@ const reportUser = async (req, res) => {
       return res.status(400).json({ error: 'Target user and reason are required' });
     }
 
-    // 1. Save Report in DB
-    await Report.create({
-      reportedBy: req.user._id,
-      targetId: targetUserId,
-      type: 'user',
-      reason,
-      details: details || ''
-    });
+    // 1. Smart Report via Moderation Engine
+    const { processReport } = require('../utils/moderationEngine');
+    const result = await processReport(req.user._id, targetUserId, 'user', reason, details || '');
 
-    console.log(`[REPORT] User ${req.user._id} reported ${targetUserId}. Reason: ${reason}. Details: ${details}`);
+    if (result.duplicate) {
+      return res.status(200).json({ message: 'You have already reported this user.' });
+    }
+    if (result.rateLimited) {
+      return res.status(429).json({ error: 'Too many reports. Please try again later.' });
+    }
+
+    console.log(`[REPORT] User ${req.user._id} reported ${targetUserId}. Reason: ${reason}. Score: ${result.weightedScore?.toFixed(2)}`);
 
     // 2. AUTO ACTION: Block the User
     // Reuse logic from blockUser controller safely

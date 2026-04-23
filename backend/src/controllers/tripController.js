@@ -1061,16 +1061,18 @@ const reportTrip = async (req, res) => {
       return res.status(400).json({ error: 'Reason is required' });
     }
 
-    // 1. Save Report
-    await Report.create({
-      reportedBy: userId,
-      targetId: tripId,
-      type: 'group',
-      reason,
-      details: details || ''
-    });
+    // Smart Report via Moderation Engine
+    const { processReport } = require('../utils/moderationEngine');
+    const result = await processReport(userId, tripId, 'group', reason, details || '');
 
-    // 2. AUTO ACTION: Remove from Group
+    if (result.duplicate) {
+      return res.status(200).json({ message: 'You have already reported this group.' });
+    }
+    if (result.rateLimited) {
+      return res.status(429).json({ error: 'Too many reports. Please try again later.' });
+    }
+
+    // AUTO ACTION: Remove from Group (preserved from original)
     const trip = await Trip.findById(tripId);
     if (trip) {
       await TripMember.findOneAndDelete({ trip: tripId, user: userId });

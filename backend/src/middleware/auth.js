@@ -33,8 +33,20 @@ const protect = async (req, res, next) => {
       }
 
       if (user.isSuspended) {
-        console.warn(`[AUTH] Blocking suspended user: ${user._id}`);
-        return res.status(403).json({ error: 'Account suspended. Contact support.' });
+        // Check for timed suspension expiry
+        if (user.suspendedUntil && new Date() > user.suspendedUntil) {
+          user.isSuspended = false;
+          user.suspendedUntil = undefined;
+          await user.save({ validateBeforeSave: false });
+        } else {
+          console.warn(`[AUTH] Blocking suspended user: ${user._id}`);
+          return res.status(403).json({ error: 'Account suspended. Contact support.' });
+        }
+      }
+
+      if (user.isBanned) {
+        console.warn(`[AUTH] Blocking banned user: ${user._id}`);
+        return res.status(403).json({ error: 'Account permanently banned.' });
       }
 
       if (user.isDeleted) {

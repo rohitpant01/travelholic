@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
+  Pressable, Vibration
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
@@ -11,7 +12,7 @@ import { RootState } from '../store';
 import { userAPI } from '../api/services';
 import storage from '../utils/storage';
 import { COLORS, FONTS, RADIUS, SPACING, useAppTheme } from '../utils/theme';
-import { logout, updateUser } from '../store/slices/authSlice';
+import { logout, updateUser, setUser } from '../store/slices/authSlice';
 import { clearSaved } from '../store/slices/savedSlice';
 import { toggleTheme } from '../store/slices/themeSlice';
 
@@ -25,6 +26,20 @@ export default function SettingsScreen() {
   const { mode } = useSelector((s: RootState) => s.theme);
   const [distance, setDistance] = useState(user?.maxDiscoveryDistance || 50);
   const [saving, setSaving] = useState(false);
+
+  // Refresh user profile on mount (picks up role changes made server-side)
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await userAPI.getProfile();
+        if (res.data.user) {
+          dispatch(setUser(res.data.user));
+        }
+      } catch (e) {
+        // Silent — non-blocking
+      }
+    })();
+  }, []);
 
   const DISTANCE_PRESETS = [20, 30, 50, 75, 100];
 
@@ -198,19 +213,21 @@ export default function SettingsScreen() {
       </View>
 
       {/* Version text with hidden admin gesture */}
-      <TouchableOpacity
+      <Pressable
         onLongPress={() => {
+          console.log('[ADMIN] Long press triggered. Role:', user?.role);
           const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
           if (isAdmin) {
+            try { Vibration.vibrate(50); } catch (e) {}
             navigation.navigate('AdminPanel');
           }
           // Non-admins: silently do nothing — zero exposure
         }}
-        delayLongPress={3000}
-        activeOpacity={1}
+        delayLongPress={2000}
+        style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
       >
         <Text style={styles.versionText}>EkalGo v1.0.0 · Made with ✈️ & ❤️</Text>
-      </TouchableOpacity>
+      </Pressable>
     </ScrollView>
   );
 }

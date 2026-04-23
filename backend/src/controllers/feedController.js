@@ -5,16 +5,7 @@ const User = require('../models/User');
 const Report = require('../models/Report');
 const { Match } = require('../models/Match');
 const { createNotification } = require('../utils/notificationService');
-
-// Safe lazy-load for bad-words (CJS/ESM compat issue with Node v22)
-let filter = null;
-try {
-  const Filter = require('bad-words');
-  filter = new Filter();
-} catch (err) {
-  console.warn('[FEED] bad-words module failed to load, profanity filter disabled:', err.message);
-  filter = { isProfane: () => false, clean: (t) => t };
-}
+const { isProfane } = require('../utils/contentFilter');
 
 // @desc    Get feed (Nearby, Friends, Global)
 // @route   GET /api/feed
@@ -23,7 +14,7 @@ const getFeed = async (req, res) => {
   try {
     const { mode = 'global', page = 1, limit = 15 } = req.query;
     const skip = (page - 1) * limit;
-    let query = {};
+    let query = { isDeleted: { $ne: true }, status: { $in: ['active', undefined] } };
     let sort = { createdAt: -1 };
     
     // 0. Global Stealth: Exclude posts from deleted users
@@ -131,9 +122,9 @@ const createPost = async (req, res) => {
       return res.status(400).json({ error: 'Post must have content or images' });
     }
 
-    let isProfane = false;
-    if (content) { try { isProfane = filter.isProfane(String(content)); } catch (e) {} }
-    if (isProfane) {
+    let flagged = false;
+    if (content) { try { flagged = isProfane(String(content)); } catch (e) {} }
+    if (flagged) {
       return res.status(400).json({ error: 'Your post contains offensive language. Please keep it friendly!' });
     }
 
@@ -412,15 +403,23 @@ const reportPost = async (req, res) => {
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
-    await Report.create({
-      reportedBy: req.user._id,
-      targetId: postId,
-      type: 'post',
-      reason,
-      details: details || ''
-    });
+    // Use smart moderation engine
+    const { processReport } = require('../utils/moderationEngine');
+    const result = await processReport(req.user._id, postId, 'post', reason, details || '');
 
-    res.json({ message: 'Post reported successfully. Our team will review it.' });
+    if (result.duplicate) {
+      return res.status(200).json({ message: 'You have already reported this content.' });
+    }
+    if (result.rateLimited) {
+      return res.status(429).json({ error: 'Too many reports. Please try again later.' });
+    }
+
+    res.json({
+      message: result.autoHidden
+        ? 'Post reported and hidden for review. Thank you for keeping our community safe.'
+        : 'Post reported successfully. Our team will review it.',
+      autoHidden: result.autoHidden
+    });
   } catch (error) {
     console.error('[REPORT POST ERROR]', error);
     res.status(500).json({ error: error.message });

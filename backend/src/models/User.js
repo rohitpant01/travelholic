@@ -126,6 +126,15 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['user', 'admin', 'superadmin'], default: 'user' },
   isSuspended: { type: Boolean, default: false },
   warningCount: { type: Number, default: 0 },
+  trustScore: { type: Number, default: 50, min: 0, max: 100 },
+  violationHistory: [{
+    type: { type: String, enum: ['warning', 'suspension', 'ban'] },
+    reason: String,
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  suspendedUntil: { type: Date },
+  isBanned: { type: Boolean, default: false },
   lastSeen: { type: Date, default: Date.now },
   isOnline: { type: Boolean, default: false },
   profileComplete: { type: Boolean, default: false },

@@ -6,7 +6,8 @@ const {
   likeUser, 
   skipUser, 
   superLikeUser,
-  updateLocation
+  updateLocation,
+  updateVisibility
 } = require('../controllers/discoverController');
 
 router.use(protect);
@@ -15,5 +16,6 @@ router.post('/like', likeUser);
 router.post('/skip', skipUser);
 router.post('/superlike', superLikeUser);
 router.post('/location', updateLocation);
+router.put('/visibility', updateVisibility);
 
 module.exports = router;

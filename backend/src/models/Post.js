@@ -20,6 +20,9 @@ const postSchema = new mongoose.Schema({
     type: Boolean, 
     default: true 
   },
+  status: { type: String, enum: ['active', 'under_review', 'hidden', 'removed'], default: 'active' },
+  reportScore: { type: Number, default: 0 },
+  reportCount: { type: Number, default: 0 },
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date },
   deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

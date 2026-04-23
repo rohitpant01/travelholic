@@ -17,7 +17,12 @@ const moderationLogSchema = new mongoose.Schema({
       'restore_content',
       'resolve_report',
       'promote_user',
-      'demote_user'
+      'demote_user',
+      'ban_user',
+      'unban_user',
+      'auto_hide_content',
+      'recalculate_trust',
+      'mass_report_detected'
     ],
     required: true
   },

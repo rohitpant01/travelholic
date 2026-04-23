@@ -16,9 +16,11 @@ type Tab = 'stats' | 'reports' | 'users' | 'logs';
 interface StatsData {
   totalUsers: number;
   suspendedUsers: number;
+  bannedUsers: number;
   pendingReports: number;
   totalReports: number;
   totalPosts: number;
+  hiddenPosts: number;
 }
 
 export default function AdminPanelScreen() {
@@ -111,19 +113,20 @@ export default function AdminPanelScreen() {
 
   // ── Admin Actions ────────────────────────────────────────────
   const handleResolveReport = (report: any) => {
-    Alert.alert('Resolve Report', 'Choose an action', [
-      { text: 'Dismiss', onPress: () => resolveReport(report._id, 'dismissed') },
-      { text: 'Warn User', style: 'destructive', onPress: () => resolveReport(report._id, 'warned') },
-      { text: 'Remove Content', style: 'destructive', onPress: () => resolveReport(report._id, 'content_removed') },
-      { text: 'Suspend User', style: 'destructive', onPress: () => resolveReport(report._id, 'user_suspended') },
+    Alert.alert('Resolve Report', `Type: ${report.type}\nReason: ${report.reason}\nReporters: ${report.targetReportCount || 1}\nTrust: ${report.reportedBy?.trustScore ?? '?'}`, [
+      { text: 'Dismiss', onPress: () => resolveReportAction(report._id, 'dismissed') },
+      { text: 'Warn User', style: 'destructive', onPress: () => resolveReportAction(report._id, 'warned') },
+      { text: 'Remove Content', style: 'destructive', onPress: () => resolveReportAction(report._id, 'content_removed') },
+      { text: 'Suspend User', style: 'destructive', onPress: () => resolveReportAction(report._id, 'user_suspended') },
+      { text: '🚫 Ban User', style: 'destructive', onPress: () => resolveReportAction(report._id, 'user_banned') },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
-  const resolveReport = async (id: string, resolution: string) => {
+  const resolveReportAction = async (id: string, resolution: string) => {
     try {
       await adminAPI.resolveReport(id, { resolution, adminNotes: `Resolved as ${resolution}` });
-      Alert.alert('Done', 'Report resolved');
+      Alert.alert('Done', 'Report resolved. Reporter has been notified.');
       fetchReports();
       fetchStats();
     } catch (err) {
@@ -134,11 +137,14 @@ export default function AdminPanelScreen() {
   const handleUserAction = (targetUser: any) => {
     const actions: any[] = [];
 
-    if (targetUser.isSuspended) {
+    if (targetUser.isBanned) {
+      actions.push({ text: '✅ Unban (manual DB)', onPress: () => Alert.alert('Info', 'Unban requires direct DB update for safety') });
+    } else if (targetUser.isSuspended) {
       actions.push({ text: '✅ Unsuspend', onPress: () => unsuspendUser(targetUser._id) });
     } else {
       actions.push({ text: '⚠️ Warn', style: 'destructive', onPress: () => warnUser(targetUser._id) });
       actions.push({ text: '🚫 Suspend', style: 'destructive', onPress: () => suspendUser(targetUser._id) });
+      actions.push({ text: '❌ Ban', style: 'destructive', onPress: () => banUser(targetUser._id) });
     }
 
     if (isSuperAdmin && targetUser._id !== user?._id) {
@@ -147,7 +153,8 @@ export default function AdminPanelScreen() {
 
     actions.push({ text: 'Cancel', style: 'cancel' });
 
-    Alert.alert(`Manage ${targetUser.firstName}`, `@${targetUser.username}`, actions);
+    const subtitle = `@${targetUser.username} · Trust: ${targetUser.trustScore ?? 50}/100 · Warnings: ${targetUser.warningCount || 0}`;
+    Alert.alert(`Manage ${targetUser.firstName}`, subtitle, actions);
   };
 
   const handleRoleChange = (targetUser: any) => {
@@ -163,10 +170,23 @@ export default function AdminPanelScreen() {
 
   const suspendUser = async (id: string) => {
     try {
-      await adminAPI.suspendUser(id, 'Suspended via admin panel');
-      Alert.alert('Done', 'User suspended');
+      const res = await adminAPI.suspendUser(id, { reason: 'Suspended via admin panel', days: 3 });
+      Alert.alert('Done', res.data.message || 'User suspended');
       fetchUsers();
     } catch { Alert.alert('Error', 'Failed to suspend user'); }
+  };
+
+  const banUser = async (id: string) => {
+    Alert.alert('Confirm Ban', 'This will permanently ban the user and remove all their content.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Ban', style: 'destructive', onPress: async () => {
+        try {
+          await adminAPI.banUser(id, 'Banned via admin panel');
+          Alert.alert('Done', 'User permanently banned');
+          fetchUsers();
+        } catch { Alert.alert('Error', 'Failed to ban user'); }
+      }}
+    ]);
   };
 
   const unsuspendUser = async (id: string) => {
@@ -240,9 +260,11 @@ export default function AdminPanelScreen() {
     const cards = [
       { label: 'Total Users', value: stats.totalUsers, icon: 'people', color: COLORS.teal },
       { label: 'Suspended', value: stats.suspendedUsers, icon: 'ban', color: COLORS.error },
+      { label: 'Banned', value: stats.bannedUsers || 0, icon: 'close-circle', color: '#E74C3C' },
       { label: 'Pending Reports', value: stats.pendingReports, icon: 'flag', color: COLORS.warning },
       { label: 'Total Reports', value: stats.totalReports, icon: 'document-text', color: COLORS.info },
       { label: 'Total Posts', value: stats.totalPosts, icon: 'newspaper', color: COLORS.orange },
+      { label: 'Hidden/Review', value: stats.hiddenPosts || 0, icon: 'eye-off', color: '#9B59B6' },
     ];
 
     return (
@@ -290,8 +312,15 @@ export default function AdminPanelScreen() {
             disabled={report.status === 'resolved'}
           >
             <View style={styles.reportHeader}>
-              <View style={[styles.typeBadge, { backgroundColor: getReportTypeColor(report.type) }]}>
-                <Text style={styles.typeBadgeText}>{report.type}</Text>
+              <View style={styles.reportHeaderLeft}>
+                <View style={[styles.typeBadge, { backgroundColor: getReportTypeColor(report.type) }]}>
+                  <Text style={styles.typeBadgeText}>{report.type}</Text>
+                </View>
+                {report.targetReportCount > 1 && (
+                  <View style={[styles.typeBadge, { backgroundColor: '#E74C3C' }]}>
+                    <Text style={styles.typeBadgeText}>{report.targetReportCount} reports</Text>
+                  </View>
+                )}
               </View>
               <Text style={styles.reportDate}>
                 {new Date(report.createdAt).toLocaleDateString()}
@@ -301,9 +330,23 @@ export default function AdminPanelScreen() {
             {report.details ? (
               <Text style={styles.reportDetails} numberOfLines={1}>{report.details}</Text>
             ) : null}
-            <Text style={styles.reportedBy}>
-              By: @{report.reportedBy?.username || 'unknown'}
-            </Text>
+            {/* Content Preview */}
+            {report.contentPreview && report.type === 'post' && (
+              <View style={styles.contentPreview}>
+                <Text style={styles.contentPreviewLabel}>Content:</Text>
+                <Text style={styles.contentPreviewText} numberOfLines={2}>
+                  {report.contentPreview.content || '[No text]'}
+                </Text>
+              </View>
+            )}
+            <View style={styles.reportFooter}>
+              <Text style={styles.reportedBy}>
+                By: @{report.reportedBy?.username || 'unknown'}
+              </Text>
+              <View style={[styles.trustBadge, { backgroundColor: getTrustColor(report.reportedBy?.trustScore) }]}>
+                <Text style={styles.trustBadgeText}>T:{report.reportedBy?.trustScore ?? '?'}</Text>
+              </View>
+            </View>
             {report.status === 'resolved' && (
               <View style={styles.resolvedBadge}>
                 <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
@@ -354,19 +397,32 @@ export default function AdminPanelScreen() {
               <Text style={styles.userEmail}>{u.email}</Text>
             </View>
           </View>
-          <View style={styles.userMeta}>
-            <View style={[styles.roleBadge, { backgroundColor: getRoleColor(u.role) }]}>
-              <Text style={styles.roleBadgeText}>{u.role || 'user'}</Text>
-            </View>
-            {u.isSuspended && (
-              <View style={[styles.roleBadge, { backgroundColor: COLORS.error }]}>
-                <Text style={styles.roleBadgeText}>SUSPENDED</Text>
+            <View style={styles.userMeta}>
+              <View style={[styles.roleBadge, { backgroundColor: getRoleColor(u.role) }]}>
+                <Text style={styles.roleBadgeText}>{u.role || 'user'}</Text>
               </View>
-            )}
-            {u.warningCount > 0 && (
-              <Text style={styles.warningCount}>⚠️ {u.warningCount}</Text>
-            )}
-          </View>
+              <View style={[styles.trustBadge, { backgroundColor: getTrustColor(u.trustScore) }]}>
+                <Text style={styles.trustBadgeText}>Trust: {u.trustScore ?? 50}</Text>
+              </View>
+              {u.isBanned && (
+                <View style={[styles.roleBadge, { backgroundColor: '#1a1a2e' }]}>
+                  <Text style={styles.roleBadgeText}>BANNED</Text>
+                </View>
+              )}
+              {u.isSuspended && !u.isBanned && (
+                <View style={[styles.roleBadge, { backgroundColor: COLORS.error }]}>
+                  <Text style={styles.roleBadgeText}>
+                    SUSPENDED{u.suspendedUntil ? ` until ${new Date(u.suspendedUntil).toLocaleDateString()}` : ''}
+                  </Text>
+                </View>
+              )}
+              {u.warningCount > 0 && (
+                <Text style={styles.warningCount}>⚠️ {u.warningCount}</Text>
+              )}
+              {(u.violationHistory?.length || 0) > 0 && (
+                <Text style={styles.warningCount}>🚩 {u.violationHistory.length}</Text>
+              )}
+            </View>
         </TouchableOpacity>
       ))}
     </View>
@@ -449,14 +505,25 @@ const getRoleColor = (role: string) => {
 };
 
 const getActionColor = (action: string) => {
+  if (action.includes('ban')) return '#1a1a2e';
   if (action.includes('suspend')) return '#E74C3C';
   if (action.includes('unsuspend')) return '#27AE60';
   if (action.includes('warn')) return '#F0A500';
-  if (action.includes('delete')) return '#E74C3C';
+  if (action.includes('delete') || action.includes('hide')) return '#E74C3C';
   if (action.includes('restore')) return '#27AE60';
   if (action.includes('promote')) return '#FFD700';
   if (action.includes('demote')) return '#95A5A6';
+  if (action.includes('mass_report')) return '#9B59B6';
+  if (action.includes('trust')) return '#3498DB';
   return '#3498DB';
+};
+
+const getTrustColor = (score?: number) => {
+  if (score === undefined || score === null) return '#94A3B8';
+  if (score >= 80) return '#27AE60';
+  if (score >= 50) return '#3498DB';
+  if (score >= 25) return '#F0A500';
+  return '#E74C3C';
 };
 
 const formatAction = (action: string) => {
@@ -631,6 +698,44 @@ const styles = StyleSheet.create({
     fontSize: FONTS.xs,
     color: COLORS.success,
     fontWeight: '500',
+  },
+  reportHeaderLeft: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
+  reportFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  trustBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  trustBadgeText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  contentPreview: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: RADIUS.sm,
+    padding: 8,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  contentPreviewLabel: {
+    fontSize: 10,
+    color: COLORS.textLight,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  contentPreviewText: {
+    fontSize: FONTS.sm,
+    color: COLORS.text,
   },
   // ── Users ──
   searchContainer: {

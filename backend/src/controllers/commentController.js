@@ -1,16 +1,7 @@
 const Comment = require('../models/Comment');
 const Post = require('../models/Post');
 const { createNotification } = require('../utils/notificationService');
-
-// Safe lazy-load for bad-words (CJS/ESM compat issue with Node v22)
-let filter = null;
-try {
-  const Filter = require('bad-words');
-  filter = new Filter();
-} catch (err) {
-  console.warn('[COMMENT] bad-words module failed to load, profanity filter disabled:', err.message);
-  filter = { isProfane: () => false, clean: (t) => t };
-}
+const { isProfane } = require('../utils/contentFilter');
 
 // @desc    Get comments for a post
 // @route   GET /api/comments/:postId
@@ -40,18 +31,15 @@ const addComment = async (req, res) => {
       return res.status(400).json({ error: 'Comment text is required' });
     }
 
-    // Safely sanitize text - bad-words filter.clean() can throw on certain inputs
     let sanitizedText = text;
-    try {
-      sanitizedText = filter.clean(String(text));
-    } catch (filterErr) {
-      console.warn('[COMMENT FILTER] Profanity filter error, using raw text:', filterErr.message);
+    if (isProfane(String(text))) {
+      return res.status(400).json({ error: 'Your comment contains offensive language.' });
     }
 
     const comment = await Comment.create({
       postId,
       userId,
-      text: sanitizedText
+      text
     });
 
     // Populate user info for the new comment
@@ -112,14 +100,10 @@ const updateComment = async (req, res) => {
     }
 
     let sanitizedText = text;
-    if (text) {
-      try {
-        sanitizedText = filter.clean(String(text));
-      } catch (filterErr) {
-        console.warn('[COMMENT FILTER] Profanity filter error, using raw text:', filterErr.message);
-      }
+    if (text && isProfane(String(text))) {
+      return res.status(400).json({ error: 'Your comment contains offensive language.' });
     }
-    comment.text = sanitizedText || comment.text;
+    comment.text = text || comment.text;
     await comment.save();
 
     const populatedComment = await comment.populate('userId', 'firstName lastName username photos');
@@ -157,9 +141,44 @@ const deleteComment = async (req, res) => {
   }
 };
 
+// @desc    Report a comment
+// @route   POST /api/comments/:id/report
+// @access  Private
+const reportComment = async (req, res) => {
+  try {
+    const commentId = req.params.id;
+    const { reason, details } = req.body;
+
+    if (!reason) return res.status(400).json({ error: 'Reason for report is required' });
+
+    const comment = await Comment.findById(commentId);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    const { processReport } = require('../utils/moderationEngine');
+    const result = await processReport(req.user._id, commentId, 'comment', reason, details || '');
+
+    if (result.duplicate) {
+      return res.status(200).json({ message: 'You have already reported this comment.' });
+    }
+    if (result.rateLimited) {
+      return res.status(429).json({ error: 'Too many reports. Please try again later.' });
+    }
+
+    res.json({
+      message: result.autoHidden
+        ? 'Comment reported and hidden for review.'
+        : 'Comment reported successfully. Our team will review it.'
+    });
+  } catch (error) {
+    console.error('[REPORT COMMENT ERROR]', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getComments,
   addComment,
   updateComment,
-  deleteComment
+  deleteComment,
+  reportComment
 };
