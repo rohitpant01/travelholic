@@ -21,6 +21,7 @@ const GlobalDestination = require("../models/GlobalDestination");
 const PlaceInsight = require("../models/PlaceInsight");
 const AIItinerary = require("../models/AIItinerary");
 const Post = require("../models/Post");
+const SmartBudgetAllocator = require("../utils/budgetAllocator");
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const HOURS_12 = 12 * 60 * 60 * 1000;
@@ -594,6 +595,11 @@ exports.generateItinerary = async (req, res) => {
       )
       .join("\n");
 
+    const numericBudget = parseInt(budget.replace(/\D/g, "")) || (days * 5000); // Default if string parsing fails
+    const allocator = new SmartBudgetAllocator(numericBudget, days);
+    const maxHotelPrice = Math.floor(allocator.limits.hotels / days);
+    const maxFoodPrice = Math.floor(allocator.limits.food / days);
+
     const unifiedPrompt = `
 You are a hyperlocal travel expert EXCLUSIVELY for ${destination}, India.
 
@@ -606,7 +612,8 @@ Below is a FIXED ${days}-day itinerary skeleton. Activity place names are LOCKED
 
 YOUR TASKS:
 1. Add a short description (≤15 words), realistic INR cost, and travel_time from the previous stop for each activity.
-2. Provide 2 unique hotel recommendations per day that exactly match the user's specified budget (${budget}) — all inside ${destination}. (e.g., if budget is Luxury, suggest luxury hotels; if budget is Economy, suggest budget/entry-level hotels).
+2. Provide 2 unique hotel recommendations per day. CRITICAL: The price_per_night MUST NOT exceed ₹${maxHotelPrice}. Do NOT suggest hotels that cost more than ₹${maxHotelPrice} per night.
+3. Provide 3 local food/restaurant recommendations per day. CRITICAL: The total cost for food per day MUST NOT exceed ₹${maxFoodPrice}.
 
 SKELETON (place names are LOCKED):
 ${placeListForAI}
@@ -645,6 +652,14 @@ OUTPUT JSON FORMAT (STRICT — no markdown, no extra text):
           "price_per_night": "₹XXXX",
           "description": "One catchy sentence",
           "rating": 4.3
+        }
+      ],
+      "food_recommendations": [
+        {
+          "dishName": "Local Dish Name",
+          "place": "Restaurant/Stall Name",
+          "price": "₹XX",
+          "description": "Short description"
         }
       ]
     }
@@ -755,6 +770,7 @@ OUTPUT JSON FORMAT (STRICT — no markdown, no extra text):
     console.log(
       `[AI] ✅ Itinerary generation complete for "${destination}" (${days} days).`
     );
+    data.budgetBreakdown = allocator.getState();
     return res.json(data);
   } catch (error) {
     console.error("[generateItinerary] Fatal error:", error.message);

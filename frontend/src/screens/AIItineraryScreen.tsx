@@ -330,6 +330,34 @@ const GemCard = ({ gem }: any) => {
   );
 };
 
+// --- EXPENSE TRACKER HEADER ---
+const ExpenseTrackerHeader = ({ budgetState, theme }: any) => {
+  if (!budgetState) return null;
+  const isExceeding = budgetState.totalSpent > budgetState.totalBudget;
+  const progress = Math.min(budgetState.totalSpent / budgetState.totalBudget, 1);
+
+  return (
+    <LinearGradient colors={[theme.card, theme.background]} style={{ padding: 15, borderRadius: 12, marginHorizontal: 20, marginTop: -30, marginBottom: 20, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, zIndex: 10 }}>
+      <Text style={{ fontSize: 16, fontWeight: '900', marginBottom: 10, color: theme.text }}>Budget Tracker</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textSecondary }}>
+          Remaining: ₹{budgetState.totalRemaining}
+        </Text>
+        <View style={{ flex: 1, height: 8, backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 4, marginLeft: 15 }}>
+          <View style={{ height: '100%', borderRadius: 4, width: `${progress * 100}%`, backgroundColor: isExceeding ? '#FF5A5F' : theme.success }} />
+        </View>
+      </View>
+      
+      {isExceeding && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FF5A5F', padding: 8, borderRadius: 8, marginTop: 10 }}>
+          <Ionicons name="warning" size={14} color="#FFF" />
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>Exceeding your budget! Consider cheaper options.</Text>
+        </View>
+      )}
+    </LinearGradient>
+  );
+};
+
 export default function AIItineraryScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -340,6 +368,7 @@ export default function AIItineraryScreen() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [activeDay, setActiveDay] = useState(0);
+  const [mainTab, setMainTab] = useState('Overview'); // 'Overview', 'Hotels', 'Food', 'Daily Plan'
   const [heroImg, setHeroImg] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(!!savedData);
   const [isSaving, setIsSaving] = useState(false);
@@ -499,173 +528,226 @@ export default function AIItineraryScreen() {
           </View>
         </View>
 
-        {/* TOP SWIPABLE INFO CARDS */}
-        {(data?.how_to_reach || data?.best_time_to_visit || data?.why_to_visit) ? (
-          <View style={{ marginTop: 20 }}>
-            <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 15 }}>
-              
-              {/* Card 1: How to Reach */}
-              {data.how_to_reach && (
-                <View style={[styles.insightCard, { width: W - 40, borderLeftColor: theme.teal, marginBottom: 0 }]}>
-                   <View style={styles.insightIcon}>
-                     <Ionicons name="airplane" size={18} color={theme.teal} />
-                   </View>
-                   <View style={{ flex: 1, justifyContent: 'center' }}>
-                     <Text style={styles.insightLabel}>HOW TO REACH</Text>
-                     <Text style={[styles.insightText, { marginTop: 6 }]}>{data.how_to_reach}</Text>
-                   </View>
-                </View>
-              )}
+        <ExpenseTrackerHeader budgetState={data?.budgetBreakdown} theme={theme} />
 
-              {/* Card 2: Travel Tips & Time */}
-              {(data.best_time_to_visit || data.travel_tips) && (
-                <View style={[styles.insightCard, { width: W - 40, borderLeftColor: '#FF9800', marginBottom: 0 }]}>
-                   <View style={styles.insightIcon}>
-                     <Ionicons name="calendar" size={18} color="#FF9800" />
-                   </View>
-                   <View style={{ flex: 1, justifyContent: 'center' }}>
-                     <Text style={[styles.insightLabel, { color: '#FF9800' }]}>BEST TIME & TIPS</Text>
-                     {data.best_time_to_visit && (
-                       <Text style={[styles.insightText, { marginTop: 6, fontWeight: '800' }]}>{data.best_time_to_visit}</Text>
-                     )}
-                     {data.travel_tips?.slice(0, 2).map((tip: string, idx: number) => (
-                       <View key={idx} style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                         <Ionicons name="checkmark-circle" size={14} color="#FF9800" />
-                         <Text style={[styles.insightText, { flex: 1, marginTop: 0 }]}>{tip}</Text>
-                       </View>
-                     ))}
-                   </View>
-                </View>
-              )}
 
-              {/* Card 3: Why To Visit */}
-              {data.why_to_visit && (
-                <View style={[styles.insightCard, { width: W - 40, borderLeftColor: '#FF5A5F', marginBottom: 0 }]}>
-                   <View style={styles.insightIcon}>
-                     <Ionicons name="heart" size={18} color="#FF5A5F" />
-                   </View>
-                   <View style={{ flex: 1, justifyContent: 'center' }}>
-                     <Text style={[styles.insightLabel, { color: '#FF5A5F' }]}>WHY YOU'LL LOVE IT</Text>
-                     {data.why_to_visit?.slice(0, 3).map((reason: string, idx: number) => (
-                       <View key={idx} style={{ flexDirection: 'row', gap: 6, marginTop: 6, alignItems: 'flex-start' }}>
-                         <Ionicons name="sparkles" size={14} color="#FF5A5F" />
-                         <Text style={[styles.insightText, { flex: 1, marginTop: -2 }]}>{reason}</Text>
-                       </View>
-                     ))}
-                   </View>
-                </View>
-              )}
-
-            </ScrollView>
-          </View>
-        ) : null}
-
-        {/* STICKY DAY TABS */}
-        <View style={styles.stickyTabs}>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            style={styles.dayTabs}
-            contentContainerStyle={styles.dayTabsContent}
-          >
-            {data?.itinerary.map((_: any, idx: number) => (
+        {/* MAIN NAVIGATION TABS */}
+        <View style={{ backgroundColor: theme.background, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}>
+            {['Overview', 'Hotels', 'Food', 'Daily Plan'].map((tab) => (
               <TouchableOpacity 
-                key={idx} 
-                onPress={() => setActiveDay(idx)}
-                style={[styles.dayTab, activeDay === idx && styles.dayTabActive]}
+                key={tab} 
+                onPress={() => setMainTab(tab)}
+                style={[styles.dayTab, mainTab === tab && styles.dayTabActive, { minWidth: 0, paddingHorizontal: 16 }]}
               >
-                <Text style={[styles.dayTabText, activeDay === idx && styles.dayTabTextActive]} numberOfLines={1}>
-                  Day {idx + 1}
+                <Text style={[styles.dayTabText, mainTab === tab && styles.dayTabTextActive]} numberOfLines={1}>
+                  {tab}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
-        {/* ROADMAP PATH */}
-        <View style={styles.roadmapSection}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
-            {roadmapSteps?.map((city: string, i: number) => (
-              <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={styles.pathChip}>
-                  <Text style={styles.pathText}>{city}</Text>
-                </View>
-                {i < roadmapSteps.length - 1 && <Ionicons name="arrow-forward" size={14} color={theme.textLight} style={{ marginHorizontal: 8 }} />}
+        {/* --- TAB CONTENT: OVERVIEW --- */}
+        {mainTab === 'Overview' && (
+          <View style={styles.pageContent}>
+            {/* TOP SWIPABLE INFO CARDS */}
+            {(data?.how_to_reach || data?.best_time_to_visit || data?.why_to_visit) && (
+              <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 15 }}>
+                
+                {data.how_to_reach && (
+                  <View style={[styles.insightCard, { width: W - 40, borderLeftColor: theme.teal, marginBottom: 0 }]}>
+                     <View style={styles.insightIcon}>
+                       <Ionicons name="airplane" size={18} color={theme.teal} />
+                     </View>
+                     <View style={{ flex: 1, justifyContent: 'center' }}>
+                       <Text style={styles.insightLabel}>HOW TO REACH</Text>
+                       <Text style={[styles.insightText, { marginTop: 6 }]}>{data.how_to_reach}</Text>
+                     </View>
+                  </View>
+                )}
+
+                {(data.best_time_to_visit || data.travel_tips) && (
+                  <View style={[styles.insightCard, { width: W - 40, borderLeftColor: '#FF9800', marginBottom: 0 }]}>
+                     <View style={styles.insightIcon}>
+                       <Ionicons name="calendar" size={18} color="#FF9800" />
+                     </View>
+                     <View style={{ flex: 1, justifyContent: 'center' }}>
+                       <Text style={[styles.insightLabel, { color: '#FF9800' }]}>BEST TIME & TIPS</Text>
+                       {data.best_time_to_visit && (
+                         <Text style={[styles.insightText, { marginTop: 6, fontWeight: '800' }]}>{data.best_time_to_visit}</Text>
+                       )}
+                       {data.travel_tips?.slice(0, 2).map((tip: string, idx: number) => (
+                         <View key={idx} style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                           <Ionicons name="checkmark-circle" size={14} color="#FF9800" />
+                           <Text style={[styles.insightText, { flex: 1, marginTop: 0 }]}>{tip}</Text>
+                         </View>
+                       ))}
+                     </View>
+                  </View>
+                )}
+
+                {data.why_to_visit && (
+                  <View style={[styles.insightCard, { width: W - 40, borderLeftColor: '#FF5A5F', marginBottom: 0 }]}>
+                     <View style={styles.insightIcon}>
+                       <Ionicons name="heart" size={18} color="#FF5A5F" />
+                     </View>
+                     <View style={{ flex: 1, justifyContent: 'center' }}>
+                       <Text style={[styles.insightLabel, { color: '#FF5A5F' }]}>WHY YOU'LL LOVE IT</Text>
+                       {data.why_to_visit?.slice(0, 3).map((reason: string, idx: number) => (
+                         <View key={idx} style={{ flexDirection: 'row', gap: 6, marginTop: 6, alignItems: 'flex-start' }}>
+                           <Ionicons name="sparkles" size={14} color="#FF5A5F" />
+                           <Text style={[styles.insightText, { flex: 1, marginTop: -2 }]}>{reason}</Text>
+                         </View>
+                       ))}
+                     </View>
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        )}
+
+        {/* --- TAB CONTENT: HOTELS --- */}
+        {mainTab === 'Hotels' && (
+          <View style={styles.pageContent}>
+            {data.itinerary.map((dayPlan: any, dIdx: number) => (
+              <View key={dIdx}>
+                {dayPlan.stay_recommendations?.length > 0 && (
+                  <>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.sectionTitleSmall}>Stays for Day {dIdx + 1}</Text>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                      {dayPlan.stay_recommendations.map((stay: any, idx: number) => (
+                        <TouchableOpacity 
+                          key={idx} 
+                          style={styles.stayCard}
+                          onPress={() => {
+                            const url = `https://www.google.com/maps/search/?api=1&query=${stay.lat},${stay.lng}`;
+                            Linking.openURL(url).catch(err => console.error("Couldn't load page", err));
+                          }}
+                          activeOpacity={0.9}
+                        >
+                          <Image 
+                            source={{ uri: stay.image || 'https://images.unsplash.com/photo-1566073771259-6a8506099945' }} 
+                            style={styles.stayBanner} 
+                          />
+                          <View style={styles.stayDetails}>
+                            <Text style={styles.stayName} numberOfLines={1}>{stay.name}</Text>
+                            <View style={styles.stayMetaRow}>
+                              <Text style={styles.stayPrice}>{stay.price_per_night} / night</Text>
+                              <View style={styles.ratingBox}>
+                                <Ionicons name="star" size={10} color="#FFD700" />
+                                <Text style={styles.ratingText}>{stay.rating || 4.5}</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.stayArea}>📍 {stay.area}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
               </View>
             ))}
-          </ScrollView>
-        </View>
+          </View>
+        )}
 
-
-        {/* DAY CONTENT */}
-        <View style={styles.pageContent}>
-          {currentDayPlan?.daily_insight && (
-            <View style={styles.insightCard}>
-              <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.insightIcon}>
-                <Ionicons name="bulb" size={16} color="#fff" />
-              </LinearGradient>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.insightLabel}>TRAVELER'S TIP</Text>
-                <Text style={styles.insightText}>{currentDayPlan.daily_insight}</Text>
+        {/* --- TAB CONTENT: FOOD --- */}
+        {mainTab === 'Food' && (
+          <View style={styles.pageContent}>
+            {data.itinerary.map((dayPlan: any, dIdx: number) => (
+              <View key={dIdx}>
+                {dayPlan.food_recommendations?.length > 0 && (
+                  <>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.sectionTitleSmall}>Eats for Day {dIdx + 1}</Text>
+                    </View>
+                    <View style={{ marginBottom: 20 }}>
+                      {dayPlan.food_recommendations.map((food: any, idx: number) => (
+                        <View key={idx} style={[styles.insightCard, { borderLeftColor: theme.success, marginBottom: 10, padding: 12 }]}>
+                           <View style={{ flex: 1 }}>
+                             <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text }}>{food.dishName || food.dish_name || 'Local Cuisine'}</Text>
+                             <Text style={{ fontSize: 13, color: theme.textSecondary, marginTop: 2 }}>📍 {food.place}</Text>
+                             <Text style={{ fontSize: 12, color: theme.textLight, marginTop: 4 }}>{food.description}</Text>
+                           </View>
+                           <View style={{ justifyContent: 'center' }}>
+                             <Text style={{ fontSize: 14, fontWeight: '900', color: theme.success }}>{food.price}</Text>
+                           </View>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
               </View>
-            </View>
-          )}
+            ))}
+          </View>
+        )}
 
-          <Text style={styles.sectionTitle}>Daily Schedule</Text>
-          {currentDayPlan?.plan.map((item: any, idx: number) => (
-            <PlanItem key={idx} item={item} index={idx} isLast={idx === currentDayPlan.plan.length-1} navigation={navigation} destination={data.destination} />
-          ))}
-
-          {/* DAILY STAY RECOMMENDATIONS */}
-          {currentDayPlan?.stay_recommendations?.length > 0 && (
-            <View style={{ marginTop: 20 }}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitleSmall}>Boutique Stays</Text>
-                <View style={styles.stayBadge}>
-                  <Text style={styles.stayBadgeText}>Nearby Day {activeDay + 1} spots</Text>
-                </View>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20, paddingTop: 10 }}>
-                {currentDayPlan.stay_recommendations.map((stay: any, idx: number) => (
+        {/* --- TAB CONTENT: DAILY PLAN --- */}
+        {mainTab === 'Daily Plan' && (
+          <>
+            {/* STICKY DAY TABS FOR DAILY PLAN */}
+            <View style={styles.stickyTabs}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.dayTabs}
+                contentContainerStyle={styles.dayTabsContent}
+              >
+                {data?.itinerary.map((_: any, idx: number) => (
                   <TouchableOpacity 
                     key={idx} 
-                    style={styles.stayCard}
-                    onPress={() => {
-                      const url = `https://www.google.com/maps/search/?api=1&query=${stay.lat},${stay.lng}`;
-                      Linking.openURL(url).catch(err => console.error("Couldn't load page", err));
-                    }}
-                    activeOpacity={0.9}
+                    onPress={() => setActiveDay(idx)}
+                    style={[styles.dayTab, activeDay === idx && styles.dayTabActive]}
                   >
-                    <Image 
-                      source={{ uri: stay.image || `https://images.unsplash.com/photo-1566073771259-6a8506099945` }} 
-                      style={styles.stayBanner} 
-                    />
-                    <LinearGradient
-                      colors={['transparent', 'rgba(0,0,0,0.6)']}
-                      style={styles.stayBadgeOverlay}
-                    >
-                      <View style={styles.stayMapBadge}>
-                        <Ionicons name="map-outline" size={12} color="#fff" />
-                        <Text style={styles.stayMapBadgeText}>View on Map</Text>
-                      </View>
-                    </LinearGradient>
-
-                    <View style={styles.stayDetails}>
-                      <Text style={styles.stayName} numberOfLines={1}>{stay.name}</Text>
-                      <View style={styles.stayMetaRow}>
-                        <Text style={styles.stayPrice}>{stay.price_per_night} / night</Text>
-                        <View style={styles.ratingBox}>
-                          <Ionicons name="star" size={10} color="#FFD700" />
-                          <Text style={styles.ratingText}>{stay.rating || 4.5}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.stayArea}>📍 {stay.area}</Text>
-                    </View>
+                    <Text style={[styles.dayTabText, activeDay === idx && styles.dayTabTextActive]} numberOfLines={1}>
+                      Day {idx + 1}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
-          )}
+
+            {/* ROADMAP PATH */}
+            <View style={styles.roadmapSection}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                {roadmapSteps?.map((city: string, i: number) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={styles.pathChip}>
+                      <Text style={styles.pathText}>{city}</Text>
+                    </View>
+                    {i < roadmapSteps.length - 1 && <Ionicons name="arrow-forward" size={14} color={theme.textLight} style={{ marginHorizontal: 8 }} />}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* DAY CONTENT */}
+            <View style={styles.pageContent}>
+              {currentDayPlan?.daily_insight && (
+                <View style={styles.insightCard}>
+                  <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.insightIcon}>
+                    <Ionicons name="bulb" size={16} color="#fff" />
+                  </LinearGradient>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.insightLabel}>TRAVELER'S TIP</Text>
+                    <Text style={styles.insightText}>{currentDayPlan.daily_insight}</Text>
+                  </View>
+                </View>
+              )}
+
+              <Text style={styles.sectionTitle}>Daily Schedule</Text>
+              {currentDayPlan?.plan.map((item: any, idx: number) => (
+                <PlanItem key={idx} item={item} index={idx} isLast={idx === currentDayPlan.plan.length-1} navigation={navigation} destination={data.destination} />
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* REMOVED DAILY STAY RECS FROM BOTTOM OF DAILY PLAN */}
+
         </View>
       </ScrollView>
     </View>
