@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndi
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, FONTS, SPACING } from '../utils/theme';
-import userAPI from '../api/services';
+import { userAPI } from '../api/services';
 
 interface BlockedUser {
   _id: string;
