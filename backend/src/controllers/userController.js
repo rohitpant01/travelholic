@@ -14,9 +14,30 @@ const getProfile = async (req, res) => {
     const user = await User.findById(req.user._id).select('-password -otp -otpExpiry');
     if (!user) return res.status(404).json({ error: 'User not found' });
     
+    // Dynamically calculate accurate matches count
+    const activeMatches = await Match.find({ users: req.user._id, isActive: true })
+      .populate({ path: 'users', select: 'isDeleted blockedUsers' });
+
+    let actualMatchesCount = 0;
+    const myBlockedIds = user.blockedUsers || [];
+    
+    activeMatches.forEach(match => {
+      const otherUser = match.users.find(u => u._id.toString() !== req.user._id.toString());
+      if (otherUser && !otherUser.isDeleted) {
+         const theyBlockedMe = otherUser.blockedUsers && otherUser.blockedUsers.includes(req.user._id);
+         const iBlockedThem = myBlockedIds.includes(otherUser._id);
+         if (!theyBlockedMe && !iBlockedThem) {
+            actualMatchesCount++;
+         }
+      }
+    });
+
     const viewsCount = await ProfileView.countDocuments({ viewee: req.user._id });
     
-    res.json({ user: { ...user.toObject(), viewsCount } });
+    const userObj = user.toObject();
+    userObj.matchesCount = actualMatchesCount;
+
+    res.json({ user: { ...userObj, viewsCount } });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -52,9 +73,21 @@ const getUserById = async (req, res) => {
     const followingCount = activeFollowing;
     
     // Dynamically calculate matches count from Match collection
-    const actualMatchesCount = await Match.countDocuments({
-      users: targetUser._id,
-      isActive: true
+    const activeMatches = await Match.find({ users: targetUser._id, isActive: true })
+      .populate({ path: 'users', select: 'isDeleted blockedUsers' });
+
+    let actualMatchesCount = 0;
+    const targetBlockedIds = targetUser.blockedUsers || [];
+    
+    activeMatches.forEach(match => {
+      const otherUser = match.users.find(u => u._id.toString() !== targetUser._id.toString());
+      if (otherUser && !otherUser.isDeleted) {
+         const theyBlockedTarget = otherUser.blockedUsers && otherUser.blockedUsers.includes(targetUser._id);
+         const targetBlockedThem = targetBlockedIds.includes(otherUser._id);
+         if (!theyBlockedTarget && !targetBlockedThem) {
+            actualMatchesCount++;
+         }
+      }
     });
 
     let distanceKm = null;
