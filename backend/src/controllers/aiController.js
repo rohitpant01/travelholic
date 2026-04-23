@@ -428,7 +428,8 @@ exports.generateItinerary = async (req, res) => {
     // Sanitize + validate inputs
     const destination = (req.body.destination || "").trim();
     const days = parseInt(req.body.days, 10);
-    const budget = (req.body.budget || "moderate").trim();
+    const budgetRaw = req.body.budget || "moderate";
+    const budget = String(budgetRaw).trim();
     const rawInterests = req.body.interests;
     const interests = Array.isArray(rawInterests)
       ? rawInterests
@@ -438,8 +439,8 @@ exports.generateItinerary = async (req, res) => {
           .map((s) => s.trim())
           .filter(Boolean)
         : [];
-    const travelType = (req.body.travelType || "leisure").trim();
-    const startLocation = (req.body.startLocation || "Origin").trim();
+    const travelType = String(req.body.travelType || "leisure").trim();
+    const startLocation = String(req.body.startLocation || "Origin").trim();
 
     if (!destination || !days || days < 1 || days > 14) {
       return res
@@ -594,8 +595,9 @@ exports.generateItinerary = async (req, res) => {
             .join("\n")
       )
       .join("\n");
-
-    const numericBudget = parseInt(budget.replace(/\D/g, "")) || (days * 5000); // Default if string parsing fails
+    
+    const budgetStr = String(budget);
+    const numericBudget = parseInt(budgetStr.replace(/\D/g, "")) || (days * 5000); // Default if string parsing fails
     const allocator = new SmartBudgetAllocator(numericBudget, days);
     const maxHotelPrice = Math.floor(allocator.limits.hotels / days);
     const maxFoodPrice = Math.floor(allocator.limits.food / days);
