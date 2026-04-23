@@ -11,18 +11,19 @@ interface DiscoverState {
 
 export const fetchDiscoveryProfiles = createAsyncThunk(
   'discover/fetchProfiles',
-  async ({ page, location, maxDistance, cityCoords }: { 
+  async ({ page, location, maxDistance, searchCity }: { 
     page: number; 
     location?: { lat: number; lng: number }; 
     maxDistance?: number;
-    cityCoords?: { lat: number; lng: number };
+    searchCity?: string;
   }, { rejectWithValue }) => {
     try {
       const res = await discoverAPI.getProfiles({ 
         page, 
-        lat: cityCoords?.lat || location?.lat, 
-        lng: cityCoords?.lng || location?.lng,
-        maxDistance 
+        lat: location?.lat, 
+        lng: location?.lng,
+        maxDistance,
+        searchCity
       });
       return res.data;
     } catch (err: any) {

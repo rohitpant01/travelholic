@@ -163,7 +163,8 @@ export default function DiscoverScreen() {
       dispatch(fetchDiscoveryProfiles({ 
         page: targetPage, 
         location: { lat: lat || 0, lng: lng || 0 }, 
-        maxDistance 
+        maxDistance,
+        searchCity: manualCoords ? travelModeCity : undefined
       }));
     } catch (e) {
       console.error('[FETCH PROFILES ERROR]', e);
@@ -176,7 +177,7 @@ export default function DiscoverScreen() {
   useEffect(() => {
     fetchProfiles(true);
     dispatch(fetchNotifications());
-  }, [manualCoords, travelModeCity, maxDistance]); 
+  }, [manualCoords, maxDistance]); 
 
   // ✅ SYNC: Handle user removal after action in Detail screen (Serializable fix)
   useEffect(() => {

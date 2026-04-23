@@ -80,9 +80,17 @@ export const userAPI = {
 // DISCOVER API
 // ============================================================
 export const discoverAPI = {
-  getProfiles: (lat?: number, lng?: number, mode?: string, sortBy?: string, page = 1, limit = 20, searchCity?: string) => {
+  getProfiles: (params: { 
+    lat?: number; 
+    lng?: number; 
+    mode?: string; 
+    sortBy?: string; 
+    page?: number; 
+    limit?: number; 
+    searchCity?: string; 
+  }) => {
     return apiClient.get('/nearby-users', {
-      params: { lat, lng, mode, sortBy, page, limit, searchCity, travelBuddy: !!searchCity }
+      params: { ...params, travelBuddy: !!params.searchCity }
     });
   },
   like: (targetUserId: string) => apiClient.post('/discover/like', { targetUserId }),
