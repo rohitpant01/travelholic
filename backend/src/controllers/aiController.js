@@ -599,8 +599,8 @@ exports.generateItinerary = async (req, res) => {
     const budgetStr = String(budget);
     const numericBudget = parseInt(budgetStr.replace(/\D/g, "")) || (days * 5000); // Default if string parsing fails
     const allocator = new SmartBudgetAllocator(numericBudget, days);
-    const maxHotelPrice = Math.floor(allocator.limits.hotels / days);
-    const maxFoodPrice = Math.floor(allocator.limits.food / days);
+    const maxHotelPrice = Math.floor(allocator.allocations.hotels / days);
+    const maxFoodPrice = Math.floor(allocator.allocations.food / days);
 
     const unifiedPrompt = `
 You are a hyperlocal travel expert EXCLUSIVELY for ${destination}, India.
@@ -772,7 +772,7 @@ OUTPUT JSON FORMAT (STRICT — no markdown, no extra text):
     console.log(
       `[AI] ✅ Itinerary generation complete for "${destination}" (${days} days).`
     );
-    data.budgetBreakdown = allocator.getState();
+    data.budgetBreakdown = allocator.generateBudgetState();
     return res.json(data);
   } catch (error) {
     console.error("[generateItinerary] Fatal error:", error.message);
