@@ -10,3 +10,8 @@ diagnostic_output.txt
 out.txt
 out2.txt
 out_dev.txt
+
+# Security: Admin scripts, debug tools, and credentials
+scripts/
+tmp/
+service-account.json

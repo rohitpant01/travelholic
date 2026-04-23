@@ -17,10 +17,21 @@ const getFeed = async (req, res) => {
     let query = { isDeleted: { $ne: true }, status: { $in: ['active', undefined] } };
     let sort = { createdAt: -1 };
     
-    // 0. Global Stealth: Exclude posts from deleted users
+    // 0. Global Stealth & Block System
     const deletedUsers = await User.find({ isDeleted: true }).select('_id');
-    const deletedUserIds = deletedUsers.map(u => u._id);
-    query.userId = { $nin: deletedUserIds };
+    let excludedUserIds = deletedUsers.map(u => u._id);
+    
+    if (req.user?._id) {
+       const currentUser = await User.findById(req.user._id).select('blockedUsers');
+       const usersWhoBlockedMe = await User.find({ blockedUsers: req.user._id }).select('_id');
+       
+       const myBlockedList = currentUser?.blockedUsers || [];
+       const blockedMeList = usersWhoBlockedMe.map(u => u._id);
+       
+       excludedUserIds = [...excludedUserIds, ...myBlockedList, ...blockedMeList];
+    }
+    
+    query.userId = { $nin: excludedUserIds };
 
     // 1. Filter Logic
     if (mode === 'nearby') {

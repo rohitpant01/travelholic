@@ -14,6 +14,8 @@ const {
   updateDistance,
   deactivateAccount,
   blockUser,
+  unblockUser,
+  getBlockedUsers,
   reportUser,
   getWhoLikedMe,
   followUser,
@@ -46,7 +48,6 @@ router.put('/update', protect, updateProfile);
 router.get('/who-liked-me', protect, getWhoLikedMe);
 router.get('/views', protect, getProfileViews);
 router.post('/follow/:userId', protect, followUser);
-router.post('/block', protect, blockUser);
 
 // ── Photos ───────────────────────────────────────────────────
 router.post('/photos', protect, uploadPhoto.array('photos', 6), uploadPhotos);
@@ -65,6 +66,11 @@ router.post('/report', protect, reportUser);
 router.delete('/account', protect, requestAccountDeletion);
 router.post('/cancel-deletion', protect, cancelAccountDeletion);
 router.post('/deactivate', protect, deactivateAccount);
+
+// ── Interaction & Safety Data ────────────────────────────────
+router.get('/blocked', protect, getBlockedUsers);
+router.post('/block', protect, blockUser);
+router.post('/unblock', protect, unblockUser);
 
 // Completed Trips
 router.post('/completed-trips', protect, addCompletedTrip);

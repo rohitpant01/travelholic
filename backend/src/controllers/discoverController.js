@@ -142,14 +142,20 @@ const getDiscoverProfiles = async (req, res) => {
     const swipedUsers = await Swipe.find({ swiper: req.user._id }).select('swiped');
     const swipedIds = swipedUsers.map(s => s.swiped);
 
+    // ⛔ Global Stealth: Hide people who blocked me
+    const usersWhoBlockedMe = await User.find({ blockedUsers: req.user._id }).select('_id');
+    const blockedMeIds = usersWhoBlockedMe.map(u => u._id);
+
     const excludeIds = isMapMode ? [
       req.user._id,
       ...(currentUser.blockedUsers || []),
+      ...blockedMeIds
     ] : [
       req.user._id,
       ...swipedIds,
       ...(currentUser.blockedUsers || []),
       ...(currentUser.matches || []),
+      ...blockedMeIds
     ];
 
     // Determine center coordinates

@@ -28,9 +28,19 @@ const getProfile = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const targetUser = await User.findById(req.params.userId)
-      .select('firstName lastName username age gender bio city country photos interests languages lookingFor isPhotoVerified countriesVisited dreamDestination completedTrips memberStatus location isOnline lastSeen origin destination travelDate followers following');
+      .select('firstName lastName username age gender bio city country photos interests languages lookingFor isPhotoVerified countriesVisited dreamDestination completedTrips memberStatus location isOnline lastSeen origin destination travelDate followers following blockedUsers');
 
     if (!targetUser || targetUser.isDeleted) return res.status(404).json({ error: 'User not found' });
+
+    // ⛔ Global Stealth: Block Check
+    if (req.user?._id) {
+      const currentUser = await User.findById(req.user._id).select('blockedUsers');
+      const hasBlocked = currentUser?.blockedUsers?.includes(targetUser._id);
+      const isBlockedBy = targetUser.blockedUsers?.includes(req.user._id);
+      if (hasBlocked || isBlockedBy) {
+        return res.status(403).json({ error: 'User unavailable' });
+      }
+    }
 
     const isFollowing = req.user?._id ? targetUser.followers?.includes(req.user._id) : false;
     
@@ -539,24 +549,79 @@ const blockUser = async (req, res) => {
     await User.findByIdAndUpdate(req.user._id, {
       $addToSet: { blockedUsers: targetUserId }
     });
+    
+    // Clean up connections
     const { Match } = require('../models/Match');
-    await Match.deleteMany({ users: { $all: [req.user._id, targetUserId] } });
-    const userBeforeBlock = await User.findById(req.user._id).select('likedBy');
+    const matchExists = await Match.findOneAndDelete({ users: { $all: [req.user._id, targetUserId] } });
+    
+    const userBeforeBlock = await User.findById(req.user._id).select('likedBy matches following');
     const wasLiker = userBeforeBlock.likedBy?.some(id => id.toString() === targetUserId);
+    const wasFollowingTarget = userBeforeBlock.following?.some(id => id.toString() === targetUserId);
 
     await User.findByIdAndUpdate(req.user._id, {
       $pull: { 
         matches: targetUserId, 
         likes: targetUserId, 
         superLikes: targetUserId,
-        likedBy: targetUserId 
+        likedBy: targetUserId,
+        following: targetUserId,
+        followers: targetUserId
       },
-      ...(wasLiker ? { $inc: { likesReceived: -1 } } : {})
+      ...(wasLiker ? { $inc: { likesReceived: -1 } } : {}),
+      ...(matchExists ? { $inc: { matchesCount: -1 } } : {})
     });
+    
     await User.findByIdAndUpdate(targetUserId, {
-      $pull: { matches: req.user._id, likedBy: req.user._id }
+      $pull: { 
+        matches: req.user._id, 
+        likedBy: req.user._id,
+        following: req.user._id,
+        followers: req.user._id 
+      },
+      ...(matchExists ? { $inc: { matchesCount: -1 } } : {})
     });
+
     res.json({ message: 'User blocked' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Unblock a user
+// @route   POST /api/user/unblock
+// @access  Private
+const unblockUser = async (req, res) => {
+  try {
+    const { targetUserId } = req.body;
+    await User.findByIdAndUpdate(req.user._id, {
+      $pull: { blockedUsers: targetUserId }
+    });
+    res.json({ message: 'User unblocked' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Get blocked users list
+// @route   GET /api/user/blocked
+// @access  Private
+const getBlockedUsers = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).populate(
+      'blockedUsers', 
+      'firstName lastName username photos location age'
+    );
+    // Sanitize photos
+    const blockedList = (user?.blockedUsers || []).map(u => ({
+      _id: u._id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      username: u.username,
+      age: u.age,
+      location: u.location,
+      photo: u.photos?.find(p => p.isProfile)?.url || u.photos?.[0]?.url || null
+    }));
+    res.json({ blockedUsers: blockedList });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -892,9 +957,12 @@ const deleteSavedDestination = async (req, res) => {
 module.exports = {
   getProfile, getUserById, updateProfile,
   uploadPhotos, deletePhoto, setProfilePhoto,
-  verifySelfie, updateLocation, updateDistance,
-  deactivateAccount, blockUser, reportUser,
-  getWhoLikedMe, followUser,
+  verifySelfie,  updateDistance,
+  requestAccountDeletion, cancelAccountDeletion,
+  deactivateAccount, blockUser, unblockUser, getBlockedUsers, reportUser,
+  uploadPhotos,
+  deletePhoto,
+  setProfilePhoto,
   addCompletedTrip, updateCompletedTrip, deleteCompletedTrip, getCompletedTrips,
   saveDestination, deleteSavedDestination, syncSavedDestinations,
   requestAccountDeletion, cancelAccountDeletion, getProfileViews,
