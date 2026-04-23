@@ -1274,8 +1274,27 @@ export default function ChatScreen() {
     );
   };
 
-  const submitReport = async (reason: string) => {
+  const submitReport = async (uiReason: string) => {
     try {
+      const REASON_MAP: Record<string, string> = {
+        'Spam / Promotion Group': 'spam',
+        'Scam / Fraud Activity': 'scam',
+        'Inappropriate Group Content': 'inappropriate',
+        'Toxic / Abusive Conversations': 'harassment',
+        'Misleading Travel Information': 'fake_info',
+        'Safety Risk': 'violence',
+        'Fake Profile': 'impersonation',
+        'Harassment': 'harassment',
+        'Spam': 'spam',
+        'Inappropriate Behavior': 'inappropriate',
+        'Safety Concern': 'other',
+        'Fake Location': 'fake_location',
+        'Scam Listing': 'scam_listing',
+        'Unsafe Place Info': 'unsafe_place'
+      };
+      
+      const reason = REASON_MAP[uiReason] || 'other';
+
       if (type === 'group') {
         await tripAPI.reportTrip(chatId, { reason });
       } else {
@@ -1367,8 +1386,8 @@ export default function ChatScreen() {
 
                {(() => {
                  const reasons = type === 'group' 
-                   ? ['Spam / Promotion Group', 'Scam / Fraud Activity', 'Inappropriate Group Content', 'Toxic / Abusive Conversations', 'Misleading Travel Information', 'Safety Risk']
-                   : ['Fake Profile', 'Harassment', 'Spam', 'Inappropriate Behavior', 'Safety Concern'];
+                   ? ['Spam / Promotion Group', 'Scam / Fraud Activity', 'Inappropriate Group Content', 'Toxic / Abusive Conversations', 'Misleading Travel Information', 'Safety Risk', 'Fake Location', 'Scam Listing', 'Unsafe Place Info']
+                   : ['Fake Profile', 'Harassment', 'Spam', 'Inappropriate Behavior', 'Safety Concern', 'Fake Location', 'Scam Listing', 'Unsafe Place Info'];
                  
                  return reasons.map(reason => (
                    <TouchableOpacity 

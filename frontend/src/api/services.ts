@@ -47,6 +47,8 @@ export const userAPI = {
   followUser: (userId: string) => apiClient.post(`/user/follow/${userId}`),
   deactivateAccount: () => apiClient.post('/user/deactivate'),
   blockUser: (targetUserId: string) => apiClient.post('/user/block', { targetUserId }),
+  unblockUser: (targetUserId: string) => apiClient.post('/user/unblock', { targetUserId }),
+  getBlockedUsers: () => apiClient.get('/user/blocked'),
   reportUser: (data: { targetUserId: string; reason: string; details?: string; matchId?: string }) => 
     apiClient.post('/user/report', data),
   deleteAccount: (password: string) => apiClient.delete('/user/account', { data: { password } }),

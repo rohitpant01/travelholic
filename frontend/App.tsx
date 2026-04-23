@@ -59,6 +59,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
 import UserDetailScreen from './src/screens/UserDetailScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import BlockedUsersScreen from './src/screens/BlockedUsersScreen';
 import MapScreen from './src/screens/MapScreen';
 import WhoLikedMeScreen from './src/screens/WhoLikedMeScreen';
 import TripsScreen from './src/screens/TripsScreen';
@@ -694,6 +695,7 @@ function AppNavigator() {
             <Stack.Screen name="PrivacySafety" component={PrivacySafetyScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="About" component={AboutScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="ProfileViews" component={ProfileViewsScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ animation: 'slide_from_right' }} />

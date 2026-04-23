@@ -101,6 +101,10 @@ export default function SettingsScreen() {
       onPress: () => navigation.navigate('PrivacySafety'), color: theme.gold,
     },
     {
+      icon: 'ban-outline', label: 'Blocked Users',
+      onPress: () => navigation.navigate('BlockedUsers'), color: theme.error,
+    },
+    {
       icon: 'help-circle-outline', label: 'Help & Support',
       onPress: () => navigation.navigate('HelpSupport'), color: theme.info,
     },

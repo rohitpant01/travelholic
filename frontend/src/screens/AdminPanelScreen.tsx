@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Alert, RefreshControl, FlatList
+  ActivityIndicator, TextInput, Alert, RefreshControl, Modal, Pressable
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
@@ -51,6 +51,18 @@ export default function AdminPanelScreen() {
   const [logs, setLogs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [reportFilter, setReportFilter] = useState('pending');
+
+  // Action Sheet State
+  const [actionSheet, setActionSheet] = useState<{
+    visible: boolean;
+    title: string;
+    subtitle?: string;
+    actions: { text: string; style?: 'destructive' | 'cancel' | 'default'; onPress?: () => void }[];
+  }>({
+    visible: false,
+    title: '',
+    actions: [],
+  });
 
   // ── Data Fetching ────────────────────────────────────────────
   const fetchStats = useCallback(async () => {
@@ -113,14 +125,18 @@ export default function AdminPanelScreen() {
 
   // ── Admin Actions ────────────────────────────────────────────
   const handleResolveReport = (report: any) => {
-    Alert.alert('Resolve Report', `Type: ${report.type}\nReason: ${report.reason}\nReporters: ${report.targetReportCount || 1}\nTrust: ${report.reportedBy?.trustScore ?? '?'}`, [
-      { text: 'Dismiss', onPress: () => resolveReportAction(report._id, 'dismissed') },
-      { text: 'Warn User', style: 'destructive', onPress: () => resolveReportAction(report._id, 'warned') },
-      { text: 'Remove Content', style: 'destructive', onPress: () => resolveReportAction(report._id, 'content_removed') },
-      { text: 'Suspend User', style: 'destructive', onPress: () => resolveReportAction(report._id, 'user_suspended') },
-      { text: '🚫 Ban User', style: 'destructive', onPress: () => resolveReportAction(report._id, 'user_banned') },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    setActionSheet({
+      visible: true,
+      title: 'Resolve Report',
+      subtitle: `Type: ${report.type}\nReason: ${report.reason}\nReporters: ${report.targetReportCount || 1}\nTrust: ${report.reportedBy?.trustScore ?? '?'}`,
+      actions: [
+        { text: 'Dismiss', onPress: () => resolveReportAction(report._id, 'dismissed') },
+        { text: 'Warn User', style: 'destructive', onPress: () => resolveReportAction(report._id, 'warned') },
+        { text: 'Remove Content', style: 'destructive', onPress: () => resolveReportAction(report._id, 'content_removed') },
+        { text: 'Suspend User', style: 'destructive', onPress: () => resolveReportAction(report._id, 'user_suspended') },
+        { text: '🚫 Ban User', style: 'destructive', onPress: () => resolveReportAction(report._id, 'user_banned') },
+      ],
+    });
   };
 
   const resolveReportAction = async (id: string, resolution: string) => {
@@ -151,21 +167,25 @@ export default function AdminPanelScreen() {
       actions.push({ text: '👑 Change Role', onPress: () => handleRoleChange(targetUser) });
     }
 
-    actions.push({ text: 'Cancel', style: 'cancel' });
-
-    const subtitle = `@${targetUser.username} · Trust: ${targetUser.trustScore ?? 50}/100 · Warnings: ${targetUser.warningCount || 0}`;
-    Alert.alert(`Manage ${targetUser.firstName}`, subtitle, actions);
+    setActionSheet({
+      visible: true,
+      title: `Manage ${targetUser.firstName}`,
+      subtitle: `@${targetUser.username} · Trust: ${targetUser.trustScore ?? 50}/100 · Warnings: ${targetUser.warningCount || 0}`,
+      actions,
+    });
   };
 
   const handleRoleChange = (targetUser: any) => {
     const roles = ['user', 'admin', 'superadmin'].filter(r => r !== targetUser.role);
-    Alert.alert('Change Role', `Current: ${targetUser.role}`, [
-      ...roles.map(r => ({
+    setActionSheet({
+      visible: true,
+      title: 'Change Role',
+      subtitle: `Current: ${targetUser.role}`,
+      actions: roles.map(r => ({
         text: `Set to ${r}`,
         onPress: () => changeRole(targetUser._id, r),
       })),
-      { text: 'Cancel', style: 'cancel' as const },
-    ]);
+    });
   };
 
   const suspendUser = async (id: string) => {
@@ -457,6 +477,36 @@ export default function AdminPanelScreen() {
     </View>
   );
 
+  const renderActionSheet = () => (
+    <Modal visible={actionSheet.visible} transparent animationType="fade" onRequestClose={() => setActionSheet(prev => ({ ...prev, visible: false }))}>
+      <Pressable style={styles.actionOverlay} onPress={() => setActionSheet(prev => ({ ...prev, visible: false }))}>
+        <Pressable style={styles.actionContainer}>
+          {actionSheet.title ? <Text style={styles.actionTitle}>{actionSheet.title}</Text> : null}
+          {actionSheet.subtitle ? <Text style={styles.actionSubtitle}>{actionSheet.subtitle}</Text> : null}
+          <View style={styles.actionDivider} />
+          {actionSheet.actions.map((act, index) => (
+            <TouchableOpacity 
+              key={index} 
+              style={[styles.actionBtn, index > 0 && styles.actionDividerTop]}
+              onPress={() => {
+                setActionSheet(prev => ({ ...prev, visible: false }));
+                if (act.onPress) act.onPress();
+              }}
+            >
+              <Text style={[styles.actionBtnText, act.style === 'destructive' && styles.actionBtnTextDestructive]}>
+                {act.text}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          <View style={[styles.actionDivider, { height: 8, backgroundColor: COLORS.background }]} />
+          <TouchableOpacity style={styles.actionBtnCancel} onPress={() => setActionSheet(prev => ({ ...prev, visible: false }))}>
+            <Text style={styles.actionBtnTextCancel}>Cancel</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+
   // ── Main Render ──────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -481,6 +531,7 @@ export default function AdminPanelScreen() {
           </>
         )}
       </ScrollView>
+      {renderActionSheet()}
     </SafeAreaView>
   );
 }
@@ -865,5 +916,65 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: FONTS.md,
     color: COLORS.textLight,
+  },
+  // ── Action Sheet Modal ──
+  actionOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionContainer: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: 30, // Extra padding for SafeArea
+  },
+  actionTitle: {
+    fontSize: FONTS.lg,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  actionSubtitle: {
+    fontSize: FONTS.sm,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  actionDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+  },
+  actionDividerTop: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  actionBtn: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtnText: {
+    fontSize: FONTS.lg,
+    color: COLORS.teal,
+    fontWeight: '500',
+  },
+  actionBtnTextDestructive: {
+    color: COLORS.error,
+    fontWeight: '600',
+  },
+  actionBtnCancel: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.white,
+  },
+  actionBtnTextCancel: {
+    fontSize: FONTS.lg,
+    color: COLORS.text,
+    fontWeight: '600',
   },
 });

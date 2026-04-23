@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Image,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -111,10 +112,26 @@ const NotificationsScreen = () => {
     
     if (data.matchId) {
       if (senderId && type !== 'match') {
-         // If it's a message or something else with a matchId, maybe still profile? 
-         // But usually Matches tab is better for generic matchId
+         // Generic fallback
       }
       navigation.navigate('MainTabs', { screen: 'Matches' } as any);
+      return;
+    }
+
+    // 🎯 PRIORITY 7: Moderation & System Notices (Instagram style alert)
+    const moderationTypes = [
+      'warning_received', 'suspension_received', 'ban_received', 
+      'content_removed', 'content_hidden', 'content_restored', 'report_resolved', 'content_reported'
+    ];
+
+    if (moderationTypes.includes(type)) {
+      Alert.alert(
+        item.title || 'System Notification',
+        item.message,
+        [
+          { text: 'Got it' },
+        ]
+      );
       return;
     }
 
@@ -158,6 +175,17 @@ const NotificationsScreen = () => {
         return { name: 'location', color: '#f59e0b' };
       case 'trending_trip':
         return { name: 'flame', color: '#ef4444' };
+      case 'warning_received':
+        return { name: 'warning', color: '#f59e0b' };
+      case 'suspension_received':
+      case 'ban_received':
+      case 'content_removed':
+        return { name: 'alert-circle', color: '#ef4444' };
+      case 'content_hidden':
+        return { name: 'eye-off', color: theme.textSecondary };
+      case 'content_restored':
+      case 'report_resolved':
+        return { name: 'checkmark-circle', color: theme.teal };
       default:
         return { name: 'notifications', color: theme.teal };
     }

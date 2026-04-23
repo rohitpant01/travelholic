@@ -28,6 +28,7 @@ const TravelPostCard = ({ post, onPressProfile, onPressComment, onPressLikes, on
   const styles = getStyles(theme);
 
   const [menuVisible, setMenuVisible] = React.useState(false);
+  const [reportingMenuVisible, setReportingMenuVisible] = React.useState(false);
 
   const user = post.userId; 
   const isTemp = (post as any).isTemporary;
@@ -104,25 +105,7 @@ const TravelPostCard = ({ post, onPressProfile, onPressComment, onPressLikes, on
         iconName: 'warning-outline',
         color: theme.error,
         onPress: () => {
-          Alert.alert(
-            'Report Post',
-            'Why are you reporting this post?',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { 
-                text: 'Spam', 
-                onPress: () => handleSendReport('Spam')
-              },
-              { 
-                text: 'Inappropriate', 
-                onPress: () => handleSendReport('Inappropriate content')
-              },
-              { 
-                text: 'Harassment', 
-                onPress: () => handleSendReport('Harassment')
-              }
-            ]
-          );
+          setTimeout(() => setReportingMenuVisible(true), 250);
         }
       });
     }
@@ -133,6 +116,17 @@ const TravelPostCard = ({ post, onPressProfile, onPressComment, onPressLikes, on
       onPress: handleShare
     });
     return opts;
+  };
+
+  const getReportingOptions = (): MenuOption[] => {
+    return [
+      { label: 'Spam', iconName: 'information-circle-outline', onPress: () => handleSendReport('spam') },
+      { label: 'Inappropriate Content', iconName: 'information-circle-outline', onPress: () => handleSendReport('inappropriate') },
+      { label: 'Harassment', iconName: 'information-circle-outline', onPress: () => handleSendReport('harassment') },
+      { label: 'Fake Location', iconName: 'information-circle-outline', onPress: () => handleSendReport('fake_location') },
+      { label: 'Scam Listing', iconName: 'information-circle-outline', onPress: () => handleSendReport('scam_listing') },
+      { label: 'Unsafe Place Info', iconName: 'information-circle-outline', onPress: () => handleSendReport('unsafe_place') },
+    ];
   };
 
   return (
@@ -283,6 +277,12 @@ const TravelPostCard = ({ post, onPressProfile, onPressComment, onPressLikes, on
         visible={menuVisible} 
         onClose={() => setMenuVisible(false)} 
         options={getMenuOptions()} 
+      />
+
+      <OptionsMenu 
+        visible={reportingMenuVisible} 
+        onClose={() => setReportingMenuVisible(false)} 
+        options={getReportingOptions()} 
       />
     </View>
   );
