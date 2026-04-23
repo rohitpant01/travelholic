@@ -55,11 +55,11 @@ const handleMatch = async (userId1, userId2, isSuperLike = false) => {
       })
     ]);
 
+    return match;
   } catch (err) {
     console.error('[SOCKET MATCH NOTIFY ERROR]', err);
+    return null;
   }
-
-  return match;
 };
 
 /**
