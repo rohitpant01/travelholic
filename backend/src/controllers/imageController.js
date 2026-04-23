@@ -96,45 +96,44 @@ exports.getPlaceImagesBatch = async (req, res) => {
 
   // ── 1. Google Places (primary) ────────────────────────────────────────────
   if (GOOGLE_PLACES_API_KEY) {
-    try {
-      const gRes = await axios.get(
+      // 1a. Initial search
+      let gRes = await axios.get(
         'https://maps.googleapis.com/maps/api/place/textsearch/json',
         { params: { query: searchQuery, key: GOOGLE_PLACES_API_KEY } }
       );
 
-      const results = gRes.data.results || [];
+      let results = gRes.data.results || [];
+      
+      // 1b. Broaden search if first attempt was too specific
+      if (results.length === 0 || (results[0]?.photos?.length || 0) < 3) {
+        const broadRes = await axios.get(
+          'https://maps.googleapis.com/maps/api/place/textsearch/json',
+          { params: { query: `${query}`, key: GOOGLE_PLACES_API_KEY } }
+        );
+        if (broadRes.data.results?.length > 0) {
+           results = [...results, ...broadRes.data.results];
+        }
+      }
 
       const allRefs = [];
       const seen = new Set();
 
-      // Priority: Fill with all photos from the #1 most relevant result first
-      if (results[0]?.photos) {
-        results[0].photos.forEach(p => {
-          if (p.photo_reference && !seen.has(p.photo_reference)) {
-            seen.add(p.photo_reference);
-            allRefs.push(p.photo_reference);
-          }
-        });
-      }
-
-      // Secondary: Fill remaining slots from other top results if the first place has few photos
-      for (const place of results.slice(1, 5)) {
-        if (allRefs.length >= 20) break; 
-        for (const photo of (place.photos || [])) {
-          const ref = photo.photo_reference;
-          if (ref && !seen.has(ref)) {
-            seen.add(ref);
-            allRefs.push(ref);
-          }
+      for (const place of results.slice(0, 15)) {
+        if (place.photos) {
+          place.photos.forEach(p => {
+            if (p.photo_reference && !seen.has(p.photo_reference)) {
+              seen.add(p.photo_reference);
+              allRefs.push(p.photo_reference);
+            }
+          });
         }
       }
 
       if (allRefs.length > 0) {
-        // Build N proxy URLs, cycling through unique refs
-        const images = Array.from({ length: count }, (_, i) => {
-          const ref = allRefs[i % allRefs.length];
-          return `${BACKEND_URL}/api/images/google-photo?ref=${ref}`;
-        });
+        const finalCount = Math.min(allRefs.length, count);
+        const images = allRefs.slice(0, finalCount).map(ref => 
+          `${BACKEND_URL}/api/images/google-photo?ref=${ref}`
+        );
 
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         return res.json({ images, source: 'Google Places' });
@@ -148,15 +147,22 @@ exports.getPlaceImagesBatch = async (req, res) => {
   if (UNSPLASH_ACCESS_KEY) {
     try {
       const response = await axios.get('https://api.unsplash.com/search/photos', {
-        params: { query: searchQuery, per_page: Math.max(count, 10), orientation: 'landscape' },
+        params: { query: searchQuery, per_page: Math.max(count, 15), orientation: 'landscape' },
         headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` }
       });
       const results = response.data.results || [];
       if (results.length > 0) {
-        const images = Array.from({ length: count }, (_, i) =>
-          results[i % results.length].urls.regular
-        );
-        return res.json({ images, source: 'Unsplash' });
+        // Filter out any potential duplicates from Unsplash
+        const seenUrls = new Set();
+        const uniqueImgs = [];
+        for (const r of results) {
+          if (!seenUrls.has(r.urls.regular)) {
+             seenUrls.add(r.urls.regular);
+             uniqueImgs.push(r.urls.regular);
+          }
+          if (uniqueImgs.length >= count) break;
+        }
+        return res.json({ images: uniqueImgs, source: 'Unsplash' });
       }
     } catch (e) {
       console.error('[ImageController] Unsplash batch failed:', e.message);
