@@ -64,9 +64,9 @@ exports.getRandomImage = async (req, res) => {
     { name: 'Leh Ladakh', image: 'https://picsum.photos/id/1019/1000/600' },
     { name: 'Goa Beaches', image: 'https://picsum.photos/id/1020/1000/600' }
   ];
-  
+
   const selected = [];
-  for(let i=0; i<count; i++) {
+  for (let i = 0; i < count; i++) {
     selected.push(fallbacks[Math.floor(Math.random() * fallbacks.length)]);
   }
 
@@ -78,9 +78,9 @@ exports.getRandomImage = async (req, res) => {
  */
 exports.getPlaceImage = async (req, res) => {
   const { query } = req.params;
-  const { photoReference, v = 0 } = req.query; 
+  const { photoReference, v = 0 } = req.query;
   const imgIdx = parseInt(v, 10) || 0;
-  
+
   // 1. If direct reference provided, proxy it immediately
   if (photoReference && GOOGLE_PLACES_API_KEY) {
     return res.redirect(`https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${photoReference}&key=${GOOGLE_PLACES_API_KEY}`);
@@ -102,24 +102,23 @@ exports.getPlaceImage = async (req, res) => {
       const gRes = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
         params: { query: searchQuery, key: GOOGLE_PLACES_API_KEY }
       });
-      
+
       const results = gRes.data.results || [];
       if (results.length > 0) {
-        // Try to get different photos from the first result first
-        const firstResultPhotos = results[0].photos || [];
-        if (firstResultPhotos.length > 0) {
-          const photoRef = firstResultPhotos[imgIdx % firstResultPhotos.length]?.photo_reference;
-          if (photoRef) {
-            const finalUrl = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${photoRef}`;
-            return sendRes(finalUrl, 'Google Places');
+        // Pool photos from the top 3 results to ensure maximum variety
+        const allPhotos = [];
+        results.slice(0, 3).forEach(r => {
+          if (r.photos) {
+            r.photos.forEach(p => allPhotos.push(p.photo_reference));
           }
-        }
-        
-        // Fallback: If first result has no photos or we want more variety, try the next result
-        const secondResultPhoto = results[1]?.photos?.[0]?.photo_reference;
-        if (secondResultPhoto && imgIdx > 0) {
-           const finalUrl = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${secondResultPhoto}`;
-           return sendRes(finalUrl, 'Google Places (Alt)');
+        });
+
+        if (allPhotos.length > 0) {
+          const photoRef = allPhotos[imgIdx % allPhotos.length];
+          const finalUrl = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${photoRef}`;
+
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          return sendRes(finalUrl, 'Google Places (Pooled)');
         }
       }
     } catch (e) {
@@ -139,7 +138,7 @@ exports.getPlaceImage = async (req, res) => {
         const selected = results[imgIdx % results.length];
         return sendRes(selected.urls.regular, 'Unsplash');
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // 4. Try Pexels
@@ -154,7 +153,7 @@ exports.getPlaceImage = async (req, res) => {
         const selected = photos[imgIdx % photos.length];
         return sendRes(selected.src.large2x, 'Pexels');
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Final Picsum placeholder with variety via seed

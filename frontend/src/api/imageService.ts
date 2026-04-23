@@ -25,7 +25,8 @@ export const fetchPlaceImages = async (query: string, count: number = 3): Promis
     const images = [];
     for (let i = 0; i < count; i++) {
         // We use redirect=true so the Image component can load the binary data directly
-        images.push(`${apiClient.defaults.baseURL}/images/place/${encodeURIComponent(query)}?redirect=true&v=${i}`);
+        // We add a timestamp (t) to bypass any aggressive local/CDN caching
+        images.push(`${apiClient.defaults.baseURL}/images/place/${encodeURIComponent(query)}?redirect=true&v=${i}&t=${Date.now()}`);
     }
     return images;
   } catch (e) {
