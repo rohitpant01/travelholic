@@ -12,7 +12,8 @@ const {
   cloneItinerary,
   deleteLyraItinerary,
   locationAutocomplete,
-  reverseGeocode
+  reverseGeocode,
+  generatePremiumItinerary
 } = require('../controllers/itineraryController');
 const { protect } = require('../middleware/auth');
 
@@ -29,6 +30,9 @@ router.get('/location/geocode', protect, reverseGeocode);
 
 // temporarily public for debugging
 router.get('/generate', generateItinerary);
+
+// 🌟 Premium EkalGo Planner
+router.post('/premium', protect, generatePremiumItinerary);
 
 // 🚀 Lyra AI Assistant
 router.get('/lyra/:id', getLyraItineraryById); // 🔥 Public deep linking route

@@ -5,6 +5,8 @@ const LyraItinerary = require('../models/LyraItinerary');
 const Post = require('../models/Post');
 const User = require('../models/User');
 
+const SmartBudgetAllocator = require('../utils/budgetAllocator');
+
 // 🏎️ In-memory cache for Google Places (simple for now)
 const placeCache = new Map();
 
@@ -710,3 +712,80 @@ exports.getLyraItineraryById = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/itinerary/premium
+ * EkalGo Premium Plan Generator with Smart Budget Allocation
+ */
+exports.generatePremiumItinerary = async (req, res) => {
+  try {
+    const { totalBudget, days, location, lat, lng } = req.body;
+    
+    if (!totalBudget || !days || !location) {
+      return res.status(400).json({ error: 'Budget, days, and location are required for a Premium Plan.' });
+    }
+
+    const allocator = new SmartBudgetAllocator(totalBudget, days);
+    const limits = allocator.calculateBaseAllocations();
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+
+    let rawHotels = [];
+    let rawFood = [];
+    
+    // We reuse the existing fetchNearby from within the file (it's declared up top)
+    if (lat && lng && apiKey) {
+      // Fetch nearby places for realism
+      // Note: fetchNearby is defined in this file, we can use it.
+      // fetchNearby(lat, lng, radius, keywords, apiKey)
+      rawHotels = await fetchNearby(lat, lng, 15000, 'hotel|resort|accommodation', apiKey);
+      rawFood = await fetchNearby(lat, lng, 10000, 'restaurant|cafe|food', apiKey);
+    }
+
+    // 2. ENFORCE BUDGET: Filter strictly before sending to frontend
+    const affordableHotels = allocator.filterHotelsWithinBudget(rawHotels);
+    const affordableFood = allocator.filterFoodWithinBudget(rawFood);
+
+    // Provide the exact payload structure required by the new React Native UI
+    const premiumPayload = {
+      tripId: `premium_${Date.now()}`,
+      location,
+      budgetBreakdown: allocator.generateBudgetState(),
+      recommendations: {
+        hotels: affordableHotels.slice(0, 5).map(h => ({
+          id: h.place_id || `h_${Date.now()}_${Math.random()}`,
+          name: h.name,
+          pricePerNight: h.pricePerNight,
+          totalStayCost: h.totalCost,
+          distanceFromCenter: 'Central',
+          rating: h.rating || 4.0,
+          category: h.isBudgetFriendly ? 'Budget' : 'Standard'
+        })),
+        food: affordableFood.slice(0, 5).map(f => ({
+          id: f.place_id || `f_${Date.now()}_${Math.random()}`,
+          dishName: f.name, // Usually a restaurant name, but mocked for structure
+          famousRestaurants: [f.name],
+          averagePrice: f.averagePrice,
+          distanceFromItinerary: 'Nearby',
+          tags: f.isBudgetFriendly ? ['Budget Friendly'] : ['Local Cuisine']
+        }))
+      },
+      dailyPlan: Array.from({ length: days }).map((_, i) => ({
+        day: i + 1,
+        date: new Date(Date.now() + i * 86400000).toISOString().split('T')[0],
+        spots: [
+          {
+            timeOfDay: 'Morning',
+            placeName: 'Explore ' + location,
+            cost: 0,
+            distanceFromPrevious: '0 km',
+            travelTimeMins: 0
+          }
+        ]
+      }))
+    };
+
+    res.json(premiumPayload);
+  } catch (err) {
+    console.error('[PREMIUM ITINERARY ERROR]', err);
+    res.status(500).json({ error: 'Failed to generate Premium Itinerary' });
+  }
+};
