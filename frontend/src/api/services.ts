@@ -61,6 +61,7 @@ export const userAPI = {
 
   // ✅ NEW: Who viewed my profile
   getProfileViews: () => apiClient.get('/user/views'),
+  getVisitors: () => apiClient.get('/user/visitors'),
 
   // ✅ NEW: Like back a user who liked you
   likeBack: (targetUserId: string) => apiClient.post('/discover/like', { targetUserId }),

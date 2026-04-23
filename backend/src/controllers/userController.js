@@ -3,7 +3,8 @@ const { Match } = require('../models/Match');
 const { cloudinary, deleteImage } = require('../config/cloudinary');
 const { compareFaces } = require('../utils/faceVerification');
 const { updateDeviceToken } = require('../utils/deviceUtility');
-const ProfileView = require('../models/ProfileView');
+const ProfileVisit = require('../models/ProfileVisit');
+const ProfileView = require('../models/ProfileView'); // Legacy fallback or delete
 const { createNotification } = require('../utils/notificationService');
 
 // @desc    Get own profile
@@ -123,38 +124,120 @@ const getUserById = async (req, res) => {
     delete userObj.followers;
     delete userObj.following;
 
-    // 👁️ Record Profile View & Notify (Don't await to avoid slowing down response)
+    // 👁️ Record Profile Visit (Custom logic requested)
     if (req.user?._id && req.user._id.toString() !== targetUser._id.toString()) {
-      (async () => {
-        try {
-          // 1. Check if viewed in the last 12 hours to avoid spamming
-          const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
-          const recentView = await ProfileView.findOne({
-            viewer: req.user._id,
-            viewee: targetUser._id,
-            viewedAt: { $gte: twelveHoursAgo }
-          });
-
-          if (!recentView) {
-            await ProfileView.create({ viewer: req.user._id, viewee: targetUser._id });
-            const viewer = await User.findById(req.user._id).select('firstName');
-            
-            await createNotification({
-              recipient: targetUser._id,
-              sender: req.user._id,
-              type: 'match', // Using match visually for now or add 'view'
-              title: 'New Profile Visitor 👀',
-              message: `${viewer.firstName} viewed your profile. Check them out!`,
-              data: { viewerId: req.user._id }
-            });
-          }
-        } catch (err) {
-          console.error('[PROFILE VIEW LOG ERROR]', err);
-        }
-      })();
+       trackProfileVisit(req.user._id, targetUser._id);
     }
 
     res.json({ user: userObj });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * CORE LOGIC: Handle Profile Visit Tracking
+ * - Validates viewer is not owner
+ * - Checks for mutual blocks
+ * - Skips already matched users
+ * - Prevents duplicates within 24 hours
+ */
+const trackProfileVisit = async (viewerId, profileOwnerId) => {
+  try {
+    // 1. Skip if viewing self (should be caught by caller but safety first)
+    if (viewerId.toString() === profileOwnerId.toString()) return;
+
+    // 2. Fetch both users to check blocks and matches
+    const [viewer, owner] = await Promise.all([
+      User.findById(viewerId).select('blockedUsers firstName'),
+      User.findById(profileOwnerId).select('blockedUsers')
+    ]);
+
+    // 3. Skip if target user doesn't exist
+    if (!owner) return;
+
+    // 4. Skip if mutual block exists
+    const hasBlocked = viewer.blockedUsers?.includes(profileOwnerId);
+    const isBlockedBy = owner.blockedUsers?.includes(viewerId);
+    if (hasBlocked || isBlockedBy) return;
+
+    // 5. Skip if users are already matched (CORE REQUIREMENT)
+    const { Match } = require('../models/Match');
+    const existingMatch = await Match.findOne({
+      users: { $all: [viewerId, profileOwnerId] },
+      isActive: true
+    });
+    if (existingMatch) return;
+
+    // 6. Deduplication: One visit per 24 hours
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentVisit = await ProfileVisit.findOne({
+      viewerId,
+      profileOwnerId,
+      createdAt: { $gte: twentyFourHoursAgo }
+    });
+
+    if (!recentVisit) {
+      // 7. Save the visit
+      await ProfileVisit.create({ viewerId, profileOwnerId });
+
+      // 8. Notify the owner (Optional, but great for engagement)
+      await createNotification({
+        recipient: profileOwnerId,
+        sender: viewerId,
+        type: 'profile_view',
+        title: 'New Profile Visitor',
+        message: `${viewer.firstName || 'Someone'} viewed your profile.`,
+        data: { viewerId }
+      });
+    }
+  } catch (err) {
+    console.warn('[VISIT_TRACKER] Failed to record visit:', err.message);
+  }
+};
+
+// @desc    Get my profile visitors (non-matched only)
+// @route   GET /api/user/visitors
+// @access  Private
+const getMyVisitors = async (req, res) => {
+  try {
+    // 1. Fetch latest visits for this user
+    const visits = await ProfileVisit.find({ profileOwnerId: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate('viewerId', 'firstName lastName username photos location.city');
+
+    const currentUser = await User.findById(req.user._id).select('blockedUsers');
+    const blockedIds = (currentUser.blockedUsers || []).map(id => id.toString());
+
+    // 2. Filter out matches, blocked users, and deleted users
+    const { Match } = require('../models/Match');
+    const visitorsPromises = visits.map(async (visit) => {
+      const visitor = visit.viewerId;
+      if (!visitor || visitor.isDeleted || blockedIds.includes(visitor._id.toString())) return null;
+
+      // Skip if already matched (CORE REQUIREMENT)
+      const isMatched = await Match.findOne({
+        users: { $all: [req.user._id, visitor._id] },
+        isActive: true
+      });
+      if (isMatched) return null;
+
+      const profilePic = visitor.photos?.find(p => p.isProfile)?.url || visitor.photos?.[0]?.url;
+
+      return {
+        userId: visitor._id,
+        name: `${visitor.firstName} ${visitor.lastName || ''}`.trim(),
+        username: visitor.username,
+        profilePic,
+        visitedAt: visit.createdAt,
+        city: visitor.location?.city
+      };
+    });
+
+    const visitors = (await Promise.all(visitorsPromises)).filter(v => v !== null);
+
+    res.json({ visitors });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1045,7 +1128,8 @@ module.exports = {
   requestAccountDeletion, cancelAccountDeletion,
   deactivateAccount, blockUser, unblockUser, getBlockedUsers, reportUser,
   getWhoLikedMe, followUser,
+  getMyVisitors, getProfileViews,
   addCompletedTrip, updateCompletedTrip, deleteCompletedTrip, getCompletedTrips,
   saveDestination, deleteSavedDestination, syncSavedDestinations,
-  requestAccountDeletion, cancelAccountDeletion, getProfileViews,
+  requestAccountDeletion, cancelAccountDeletion, getMyReports, getMyReportDetails,
 };

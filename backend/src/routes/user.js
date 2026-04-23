@@ -21,6 +21,8 @@ const {
   getMyReportDetails,
   getWhoLikedMe,
   followUser,
+  getMyVisitors,
+  getProfileViews,
   addCompletedTrip,
   updateCompletedTrip,
   deleteCompletedTrip,
@@ -30,7 +32,6 @@ const {
   syncSavedDestinations,
   requestAccountDeletion,
   cancelAccountDeletion,
-  getProfileViews,
 } = require('../controllers/userController');
 const multer = require('multer');
 
@@ -48,6 +49,7 @@ router.put('/update', protect, updateProfile);
 
 // ── ✅ NEW: Who liked me ──────────────────────────────────────
 router.get('/who-liked-me', protect, getWhoLikedMe);
+router.get('/visitors', protect, getMyVisitors);
 router.get('/views', protect, getProfileViews);
 router.post('/follow/:userId', protect, followUser);
 
