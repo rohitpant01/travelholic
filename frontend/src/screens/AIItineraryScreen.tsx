@@ -204,6 +204,20 @@ const PlanItem = ({ item, index, isLast, navigation, destination }: any) => {
               <Ionicons name="navigate-outline" size={12} color={theme.teal} />
               <Text style={styles.metaText} numberOfLines={1}>{item.distance || '1 km'}</Text>
             </View>
+            
+            {/* Selection Toggle */}
+            <TouchableOpacity 
+              style={[
+                styles.selectBtn, 
+                item.isSelected && { backgroundColor: theme.success, borderColor: theme.success }
+              ]}
+              onPress={(e) => { e.stopPropagation(); item.onToggle(); }}
+            >
+              <Ionicons name={item.isSelected ? "checkmark-circle" : "add-circle-outline"} size={14} color={item.isSelected ? "#fff" : theme.teal} />
+              <Text style={[styles.selectBtnText, item.isSelected && { color: '#fff' }]}>
+                {item.isSelected ? 'Selected' : 'Select'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
 
@@ -331,27 +345,63 @@ const GemCard = ({ gem }: any) => {
 };
 
 // --- EXPENSE TRACKER HEADER ---
-const ExpenseTrackerHeader = ({ budgetState, theme }: any) => {
+const ExpenseTrackerHeader = ({ budgetState, dynamicSpending, theme }: any) => {
   if (!budgetState) return null;
-  const isExceeding = budgetState.totalSpent > budgetState.totalBudget;
-  const progress = Math.min(budgetState.totalSpent / budgetState.totalBudget, 1);
+  
+  const totalSpent = dynamicSpending.hotels + dynamicSpending.food + dynamicSpending.activities;
+  const totalBudget = budgetState.totalBudget;
+  const remaining = totalBudget - totalSpent;
+  const progress = Math.min(totalSpent / totalBudget, 1);
+  
+  // Color logic
+  let progressColor = theme.success; // Green (0-70%)
+  if (progress > 0.9) progressColor = '#FF5A5F'; // Red (90%+)
+  else if (progress > 0.7) progressColor = '#FF9800'; // Yellow (70-90%)
+
+  const isExceeding = totalSpent > totalBudget;
 
   return (
-    <LinearGradient colors={[theme.card, theme.background]} style={{ padding: 15, borderRadius: 12, marginHorizontal: 20, marginTop: -30, marginBottom: 20, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, zIndex: 10 }}>
-      <Text style={{ fontSize: 16, fontWeight: '900', marginBottom: 10, color: theme.text }}>Budget Tracker</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textSecondary }}>
-          Remaining: ₹{budgetState.totalRemaining}
+    <LinearGradient colors={[theme.card, theme.background]} style={{ padding: 18, borderRadius: 16, marginHorizontal: 20, marginTop: -30, marginBottom: 20, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, zIndex: 10, borderWidth: 1, borderColor: theme.borderLight }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text }}>Budget Tracker</Text>
+        <View style={{ backgroundColor: progressColor + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+          <Text style={{ fontSize: 12, fontWeight: '800', color: progressColor }}>
+            {Math.round(progress * 100)}% Used
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textSecondary }}>
+          Remaining: <Text style={{ color: isExceeding ? '#FF5A5F' : theme.text, fontWeight: '900' }}>₹{remaining.toLocaleString()}</Text>
         </Text>
-        <View style={{ flex: 1, height: 8, backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 4, marginLeft: 15 }}>
-          <View style={{ height: '100%', borderRadius: 4, width: `${progress * 100}%`, backgroundColor: isExceeding ? '#FF5A5F' : theme.success }} />
+        <Text style={{ fontSize: 13, color: theme.textLight }}>Goal: ₹{totalBudget.toLocaleString()}</Text>
+      </View>
+
+      <View style={{ height: 10, backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', borderRadius: 5, overflow: 'hidden', marginBottom: 15 }}>
+        <View style={{ height: '100%', borderRadius: 5, width: `${progress * 100}%`, backgroundColor: progressColor }} />
+      </View>
+
+      {/* Category Breakdown */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.borderLight, paddingTop: 12 }}>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 10, fontWeight: '800', color: theme.textLight, textTransform: 'uppercase' }}>Hotels</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>₹{dynamicSpending.hotels.toLocaleString()}</Text>
+        </View>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 10, fontWeight: '800', color: theme.textLight, textTransform: 'uppercase' }}>Food</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>₹{dynamicSpending.food.toLocaleString()}</Text>
+        </View>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 10, fontWeight: '800', color: theme.textLight, textTransform: 'uppercase' }}>Activities</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>₹{dynamicSpending.activities.toLocaleString()}</Text>
         </View>
       </View>
       
       {isExceeding && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FF5A5F', padding: 8, borderRadius: 8, marginTop: 10 }}>
-          <Ionicons name="warning" size={14} color="#FFF" />
-          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold' }}>Exceeding your budget! Consider cheaper options.</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FF5A5F', padding: 10, borderRadius: 10, marginTop: 15 }}>
+          <Ionicons name="warning" size={16} color="#FFF" />
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: 'bold', flex: 1 }}>Budget Exceeded! Remove some items to stay within your goal.</Text>
         </View>
       )}
     </LinearGradient>
@@ -369,6 +419,26 @@ export default function AIItineraryScreen() {
   const [data, setData] = useState<any>(null);
   const [activeDay, setActiveDay] = useState(0);
   const [mainTab, setMainTab] = useState('Overview'); // 'Overview', 'Hotels', 'Food', 'Daily Plan'
+  
+  // Real-time Budget Selection State
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [dynamicSpending, setDynamicSpending] = useState({ hotels: 0, food: 0, activities: 0 });
+
+  const toggleSelection = (id: string, costStr: string, category: 'hotels' | 'food' | 'activities') => {
+    const numericCost = parseInt(String(costStr || '0').replace(/\D/g, '')) || 0;
+    setSelectedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        setDynamicSpending(s => ({ ...s, [category]: s[category] - numericCost }));
+      } else {
+        next.add(id);
+        setDynamicSpending(s => ({ ...s, [category]: s[category] + numericCost }));
+      }
+      return next;
+    });
+  };
+
   const [heroImg, setHeroImg] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(!!savedData);
   const [isSaving, setIsSaving] = useState(false);
@@ -528,7 +598,11 @@ export default function AIItineraryScreen() {
           </View>
         </View>
 
-        <ExpenseTrackerHeader budgetState={data?.budgetBreakdown} theme={theme} />
+        <ExpenseTrackerHeader 
+          budgetState={data?.budgetBreakdown} 
+          dynamicSpending={dynamicSpending}
+          theme={theme} 
+        />
 
 
         {/* MAIN NAVIGATION TABS */}
@@ -643,6 +717,19 @@ export default function AIItineraryScreen() {
                               </View>
                             </View>
                             <Text style={styles.stayArea}>📍 {stay.area}</Text>
+                            
+                            <TouchableOpacity 
+                              style={[
+                                { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingVertical: 8, borderRadius: 10, borderWeight: 1, borderColor: theme.teal, borderWidth: 1, justifyContent: 'center' },
+                                selectedItems.has(`hotel_${dIdx}_${idx}`) && { backgroundColor: theme.success, borderColor: theme.success }
+                              ]}
+                              onPress={() => toggleSelection(`hotel_${dIdx}_${idx}`, stay.price_per_night, 'hotels')}
+                            >
+                              <Ionicons name={selectedItems.has(`hotel_${dIdx}_${idx}`) ? "checkmark-circle" : "bed-outline"} size={14} color={selectedItems.has(`hotel_${dIdx}_${idx}`) ? "#fff" : theme.teal} />
+                              <Text style={{ fontSize: 12, fontWeight: '800', color: selectedItems.has(`hotel_${dIdx}_${idx}`) ? "#fff" : theme.teal }}>
+                                {selectedItems.has(`hotel_${dIdx}_${idx}`) ? 'Reserved' : 'Select Stay'}
+                              </Text>
+                            </TouchableOpacity>
                           </View>
                         </TouchableOpacity>
                       ))}
@@ -666,16 +753,25 @@ export default function AIItineraryScreen() {
                     </View>
                     <View style={{ marginBottom: 20 }}>
                       {dayPlan.food_recommendations.map((food: any, idx: number) => (
-                        <View key={idx} style={[styles.insightCard, { borderLeftColor: theme.success, marginBottom: 10, padding: 12 }]}>
+                        <TouchableOpacity 
+                          key={idx} 
+                          style={[styles.insightCard, { borderLeftColor: theme.success, marginBottom: 10, padding: 12 }, selectedItems.has(`food_${dIdx}_${idx}`) && { borderColor: theme.success, borderWidth: 1 }]}
+                          onPress={() => toggleSelection(`food_${dIdx}_${idx}`, food.price, 'food')}
+                        >
                            <View style={{ flex: 1 }}>
                              <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text }}>{food.dishName || food.dish_name || 'Local Cuisine'}</Text>
                              <Text style={{ fontSize: 13, color: theme.textSecondary, marginTop: 2 }}>📍 {food.place}</Text>
                              <Text style={{ fontSize: 12, color: theme.textLight, marginTop: 4 }}>{food.description}</Text>
                            </View>
-                           <View style={{ justifyContent: 'center' }}>
+                           <View style={{ alignItems: 'flex-end', justifyContent: 'center', gap: 8 }}>
                              <Text style={{ fontSize: 14, fontWeight: '900', color: theme.success }}>{food.price}</Text>
+                             <Ionicons 
+                                name={selectedItems.has(`food_${dIdx}_${idx}`) ? "checkbox" : "square-outline"} 
+                                size={20} 
+                                color={selectedItems.has(`food_${dIdx}_${idx}`) ? theme.success : theme.border} 
+                             />
                            </View>
-                        </View>
+                        </TouchableOpacity>
                       ))}
                     </View>
                   </>
@@ -740,7 +836,18 @@ export default function AIItineraryScreen() {
 
               <Text style={styles.sectionTitle}>Daily Schedule</Text>
               {currentDayPlan?.plan.map((item: any, idx: number) => (
-                <PlanItem key={idx} item={item} index={idx} isLast={idx === currentDayPlan.plan.length-1} navigation={navigation} destination={data.destination} />
+                <PlanItem 
+                  key={idx} 
+                  item={{
+                    ...item,
+                    isSelected: selectedItems.has(`activity_${activeDay}_${idx}`),
+                    onToggle: () => toggleSelection(`activity_${activeDay}_${idx}`, item.cost, 'activities')
+                  }} 
+                  index={idx} 
+                  isLast={idx === currentDayPlan.plan.length-1} 
+                  navigation={navigation} 
+                  destination={data.destination} 
+                />
               ))}
             </View>
           </>
@@ -828,6 +935,8 @@ const getStyles = (theme: any) => StyleSheet.create({
   timeBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: theme.teal, paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
   timeBadgeText: { fontSize: 11, fontWeight: '800', color: '#fff', textTransform: 'uppercase' },
   stepCost: { fontSize: 15, fontWeight: '900', color: theme.success },
+  selectBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWeight: 1, borderColor: theme.teal, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, marginLeft: 'auto' },
+  selectBtnText: { fontSize: 11, color: theme.teal, fontWeight: '800' },
   stepActivity: { fontSize: 19, fontWeight: '900', color: theme.text, marginBottom: 8 },
   stepDesc: { fontSize: 14, color: theme.textSecondary, lineHeight: 22, marginBottom: 15 },
   stepContentRow: { flexDirection: 'row', gap: 15 },

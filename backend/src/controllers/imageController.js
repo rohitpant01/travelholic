@@ -78,7 +78,8 @@ exports.getRandomImage = async (req, res) => {
  */
 exports.getPlaceImage = async (req, res) => {
   const { query } = req.params;
-  const { photoReference } = req.query; // Optional direct reference
+  const { photoReference, v = 0 } = req.query; 
+  const imgIdx = parseInt(v, 10) || 0;
   
   // 1. If direct reference provided, proxy it immediately
   if (photoReference && GOOGLE_PLACES_API_KEY) {
@@ -101,10 +102,25 @@ exports.getPlaceImage = async (req, res) => {
       const gRes = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
         params: { query: searchQuery, key: GOOGLE_PLACES_API_KEY }
       });
-      const photoRef = gRes.data.results?.[0]?.photos?.[0]?.photo_reference;
-      if (photoRef) {
-        const finalUrl = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${photoRef}`;
-        return sendRes(finalUrl, 'Google Places');
+      
+      const results = gRes.data.results || [];
+      if (results.length > 0) {
+        // Try to get different photos from the first result first
+        const firstResultPhotos = results[0].photos || [];
+        if (firstResultPhotos.length > 0) {
+          const photoRef = firstResultPhotos[imgIdx % firstResultPhotos.length]?.photo_reference;
+          if (photoRef) {
+            const finalUrl = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${photoRef}`;
+            return sendRes(finalUrl, 'Google Places');
+          }
+        }
+        
+        // Fallback: If first result has no photos or we want more variety, try the next result
+        const secondResultPhoto = results[1]?.photos?.[0]?.photo_reference;
+        if (secondResultPhoto && imgIdx > 0) {
+           const finalUrl = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${secondResultPhoto}`;
+           return sendRes(finalUrl, 'Google Places (Alt)');
+        }
       }
     } catch (e) {
       console.error('[ImageController] Google Places search failed:', e.message);
@@ -115,11 +131,13 @@ exports.getPlaceImage = async (req, res) => {
   if (UNSPLASH_ACCESS_KEY) {
     try {
       const response = await axios.get('https://api.unsplash.com/search/photos', {
-        params: { query: searchQuery, per_page: 1, orientation: 'landscape' },
+        params: { query: searchQuery, per_page: 10, orientation: 'landscape' },
         headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` }
       });
-      if (response.data.results?.[0]) {
-        return sendRes(response.data.results[0].urls.regular, 'Unsplash');
+      const results = response.data.results || [];
+      if (results.length > 0) {
+        const selected = results[imgIdx % results.length];
+        return sendRes(selected.urls.regular, 'Unsplash');
       }
     } catch (e) {}
   }
@@ -128,17 +146,19 @@ exports.getPlaceImage = async (req, res) => {
   if (PEXELS_API_KEY) {
     try {
       const response = await axios.get('https://api.pexels.com/v1/search', {
-        params: { query: searchQuery, per_page: 1 },
+        params: { query: searchQuery, per_page: 10 },
         headers: { Authorization: PEXELS_API_KEY }
       });
-      if (response.data.photos?.[0]) {
-        return sendRes(response.data.photos[0].src.large2x, 'Pexels');
+      const photos = response.data.photos || [];
+      if (photos.length > 0) {
+        const selected = photos[imgIdx % photos.length];
+        return sendRes(selected.src.large2x, 'Pexels');
       }
     } catch (e) {}
   }
 
-  // Final Picsum placeholder
-  const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(query)}/1000/600`;
+  // Final Picsum placeholder with variety via seed
+  const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(query)}-${imgIdx}/1000/600`;
   sendRes(fallbackUrl, 'Picsum');
 };
 

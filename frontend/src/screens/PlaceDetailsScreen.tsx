@@ -88,6 +88,7 @@ export default function PlaceDetailsScreen() {
   const [wikiDesc, setWikiDesc] = useState<string | null>(null);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [currentZoomImg, setCurrentZoomImg] = useState<string | null>(null);
+  const [activeImgIdx, setActiveImgIdx] = useState(0);
 
   const saveTitle = place?.title || place?.name || place?.place || '';
   const isSaved = savedIds.includes(saveTitle);
@@ -198,8 +199,12 @@ export default function PlaceDetailsScreen() {
 
   const prettifyLocation = (loc: string) => {
     if (!loc) return 'India';
-    const clean = loc.split(',').map(p => p.trim()).filter(p => !p.includes('+')).join(', ');
-    return clean || loc;
+    // Remove the place name itself from the location string if it's already there
+    let clean = loc.replace(saveTitle, '').trim();
+    if (clean.startsWith(',')) clean = clean.substring(1).trim();
+    
+    const parts = clean.split(',').map(p => p.trim()).filter(p => !p.includes('+') && p.length > 0);
+    return parts.join(', ') || loc;
   };
 
   const finalDescription = place.story || place.description || wikiDesc || `Discover the soul of ${saveTitle}. A journey into nature and culture.`;
@@ -226,6 +231,10 @@ export default function PlaceDetailsScreen() {
               horizontal 
               pagingEnabled 
               showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const newIdx = Math.round(e.nativeEvent.contentOffset.x / W);
+                setActiveImgIdx(newIdx);
+              }}
             >
               {images.map((img, i) => (
                 <TouchableOpacity 
@@ -247,7 +256,13 @@ export default function PlaceDetailsScreen() {
           {images.length > 1 && (
             <View style={styles.dotsRow}>
               {images.map((_, i) => (
-                <View key={i} style={styles.dot} />
+                <View 
+                  key={i} 
+                  style={[
+                    styles.dot, 
+                    { backgroundColor: activeImgIdx === i ? '#fff' : 'rgba(255,255,255,0.4)', width: activeImgIdx === i ? 20 : 8 }
+                  ]} 
+                />
               ))}
             </View>
           )}
