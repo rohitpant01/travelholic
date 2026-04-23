@@ -44,6 +44,7 @@ const notificationSchema = new mongoose.Schema({
     postId: mongoose.Schema.Types.ObjectId,
     tripId: mongoose.Schema.Types.ObjectId,
     matchId: mongoose.Schema.Types.ObjectId,
+    reportId: mongoose.Schema.Types.ObjectId,
   },
   isRead: {
     type: Boolean,

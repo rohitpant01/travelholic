@@ -118,13 +118,25 @@ const NotificationsScreen = () => {
       return;
     }
 
-    // 🎯 PRIORITY 7: Moderation & System Notices (Instagram style alert)
+    // 🎯 PRIORITY 7: Moderation & System Notices (Instagram style alert or Navigation)
     const moderationTypes = [
       'warning_received', 'suspension_received', 'ban_received', 
       'content_removed', 'content_hidden', 'content_restored', 'report_resolved', 'content_reported'
     ];
 
     if (moderationTypes.includes(type)) {
+      // If it's a resolved report notification, navigate to details
+      if (type === 'report_resolved') {
+        if (data.reportId) {
+          navigation.navigate('ReportDetail', { reportId: data.reportId });
+        } else {
+          // Fallback if ID was stripped by old schema: go to list
+          navigation.navigate('MyReports');
+        }
+        return;
+      }
+
+      // Default: show alert for other moderation types
       Alert.alert(
         item.title || 'System Notification',
         item.message,
