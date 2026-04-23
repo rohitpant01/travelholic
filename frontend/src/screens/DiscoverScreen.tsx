@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Pressable, 
   View, Text, StyleSheet, TouchableOpacity, Animated as RNAnimated,
-  Dimensions, ActivityIndicator, Alert, Modal, Platform, TextInput
+  Dimensions, ActivityIndicator, Alert, Modal, Platform, TextInput,
+  KeyboardAvoidingView, ScrollView, Keyboard
  } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '../store';
@@ -18,6 +19,7 @@ const ShimmerPlaceholder = createShimmerPlaceholder(LinearGradient);
 
 
 import Swiper from 'react-native-deck-swiper';
+import { GOOGLE_MAPS_API_KEY } from '../api/client';
 
 // New Components
 import DiscoveryHeader from '../components/DiscoveryHeader';
@@ -60,6 +62,10 @@ export default function DiscoverScreen() {
   const [ghostMode, setGhostMode] = useState(user?.visibilityStatus === 'ghost');
   const [travelModeCity, setTravelModeCity] = useState('');
   const [manualCoords, setManualCoords] = useState<{ lat: number, lng: number } | null>(null);
+  
+  // Suggestion State
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const { location, refreshLocation } = useLocationTracker();
 
@@ -69,6 +75,56 @@ export default function DiscoverScreen() {
       setGhostMode(!ghostMode);
       await discoverAPI.updateVisibility(newStatus);
     } catch (e) {}
+  };
+
+  const fetchCitySuggestions = async (text: string) => {
+    setTravelModeCity(text);
+    if (text.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&types=(cities)&key=${GOOGLE_MAPS_API_KEY}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.status === 'OK') {
+        setSuggestions(data.predictions);
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+    }
+  };
+
+  const selectCitySuggestion = async (item: any) => {
+    Keyboard.dismiss();
+    const fallbackText = item.structured_formatting?.main_text || item.description?.split(',')[0] || '';
+    setTravelModeCity(fallbackText);
+    setSuggestions([]);
+    setShowSuggestions(false);
+
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${item.place_id}&fields=geometry&key=${GOOGLE_MAPS_API_KEY}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.status === 'OK') {
+        const lat = data.result.geometry.location.lat;
+        const lng = data.result.geometry.location.lng;
+        setManualCoords({ lat, lng });
+        Alert.alert('Travel Mode Active', `Finding travelers interested in ${fallbackText}`);
+      } else {
+        throw new Error('No geometry');
+      }
+    } catch (e) {
+      console.warn('Place details failed, falling back to name search');
+      setManualCoords({ lat: 1, lng: 1 });
+      fetchProfiles(true);
+    }
   };
 
   useEffect(() => {
@@ -431,7 +487,10 @@ export default function DiscoverScreen() {
 
       {/* Filter Modal */}
       <Modal visible={showFilterModal} transparent animationType="slide" onRequestClose={() => setShowFilterModal(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={styles.modalOverlay}
+        >
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFilterModal(false)} />
           <View style={styles.filterCard}>
             <View style={styles.filterHeader}>
@@ -459,16 +518,17 @@ export default function DiscoverScreen() {
               />
             </View>
 
-            <View style={styles.filterSection}>
+            <View style={[styles.filterSection, { zIndex: 9999 }]}>
               <Text style={styles.filterLabel}>Travel Mode (Explore Other Cities)</Text>
-              <View style={styles.citySearchContainer}>
+              <View style={[styles.citySearchContainer, showSuggestions && suggestions.length > 0 && { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>
                 <Ionicons name="search" size={18} color={theme.textSecondary} />
                 <TextInput
                   placeholder="Enter city name..."
                   placeholderTextColor={theme.textLight}
                   style={styles.cityInput}
                   value={travelModeCity}
-                  onChangeText={setTravelModeCity}
+                  onChangeText={fetchCitySuggestions}
+                  onFocus={() => { if (travelModeCity.length >= 3) setShowSuggestions(true); }}
                   onSubmitEditing={async () => {
                     if (!travelModeCity) {
                       setManualCoords(null);
@@ -481,12 +541,10 @@ export default function DiscoverScreen() {
                         setManualCoords({ lat: geo[0].latitude, lng: geo[0].longitude });
                         Alert.alert('Travel Buddy Mode', `Finding travelers interested in ${travelModeCity}`);
                       } else {
-                        // Fallback: Just search by string on backend
-                        setManualCoords({ lat: 1, lng: 1 }); // Trigger search mode
+                        setManualCoords({ lat: 1, lng: 1 }); 
                         fetchProfiles(true);
                       }
                     } catch (e) {
-                      // Retry pattern or name-based search fallback
                       console.warn('Geocoding failed, falling back to name search');
                       setManualCoords({ lat: 1, lng: 1 });
                       fetchProfiles(true);
@@ -494,6 +552,24 @@ export default function DiscoverScreen() {
                   }}
                 />
               </View>
+              {showSuggestions && suggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 180 }} keyboardShouldPersistTaps="always">
+                    {suggestions.map((item, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.suggestionItem}
+                        onPress={() => selectCitySuggestion(item)}
+                      >
+                        <Ionicons name="location-outline" size={18} color={theme.teal} style={{ marginRight: 8 }} />
+                        <Text style={styles.suggestionText} numberOfLines={1}>
+                          {item.description}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
               {manualCoords && (
                 <TouchableOpacity onPress={() => { setManualCoords(null); setTravelModeCity(''); fetchProfiles(); }} style={styles.resetTravelMode}>
                   <Text style={styles.resetTravelText}>Reset to My Location</Text>
@@ -529,7 +605,7 @@ export default function DiscoverScreen() {
               <Text style={styles.applyBtnText}>Apply Settings</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Email Verification Pop-up */}
@@ -704,5 +780,29 @@ const getStyles = (theme: any) => StyleSheet.create({
     color: theme.teal,
     fontWeight: '700',
     textDecorationLine: 'underline',
+  },
+  suggestionsContainer: {
+    backgroundColor: theme.white,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: theme.border,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    ...SHADOW.md,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: theme.text,
+    flex: 1,
   },
 });
