@@ -96,29 +96,19 @@ exports.getPlaceImagesBatch = async (req, res) => {
 
   // ── 1. Google Places (primary) ────────────────────────────────────────────
   if (GOOGLE_PLACES_API_KEY) {
-      // 1a. Initial search
-      let gRes = await axios.get(
+    try {
+      // 1a. Initial search (Top 20 results)
+      const gRes = await axios.get(
         'https://maps.googleapis.com/maps/api/place/textsearch/json',
         { params: { query: searchQuery, key: GOOGLE_PLACES_API_KEY } }
       );
 
       let results = gRes.data.results || [];
-      
-      // 1b. Broaden search if first attempt was too specific
-      if (results.length === 0 || (results[0]?.photos?.length || 0) < 3) {
-        const broadRes = await axios.get(
-          'https://maps.googleapis.com/maps/api/place/textsearch/json',
-          { params: { query: `${query}`, key: GOOGLE_PLACES_API_KEY } }
-        );
-        if (broadRes.data.results?.length > 0) {
-           results = [...results, ...broadRes.data.results];
-        }
-      }
-
       const allRefs = [];
       const seen = new Set();
 
-      for (const place of results.slice(0, 15)) {
+      // Collect as many unique photo references as possible
+      for (const place of results.slice(0, 20)) {
         if (place.photos) {
           place.photos.forEach(p => {
             if (p.photo_reference && !seen.has(p.photo_reference)) {
@@ -129,68 +119,53 @@ exports.getPlaceImagesBatch = async (req, res) => {
         }
       }
 
-      if (allRefs.length > 0) {
-        const finalCount = Math.min(allRefs.length, count);
-        const images = allRefs.slice(0, finalCount).map(ref => 
-          `${BACKEND_URL}/api/images/google-photo?ref=${ref}`
-        );
-
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        return res.json({ images, source: 'Google Places' });
+      // Shuffle Google Refs (Fisher-Yates)
+      for (let i = allRefs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allRefs[i], allRefs[j]] = [allRefs[j], allRefs[i]];
       }
-    } catch (e) {
-      console.error('[ImageController] Google Places batch failed:', e.message);
-    }
-  }
 
-  // ── 2. Unsplash (fallback) ────────────────────────────────────────────────
-  if (UNSPLASH_ACCESS_KEY) {
-    try {
-      const response = await axios.get('https://api.unsplash.com/search/photos', {
-        params: { query: searchQuery, per_page: Math.max(count, 15), orientation: 'landscape' },
-        headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` }
-      });
-      const results = response.data.results || [];
-      if (results.length > 0) {
-        // Filter out any potential duplicates from Unsplash
-        const seenUrls = new Set();
-        const uniqueImgs = [];
-        for (const r of results) {
-          if (!seenUrls.has(r.urls.regular)) {
-             seenUrls.add(r.urls.regular);
-             uniqueImgs.push(r.urls.regular);
-          }
-          if (uniqueImgs.length >= count) break;
+      let finalImages = allRefs.map(ref => 
+        `${BACKEND_URL}/api/images/google-photo?ref=${ref}&t=${Date.now()}`
+      );
+
+      // ── 2. Mix in Fallbacks if needed (Unsplash) ──────────────────────────
+      if (finalImages.length < count && UNSPLASH_ACCESS_KEY) {
+        try {
+          const uRes = await axios.get('https://api.unsplash.com/search/photos', {
+            params: { query: searchQuery, per_page: 15, orientation: 'landscape' },
+            headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` }
+          });
+          const uResults = uRes.data.results || [];
+          uResults.forEach(r => {
+            if (finalImages.length < count * 2) { // don't overfill
+               finalImages.push(r.urls.regular);
+            }
+          });
+        } catch (e) {
+          console.warn('[ImageController] Mixed fallback failed:', e.message);
         }
-        return res.json({ images: uniqueImgs, source: 'Unsplash' });
+      }
+
+      if (finalImages.length > 0) {
+        // Final Shuffle of the mixed result
+        for (let i = finalImages.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [finalImages[i], finalImages[j]] = [finalImages[j], finalImages[i]];
+        }
+
+        const selection = finalImages.slice(0, count);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.json({ images: selection, source: 'Mixed/Google/Unsplash' });
       }
     } catch (e) {
-      console.error('[ImageController] Unsplash batch failed:', e.message);
+      console.error('[ImageController] Production batch failed:', e.message);
     }
   }
 
-  // ── 3. Pexels (fallback) ──────────────────────────────────────────────────
-  if (PEXELS_API_KEY) {
-    try {
-      const response = await axios.get('https://api.pexels.com/v1/search', {
-        params: { query: searchQuery, per_page: Math.max(count, 10) },
-        headers: { Authorization: PEXELS_API_KEY }
-      });
-      const photos = response.data.photos || [];
-      if (photos.length > 0) {
-        const images = Array.from({ length: count }, (_, i) =>
-          photos[i % photos.length].src.large2x
-        );
-        return res.json({ images, source: 'Pexels' });
-      }
-    } catch (e) {
-      console.error('[ImageController] Pexels batch failed:', e.message);
-    }
-  }
-
-  // ── 4. Picsum seeds (last resort, always unique) ──────────────────────────
+  // ── 3. Last Resort: Picsum seeds ──────────────────────────────────────────
   const images = Array.from({ length: count }, (_, i) =>
-    `https://picsum.photos/seed/${encodeURIComponent(query)}-${i}/1000/600`
+    `https://picsum.photos/seed/${encodeURIComponent(query)}-${i}-${Date.now()}/1000/600`
   );
   return res.json({ images, source: 'Picsum' });
 };
