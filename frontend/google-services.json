@@ -14,7 +14,7 @@
       },
       "oauth_client": [
         {
-          "client_id": "898480493172-jk9gdd6ikil0e4285gcs7e424j5do5qd.apps.googleusercontent.com",
+          "client_id": "898480493172-afp743ui84k06fbpqs74ffpi3jo59ghr.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.travelholic",
@@ -22,7 +22,15 @@
           }
         },
         {
-          "client_id": "898480493172-uel9195jfcbbrp655ajv21frtsblpd5g.apps.googleusercontent.com",
+          "client_id": "898480493172-scuv56gafptnpbasdjfo8ik43s5vu5ac.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.travelholic",
+            "certificate_hash": "11d2006b2174e6d9017ff84ade742a3792e8f319"
+          }
+        },
+        {
+          "client_id": "898480493172-k5shci2bp1eont9oolqm93p40vq7stvn.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -35,8 +43,15 @@
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "898480493172-uel9195jfcbbrp655ajv21frtsblpd5g.apps.googleusercontent.com",
+              "client_id": "898480493172-k5shci2bp1eont9oolqm93p40vq7stvn.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "898480493172-4pbsleee1trrr9t4apj6a88upng3k9t2.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.travelholic"
+              }
             }
           ]
         }
