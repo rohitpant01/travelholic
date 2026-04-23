@@ -38,6 +38,12 @@ const getProfile = async (req, res) => {
     const userObj = user.toObject();
     userObj.matchesCount = actualMatchesCount;
 
+    // Persist to DB to avoid stale data on next load
+    if (user.matchesCount !== actualMatchesCount) {
+       user.matchesCount = actualMatchesCount;
+       await user.save({ validateBeforeSave: false });
+    }
+
     res.json({ user: { ...userObj, viewsCount } });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -123,6 +129,12 @@ const getUserById = async (req, res) => {
     
     delete userObj.followers;
     delete userObj.following;
+
+    // Persist for data health
+    if (targetUser.matchesCount !== actualMatchesCount) {
+      targetUser.matchesCount = actualMatchesCount;
+      await targetUser.save({ validateBeforeSave: false });
+    }
 
     // 👁️ Record Profile Visit (Custom logic requested)
     if (req.user?._id && req.user._id.toString() !== targetUser._id.toString()) {
