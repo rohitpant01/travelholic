@@ -135,16 +135,6 @@ export default function DiscoverScreen() {
   }, [user?.isEmailVerified, user?.registrationStep]);
 
   const fetchProfiles = useCallback(async (reset = false) => {
-    if (loading && !reset) return;
-    if (!reset && !hasMore) return;
-
-    if (reset) {
-      setLoading(true);
-    } else {
-      setRefreshing(true);
-    }
-
-  const fetchProfiles = useCallback(async (reset = false) => {
     if (!hasMore && !reset) return;
 
     try {
