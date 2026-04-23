@@ -86,6 +86,8 @@ import ProfileViewsScreen from './src/screens/ProfileViewsScreen';
 import ChecklistScreen from './src/screens/ChecklistScreen';
 import ChecklistDetailScreen from './src/screens/ChecklistDetailScreen';
 import AdminPanelScreen from './src/screens/AdminPanelScreen';
+import MyReportsScreen from './src/screens/MyReportsScreen';
+import ReportDetailScreen from './src/screens/ReportDetailScreen';
 
 import apiClient from './src/api/client';
 
@@ -700,6 +702,8 @@ function AppNavigator() {
             <Stack.Screen name="ProfileViews" component={ProfileViewsScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="ChecklistDetail" component={ChecklistDetailScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="MyReports" component={MyReportsScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="AdminPanel" component={AdminPanelScreen} options={{ animation: 'slide_from_bottom', headerShown: false }} />
           </>
         )}

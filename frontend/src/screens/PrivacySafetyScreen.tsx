@@ -89,6 +89,17 @@ export default function PrivacySafetyScreen() {
             </View>
           </View>
         ))}
+
+        <TouchableOpacity 
+          style={styles.reportsLink} 
+          onPress={() => navigation.navigate('MyReports' as any)}
+        >
+          <View style={styles.reportsLinkContent}>
+            <Ionicons name="flag-outline" size={20} color={theme.teal} />
+            <Text style={styles.reportsLinkText}>View My Filed Reports</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -112,4 +123,25 @@ const getStyles = (theme: any) => StyleSheet.create({
   listItem: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8, paddingRight: 10 },
   bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.teal, marginTop: 8, marginRight: 10 },
   itemText: { flex: 1, fontSize: FONTS.sm, color: theme.textSecondary, lineHeight: 20 },
+  reportsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.white,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.lg,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  reportsLinkContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reportsLinkText: {
+    fontSize: FONTS.base,
+    fontWeight: '600',
+    color: theme.text,
+    marginLeft: 12,
+  },
 });

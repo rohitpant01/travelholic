@@ -48,4 +48,6 @@ export type RootStackParamList = {
   AdminPanel: undefined;
   Checklist: undefined;
   ChecklistDetail: { checklistId: string };
+  MyReports: undefined;
+  ReportDetail: { reportId: string };
 };

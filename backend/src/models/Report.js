@@ -28,6 +28,13 @@ const reportSchema = new mongoose.Schema({
     maxlength: 500
   },
 
+  // Immutable content snapshot at time of reporting
+  targetSnapshot: {
+    type: Object,
+    default: {}
+  },
+
+
   // Weighted scoring
   reporterTrustScore: { type: Number, default: 50 },
   weight: { type: Number, default: 1.0 },

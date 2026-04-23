@@ -17,6 +17,8 @@ const {
   unblockUser,
   getBlockedUsers,
   reportUser,
+  getMyReports,
+  getMyReportDetails,
   getWhoLikedMe,
   followUser,
   addCompletedTrip,
@@ -63,6 +65,8 @@ router.put('/distance', protect, updateDistance);
 
 // ── Account actions ───────────────────────────────────────────
 router.post('/report', protect, reportUser);
+router.get('/reports', protect, getMyReports);
+router.get('/reports/:reportId/details', protect, getMyReportDetails);
 router.delete('/account', protect, requestAccountDeletion);
 router.post('/cancel-deletion', protect, cancelAccountDeletion);
 router.post('/deactivate', protect, deactivateAccount);

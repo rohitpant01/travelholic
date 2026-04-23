@@ -888,6 +888,43 @@ const reportUser = async (req, res) => {
   }
 };
 
+// @desc    Get user's filed reports
+// @route   GET /api/user/reports
+// @access  Private
+const getMyReports = async (req, res) => {
+  try {
+    const Report = require('../models/Report');
+    const reports = await Report.find({ reportedBy: req.user._id })
+      .sort({ createdAt: -1 })
+      .select('type reason status createdAt resolvedAt resolution details targetSnapshot targetId');
+
+    res.json({ reports });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Get details of a specific report filed by the user
+// @route   GET /api/user/reports/:reportId/details
+// @access  Private
+const getMyReportDetails = async (req, res) => {
+  try {
+    const Report = require('../models/Report');
+    const report = await Report.findOne({
+       _id: req.params.reportId,
+       reportedBy: req.user._id 
+    }).select('-reporterTrustScore -weight');
+
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    res.json({ report });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // @desc    Save a destination to bucket list
 // @route   POST /api/user/saved-destinations
 // @access  Private

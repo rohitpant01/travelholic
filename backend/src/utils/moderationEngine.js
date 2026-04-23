@@ -49,7 +49,47 @@ const processReport = async (reporterId, targetId, targetType, reason, details =
       weight = MASS_REPORT_WEIGHT_PENALTY;
     }
 
-    // 3. Create report (unique index prevents duplicates)
+    // 3. Immutable Snapshot Construction
+    let targetSnapshot = {};
+    try {
+      if (targetType === 'user') {
+        const targetUser = await User.findById(targetId).select('firstName lastName username photos bio location.city');
+        if (targetUser) {
+          targetSnapshot = {
+             displayName: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim(),
+             username: targetUser.username,
+             photo: targetUser.photos?.find(p => p.isProfile)?.url || targetUser.photos?.[0]?.url || null,
+             bio: targetUser.bio,
+             city: targetUser.location?.city
+          };
+        }
+      } else if (targetType === 'post') {
+        const targetPost = await Post.findById(targetId).populate('userId', 'firstName lastName photos');
+        if (targetPost) {
+           targetSnapshot = {
+              text: targetPost.content || targetPost.caption || '',
+              images: targetPost.media || targetPost.photos || targetPost.images || [], // handle various post schema structures
+              authorName: targetPost.userId ? `${targetPost.userId.firstName || ''} ${targetPost.userId.lastName || ''}`.trim() : 'Unknown',
+              authorPhoto: targetPost.userId?.photos?.find(p => p.isProfile)?.url || targetPost.userId?.photos?.[0]?.url || null,
+              createdAt: targetPost.createdAt
+           };
+        }
+      } else if (targetType === 'comment') {
+        const targetComment = await Comment.findById(targetId).populate('userId', 'firstName lastName photos');
+        if (targetComment) {
+           targetSnapshot = {
+              text: targetComment.text || targetComment.content || '',
+              authorName: targetComment.userId ? `${targetComment.userId.firstName || ''} ${targetComment.userId.lastName || ''}`.trim() : 'Unknown',
+              authorPhoto: targetComment.userId?.photos?.find(p => p.isProfile)?.url || targetComment.userId?.photos?.[0]?.url || null,
+              createdAt: targetComment.createdAt
+           };
+        }
+      }
+    } catch (snapshotErr) {
+       console.warn(`[MODERATION] Failed to build snapshot for ${targetType} ${targetId}`, snapshotErr);
+    }
+
+    // 4. Create report (unique index prevents duplicates)
     let report;
     try {
       report = await Report.create({
@@ -59,7 +99,8 @@ const processReport = async (reporterId, targetId, targetType, reason, details =
         reason,
         details,
         reporterTrustScore: trustScore,
-        weight
+        weight,
+        targetSnapshot
       });
     } catch (err) {
       if (err.code === 11000) {
@@ -69,13 +110,13 @@ const processReport = async (reporterId, targetId, targetType, reason, details =
       throw err;
     }
 
-    // 4. Calculate aggregate weighted score for this target
+    // 5. Calculate aggregate weighted score for this target
     const { weightedScore, uniqueReporters } = await calculateWeightedScore(targetId, targetType);
 
-    // 5. Update target's report stats
+    // 6. Update target's report stats
     await updateTargetReportStats(targetId, targetType, weightedScore, uniqueReporters);
 
-    // 6. Check threshold for auto-hide
+    // 7. Check threshold for auto-hide
     let autoHidden = false;
     const threshold = THRESHOLDS[targetType] || 3.0;
     if (weightedScore >= threshold) {

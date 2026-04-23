@@ -51,6 +51,8 @@ export const userAPI = {
   getBlockedUsers: () => apiClient.get('/user/blocked'),
   reportUser: (data: { targetUserId: string; reason: string; details?: string; matchId?: string }) => 
     apiClient.post('/user/report', data),
+  getMyReports: () => apiClient.get('/user/reports'),
+  getMyReportDetails: (reportId: string) => apiClient.get(`/user/reports/${reportId}/details`),
   deleteAccount: (password: string) => apiClient.delete('/user/account', { data: { password } }),
   restoreAccount: () => apiClient.post('/user/cancel-deletion'),
 
