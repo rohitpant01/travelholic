@@ -555,8 +555,9 @@ const blockUser = async (req, res) => {
     const matchExists = await Match.findOneAndDelete({ users: { $all: [req.user._id, targetUserId] } });
     
     const userBeforeBlock = await User.findById(req.user._id).select('likedBy matches following');
-    const wasLiker = userBeforeBlock.likedBy?.some(id => id.toString() === targetUserId);
-    const wasFollowingTarget = userBeforeBlock.following?.some(id => id.toString() === targetUserId);
+    const wasLiker = userBeforeBlock.likedBy?.some(id => id.toString() === targetUserId.toString());
+    const wasMatch = userBeforeBlock.matches?.some(id => id.toString() === targetUserId.toString());
+    const wasFollowingTarget = userBeforeBlock.following?.some(id => id.toString() === targetUserId.toString());
 
     await User.findByIdAndUpdate(req.user._id, {
       $pull: { 
@@ -568,7 +569,7 @@ const blockUser = async (req, res) => {
         followers: targetUserId
       },
       ...(wasLiker ? { $inc: { likesReceived: -1 } } : {}),
-      ...(matchExists ? { $inc: { matchesCount: -1 } } : {})
+      ...(wasMatch ? { $inc: { matchesCount: -1 } } : {})
     });
     
     await User.findByIdAndUpdate(targetUserId, {
@@ -578,8 +579,21 @@ const blockUser = async (req, res) => {
         following: req.user._id,
         followers: req.user._id 
       },
-      ...(matchExists ? { $inc: { matchesCount: -1 } } : {})
+      ...(wasMatch ? { $inc: { matchesCount: -1 } } : {})
     });
+
+    // Fire Socket remove event to sync Frontend Match Counts instantly
+    if (wasMatch || matchExists) {
+      try {
+        const { getIO } = require('../socket/socketHandler');
+        const io = getIO();
+        const fallbackMatchId = matchExists ? matchExists._id : targetUserId;
+        io.to(req.user._id.toString()).emit('match_removed', { matchId: fallbackMatchId, targetUserId });
+        io.to(targetUserId.toString()).emit('match_removed', { matchId: fallbackMatchId, targetUserId: req.user._id });
+      } catch (socketErr) {
+        console.warn('[BLOCK SOCKET ERROR]', socketErr.message);
+      }
+    }
 
     res.json({ message: 'User blocked' });
   } catch (error) {
