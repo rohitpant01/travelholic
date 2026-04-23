@@ -118,19 +118,15 @@ export default function UserDetailScreen() {
       }
 
       const res = await discoverAPI.like(userId);
-      // Synchronize Discovery state
-      if (route.params?.onActionPerformed) {
-        route.params.onActionPerformed();
-      }
 
       if (res.data.match) {
         Alert.alert("It's a Match! 🎉", `You and ${profile.firstName} have matched!`, [
           { text: "Message", onPress: handleMessage },
-          { text: "Great!", onPress: () => navigation.goBack() }
+          { text: "Great!", onPress: () => navigation.navigate('MainTabs', { screen: 'Travelers', params: { lastActionUserId: userId } } as any) }
         ]);
       } else {
         Alert.alert("Liked! ❤️", `We've let ${profile.firstName} know you're interested.`, [
-          { text: "OK", onPress: () => navigation.goBack() }
+          { text: "OK", onPress: () => navigation.navigate('MainTabs', { screen: 'Travelers', params: { lastActionUserId: userId } } as any) }
         ]);
       }
     } catch (e) {
@@ -142,11 +138,7 @@ export default function UserDetailScreen() {
   const handlePass = async () => {
     try {
       await discoverAPI.skip(userId);
-      // Synchronize Discovery state
-      if (route.params?.onActionPerformed) {
-        route.params.onActionPerformed();
-      }
-      navigation.goBack();
+      navigation.navigate('MainTabs', { screen: 'Travelers', params: { lastActionUserId: userId } } as any);
     } catch (e) {
       console.error('Pass error:', e);
     }

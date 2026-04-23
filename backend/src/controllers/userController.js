@@ -194,6 +194,7 @@ const trackProfileVisit = async (viewerId, profileOwnerId) => {
       await ProfileVisit.create({ viewerId, profileOwnerId });
 
       // 8. Notify the owner (Optional, but great for engagement)
+      console.log(`[VISIT_TRACKER] Sending notification to ${profileOwnerId} from viewer ${viewerId}`);
       await createNotification({
         recipient: profileOwnerId,
         sender: viewerId,
@@ -202,6 +203,8 @@ const trackProfileVisit = async (viewerId, profileOwnerId) => {
         message: `${viewer.firstName || 'Someone'} viewed your profile.`,
         data: { viewerId }
       });
+    } else {
+      console.log(`[VISIT_TRACKER] Skipping visit record: Recent visit exists within 24h.`);
     }
   } catch (err) {
     console.warn('[VISIT_TRACKER] Failed to record visit:', err.message);
@@ -323,27 +326,28 @@ const getWhoLikedMe = async (req, res) => {
 // @access  Private
 const getProfileViews = async (req, res) => {
   try {
-    const views = await ProfileView.find({ viewee: req.user._id })
-      .populate('viewer', 'firstName lastName photos age city country gender isPhotoVerified isOnline')
-      .sort({ viewedAt: -1 })
+    const views = await ProfileVisit.find({ profileOwnerId: req.user._id })
+      .populate('viewerId', 'firstName lastName photos age city country gender isPhotoVerified isOnline')
+      .sort({ createdAt: -1 })
       .limit(50);
 
-    const sanitized = views.filter(v => v.viewer).map(v => ({
-      _id: v.viewer._id,
-      firstName: v.viewer.firstName,
-      lastName: v.viewer.lastName,
-      age: v.viewer.age,
-      city: v.viewer.city,
-      country: v.viewer.country,
-      gender: v.viewer.gender,
-      isPhotoVerified: v.viewer.isPhotoVerified,
-      isOnline: v.viewer.isOnline,
-      viewedAt: v.viewedAt,
-      profilePhoto: v.viewer.photos?.find(p => p.isProfile)?.url || v.viewer.photos?.[0]?.url || null
+    const sanitized = views.filter(v => v.viewerId).map(v => ({
+      _id: v.viewerId._id,
+      firstName: v.viewerId.firstName,
+      lastName: v.viewerId.lastName,
+      age: v.viewerId.age,
+      city: v.viewerId.city,
+      country: v.viewerId.country,
+      gender: v.viewerId.gender,
+      isPhotoVerified: v.viewerId.isPhotoVerified,
+      isOnline: v.viewerId.isOnline,
+      profilePhoto: v.viewerId.photos?.find(p => p.isProfile)?.url || v.viewerId.photos?.[0]?.url,
+      viewedAt: v.createdAt
     }));
 
     res.json({ views: sanitized, count: sanitized.length });
   } catch (error) {
+    console.error('[getProfileViews] Error:', error);
     res.status(500).json({ error: error.message });
   }
 };

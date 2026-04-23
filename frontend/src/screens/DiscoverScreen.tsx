@@ -212,6 +212,15 @@ export default function DiscoverScreen() {
     dispatch(fetchNotifications());
   }, [viewMode, manualCoords, travelModeCity]); 
 
+  // ✅ SYNC: Handle user removal after action in Detail screen (Serializable fix)
+  useEffect(() => {
+    const actId = route.params?.lastActionUserId;
+    if (actId) {
+      setProfiles(prev => prev.filter(p => p._id !== actId));
+      // Clear param so it doesn't trigger again on next focus
+      navigation.setParams({ lastActionUserId: undefined });
+    }
+  }, [route.params?.lastActionUserId]);
 
   const handleLike = async (index: number | string) => {
     const profile = typeof index === 'number' ? profiles[index] : profiles.find(p => p._id === index);
@@ -269,10 +278,7 @@ export default function DiscoverScreen() {
         profile={profile}
         onPressProfile={(p) => navigation.navigate('UserDetail', {
           userId: p._id,
-          profile: p,
-          onActionPerformed: () => {
-            setProfiles(prev => prev.filter(item => item._id !== p._id));
-          }
+          profile: p
         })}
       />
     </View>
@@ -434,10 +440,7 @@ export default function DiscoverScreen() {
                 ghostMode={ghostMode}
                 onProfilePress={(p: any) => navigation.navigate('UserDetail', { 
                   userId: p._id, 
-                  profile: p,
-                  onActionPerformed: () => {
-                    setProfiles(prev => prev.filter(item => item._id !== p._id));
-                  }
+                  profile: p
                 })}
                 onLike={(p: any) => handleLike(p._id)}
                 onSuperLike={(p: any) => handleSuperLike(p._id)}
