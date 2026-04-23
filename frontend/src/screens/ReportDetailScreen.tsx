@@ -56,7 +56,7 @@ export default function ReportDetailScreen() {
       <SafeAreaView style={styles.errorContainer}>
         <Ionicons name="warning-outline" size={48} color="#ef4444" />
         <Text style={styles.errorText}>Report not found</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MyReports')}>
           <Text style={styles.backBtnText}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -69,7 +69,7 @@ export default function ReportDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MyReports')} style={styles.iconBtn}>
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Report Details</Text>

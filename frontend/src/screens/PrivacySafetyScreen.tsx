@@ -63,7 +63,7 @@ export default function PrivacySafetyScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : (navigation as any).navigate('MainTabs')} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Privacy & Safety</Text>
