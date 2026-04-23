@@ -23,7 +23,8 @@ export const fetchDiscoveryProfiles = createAsyncThunk(
         lat: location?.lat, 
         lng: location?.lng,
         maxDistance,
-        searchCity
+        searchCity,
+        travelBuddy: !!searchCity
       });
       return res.data;
     } catch (err: any) {

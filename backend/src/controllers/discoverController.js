@@ -179,6 +179,9 @@ const getDiscoverProfiles = async (req, res) => {
       ...(isMapMode ? {} : { 'photos.0': { $exists: true } }),
     };
 
+    // ── LOGGING (Debug Travel Mode) ──────────────────────────────────────────
+    console.log(`[Discover] 🔍 Mode: ${searchCity ? 'TRAVEL MODE (' + searchCity + ')' : 'PROXIMITY MODE'}, Lat: ${activeLat}, Lng: ${activeLng}, Radius: ${maxDistance}km`);
+
     // 2. Location/Search Core
     if (useGeo && !searchCity) {
       // PROXIMITY MODE
@@ -197,6 +200,7 @@ const getDiscoverProfiles = async (req, res) => {
       const searchMatch = { ...baseMatch };
       
       if (searchCity) {
+        console.log(`[Discover] 📍 Matching city: "${searchCity}"`);
         // If searching for travel buddies, match destination city
         searchMatch.$or = [
             { 'destination.city': { $regex: searchCity, $options: 'i' } },
