@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+const { protect, protectOptional } = require('../middleware/auth');
 const { uploadPhoto, uploadSelfie } = require('../config/cloudinary');
 const {
   getProfile,
@@ -91,6 +91,6 @@ router.post('/sync-saved-destinations', protect, syncSavedDestinations);
 
 // ── View another user (PUBLIC) ────────────────────────────────
 // ⚠️ Keep this LAST. Matches any ID or string like "profile" if not matched above.
-router.get('/:userId', getUserById);
+router.get('/:userId', protectOptional, getUserById);
 
 module.exports = router;

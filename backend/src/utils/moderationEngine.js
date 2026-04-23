@@ -50,17 +50,17 @@ const processReport = async (reporterId, targetId, targetType, reason, details =
     }
 
     // 3. Immutable Snapshot Construction
-    let targetSnapshot = {};
+    let targetSnapshot = null;
     try {
       if (targetType === 'user') {
-        const targetUser = await User.findById(targetId).select('firstName lastName username photos bio location.city');
+        const targetUser = await User.findById(targetId).select('firstName lastName username photos bio city location.city');
         if (targetUser) {
           targetSnapshot = {
              displayName: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim(),
              username: targetUser.username,
              photo: targetUser.photos?.find(p => p.isProfile)?.url || targetUser.photos?.[0]?.url || null,
              bio: targetUser.bio,
-             city: targetUser.location?.city
+             city: targetUser.city || targetUser.location?.city || 'Unknown'
           };
         }
       } else if (targetType === 'post') {
@@ -68,7 +68,7 @@ const processReport = async (reporterId, targetId, targetType, reason, details =
         if (targetPost) {
            targetSnapshot = {
               text: targetPost.content || targetPost.caption || '',
-              images: targetPost.media || targetPost.photos || targetPost.images || [], // handle various post schema structures
+              images: targetPost.images || targetPost.media || targetPost.photos || [],
               authorName: targetPost.userId ? `${targetPost.userId.firstName || ''} ${targetPost.userId.lastName || ''}`.trim() : 'Unknown',
               authorPhoto: targetPost.userId?.photos?.find(p => p.isProfile)?.url || targetPost.userId?.photos?.[0]?.url || null,
               createdAt: targetPost.createdAt
@@ -86,7 +86,12 @@ const processReport = async (reporterId, targetId, targetType, reason, details =
         }
       }
     } catch (snapshotErr) {
-       console.warn(`[MODERATION] Failed to build snapshot for ${targetType} ${targetId}`, snapshotErr);
+       console.warn(`[MODERATION] Failed to build snapshot for ${targetType} ${targetId}:`, snapshotErr.message);
+    }
+
+    // Ensure we don't save empty objects as snapshots
+    if (targetSnapshot && Object.keys(targetSnapshot).length === 0) {
+      targetSnapshot = null;
     }
 
     // 4. Create report (unique index prevents duplicates)

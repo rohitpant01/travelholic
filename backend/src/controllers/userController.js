@@ -4,7 +4,6 @@ const { cloudinary, deleteImage } = require('../config/cloudinary');
 const { compareFaces } = require('../utils/faceVerification');
 const { updateDeviceToken } = require('../utils/deviceUtility');
 const ProfileVisit = require('../models/ProfileVisit');
-const ProfileView = require('../models/ProfileView'); // Legacy fallback or delete
 const { createNotification } = require('../utils/notificationService');
 
 // @desc    Get own profile
@@ -33,7 +32,7 @@ const getProfile = async (req, res) => {
       }
     });
 
-    const viewsCount = await ProfileView.countDocuments({ viewee: req.user._id });
+    const viewsCount = await ProfileVisit.countDocuments({ profileOwnerId: req.user._id });
     
     const userObj = user.toObject();
     userObj.matchesCount = actualMatchesCount;

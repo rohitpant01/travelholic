@@ -64,6 +64,7 @@ export default function ReportDetailScreen() {
   }
 
   const snapshot = report.targetSnapshot;
+  const hasSnapshot = snapshot && Object.keys(snapshot).length > 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -104,7 +105,7 @@ export default function ReportDetailScreen() {
           <Text style={styles.cardTitle}>Reported Content</Text>
           <Text style={styles.helperText}>This is a secure snapshot of the content at the time you reported it.</Text>
 
-          {snapshot ? (
+          {hasSnapshot ? (
             <View style={styles.snapshotContainer}>
               {/* If User Snapshot */}
               {report.type === 'user' && (
