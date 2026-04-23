@@ -492,8 +492,8 @@ export default function EditProfileScreen() {
             <Text style={styles.charCount}>{bio.length}/200</Text>
           </View>
 
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+          <View style={[styles.row, { zIndex: activeField === 'city' && showSuggestions ? 9999 : 1 }]}>
+            <View style={[styles.inputGroup, { flex: 1, marginRight: 8, zIndex: 999 }]}>
               <Text style={styles.label}>City</Text>
               <TextInput
                 style={styles.input}
@@ -558,10 +558,10 @@ export default function EditProfileScreen() {
         </View>
 
         {/* Travel Matching Section */}
-        <View style={styles.infoSection}>
+        <View style={[styles.infoSection, { zIndex: (activeField === 'origin' || activeField === 'destination') && showSuggestions ? 9999 : 1 }]}>
           <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Travel Plan</Text>
           
-          <View style={styles.inputGroup}>
+          <View style={[styles.inputGroup, { zIndex: activeField === 'origin' && showSuggestions ? 999 : 1 }]}>
             <Text style={styles.label}>Departure City (Origin)</Text>
             <TextInput
               style={styles.input}
@@ -593,7 +593,7 @@ export default function EditProfileScreen() {
             )}
           </View>
 
-          <View style={styles.inputGroup}>
+          <View style={[styles.inputGroup, { zIndex: activeField === 'destination' && showSuggestions ? 999 : 1 }]}>
             <Text style={styles.label}>Destination City</Text>
             <TextInput
               style={styles.input}

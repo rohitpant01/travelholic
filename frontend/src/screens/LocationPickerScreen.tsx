@@ -164,23 +164,6 @@ const LocationPickerScreen = () => {
         </View>
       </View>
 
-      {/* Suggestions List */}
-      {suggestions.length > 0 && (
-        <View style={styles.suggestionsContainer}>
-          <FlatList
-            data={suggestions}
-            keyExtractor={(item) => item.place_id}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.suggestionItem} onPress={() => selectSuggestion(item)}>
-                <Ionicons name="location-outline" size={20} color={COLORS.teal} />
-                <Text style={styles.suggestionText} numberOfLines={1}>{item.description}</Text>
-              </TouchableOpacity>
-            )}
-            keyboardShouldPersistTaps="always"
-          />
-        </View>
-      )}
-
       {/* Map */}
       <MapView
         ref={mapRef}
@@ -197,6 +180,23 @@ const LocationPickerScreen = () => {
           />
         )}
       </MapView>
+
+      {/* Suggestions List (Moved after MapView to fix Android z-index overlap) */}
+      {suggestions.length > 0 && (
+        <View style={styles.suggestionsContainer}>
+          <FlatList
+            data={suggestions}
+            keyExtractor={(item) => item.place_id}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.suggestionItem} onPress={() => selectSuggestion(item)}>
+                <Ionicons name="location-outline" size={20} color={COLORS.teal} />
+                <Text style={styles.suggestionText} numberOfLines={1}>{item.description}</Text>
+              </TouchableOpacity>
+            )}
+            keyboardShouldPersistTaps="always"
+          />
+        </View>
+      )}
 
       {/* Footer Confirm */}
       {selectedLocation && (
