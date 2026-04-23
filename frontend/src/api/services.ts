@@ -79,6 +79,7 @@ export const userAPI = {
 // ============================================================
 // DISCOVER API
 // ============================================================
+export const discoverAPI = {
   getProfiles: (options: { 
     lat?: number; 
     lng?: number; 
