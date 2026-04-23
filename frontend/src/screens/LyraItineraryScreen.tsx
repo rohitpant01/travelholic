@@ -13,6 +13,7 @@ import { useAppTheme, FONTS, RADIUS, SHADOW, SPACING } from '../utils/theme';
 import { lyraAPI } from '../api/services';
 
 import WebDownloadBanner from '../components/WebDownloadBanner';
+import AILoadingView from '../components/AILoadingView';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -538,7 +539,7 @@ export default function LyraItineraryScreen() {
     setData(updated);
   };
 
-  if (loading) return <ShimmerLoader />;
+  if (loading) return <AILoadingView />;
   if (!data) return null;
 
   const currentDay = data.itinerary?.[activeDay];

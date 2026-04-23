@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Pressable, 
   View, Text, StyleSheet, Modal,
   TouchableOpacity, TextInput, Image,
   ScrollView, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Keyboard,
   Switch
  } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,11 +38,30 @@ export default function CreatePostModal({ visible, onClose }: Props) {
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [selectedLocation, setSelectedLocation] = useState<{
     name: string;
     lat: number;
     lng: number;
   } | null>(null);
+
+  // ✅ Track keyboard height for dynamic scroll padding
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const compressImage = async (uri: string) => {
     try {
@@ -232,7 +251,7 @@ export default function CreatePostModal({ visible, onClose }: Props) {
       <View style={styles.container}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           {/* Header */}
           <View style={styles.header}>
@@ -258,9 +277,10 @@ export default function CreatePostModal({ visible, onClose }: Props) {
 
           <ScrollView 
             style={styles.scroll} 
-            contentContainerStyle={{ paddingBottom: 100 }} 
+            contentContainerStyle={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight + 60 : 100 }} 
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
           >
             {/* User Row */}
             <View style={styles.userRow}>
@@ -298,6 +318,8 @@ export default function CreatePostModal({ visible, onClose }: Props) {
               onChangeText={setContent}
               maxLength={2000}
               autoFocus={true}
+              scrollEnabled={true}
+              textAlignVertical="top"
             />
 
             {/* ✨ AI Travel Plan Toggle */}
@@ -411,10 +433,11 @@ const getStyles = (theme: any, insets: any) => StyleSheet.create({
   input: {
     fontSize: 16,
     color: theme.text,
-    minHeight: 100,
+    minHeight: 120,
+    maxHeight: 300,
     textAlignVertical: 'top',
     marginBottom: 16,
-    lineHeight: 22,
+    lineHeight: 24,
   },
   selectedLocTag: {
     flexDirection: 'row',

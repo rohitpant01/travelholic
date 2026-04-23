@@ -268,7 +268,7 @@ export default function StoryViewer({ stories, initialIndex = 0, onClose }: Prop
           {/* Media Content Section */}
           <View style={styles.mediaContainer}>
             <TouchableWithoutFeedback onPressIn={pauseTimer} onPressOut={resumeTimer}>
-              <Image source={{ uri: stories[index].mediaUrl }} style={styles.media} resizeMode="cover" />
+              <Image source={{ uri: stories[index].mediaUrl }} style={styles.media} resizeMode="contain" />
             </TouchableWithoutFeedback>
 
             {/* Tap zones for navigation overlaid on the image */}

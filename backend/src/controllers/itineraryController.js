@@ -650,7 +650,12 @@ exports.reverseGeocode = async (req, res) => {
     const { lat, lng, address } = req.query;
 
     let url;
-    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+
+    if (!apiKey) {
+      console.error('[GEOCODE] No Google API key found in environment');
+      return res.status(500).json({ error: 'Geocoding not configured' });
+    }
 
     if (lat && lng) {
       url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
@@ -660,38 +665,53 @@ exports.reverseGeocode = async (req, res) => {
       return res.status(400).json({ error: 'Coordinates or address required' });
     }
 
+    console.log(`[GEOCODE] Requesting: lat=${lat}, lng=${lng}, address=${address || 'N/A'}`);
+
     const response = await axios.get(url);
-    if (response.data.status === 'OK' && response.data.results.length > 0) {
-      const result = response.data.results[0];
 
-      // Attempt to extract a clean city or neighborhood name
-      const getCity = (components) => {
-        for (const type of ['locality', 'sublocality', 'administrative_area_level_3', 'administrative_area_level_2']) {
-          const comp = components.find(c => c.types.includes(type));
-          if (comp) return comp.long_name;
-        }
-        return null;
-      };
-
-      let bestName = getCity(result.address_components) || result.address_components[0].long_name;
-
-      // If it's still a plus code, try to grab the next part of the formatted address
-      if (bestName.includes('+')) {
-        const parts = result.formatted_address.split(',');
-        bestName = parts.length > 1 ? parts[1].trim() : bestName;
-      }
-
-      return res.json({
-        formattedAddress: result.formatted_address,
-        placeId: result.place_id,
-        name: bestName,
-        location: result.geometry.location // { lat, lng }
+    if (response.data.status !== 'OK' || !response.data.results?.length) {
+      console.warn(`[GEOCODE] Google returned status: ${response.data.status}, error: ${response.data.error_message || 'none'}`);
+      return res.json({ 
+        name: address || 'Unknown Location', 
+        formattedAddress: address || 'Unknown',
+        location: { lat: parseFloat(lat) || 0, lng: parseFloat(lng) || 0 }
       });
     }
-    res.json({ error: 'Location not found' });
+
+    const result = response.data.results[0];
+
+    // Attempt to extract a clean city or neighborhood name
+    const getCity = (components) => {
+      for (const type of ['locality', 'sublocality', 'administrative_area_level_3', 'administrative_area_level_2']) {
+        const comp = components.find(c => c.types.includes(type));
+        if (comp) return comp.long_name;
+      }
+      return null;
+    };
+
+    let bestName = getCity(result.address_components) || result.address_components[0].long_name;
+
+    // If it's still a plus code, try to grab the next part of the formatted address
+    if (bestName.includes('+')) {
+      const parts = result.formatted_address.split(',');
+      bestName = parts.length > 1 ? parts[1].trim() : bestName;
+    }
+
+    return res.json({
+      formattedAddress: result.formatted_address,
+      placeId: result.place_id,
+      name: bestName,
+      location: result.geometry.location // { lat, lng }
+    });
   } catch (err) {
     console.error('[GEOCODE PROXY ERROR]', err.message);
-    res.status(500).json({ error: 'Failed to geocode location' });
+    // Return a graceful fallback instead of 500
+    const { lat, lng } = req.query;
+    res.json({ 
+      name: 'Current Location',
+      formattedAddress: `${lat}, ${lng}`,
+      location: { lat: parseFloat(lat) || 0, lng: parseFloat(lng) || 0 }
+    });
   }
 };
 
