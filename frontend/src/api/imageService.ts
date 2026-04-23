@@ -14,27 +14,27 @@ export const fetchPlaceImage = async (query: string): Promise<string | null> => 
 };
 
 /**
- * Fetch multiple place images for Swipable Galleries
- * Currently proxies through the same place endpoint
+ * Fetch multiple DISTINCT place images for Swipable Galleries.
+ * Uses a single batch endpoint so the backend can collect all photo references
+ * from Google Places in one API call and return N unique ones — fixes the
+ * "all photos look the same" problem caused by N independent requests.
  */
 export const fetchPlaceImages = async (query: string, count: number = 3): Promise<string[]> => {
   try {
-    // Return a list of URLs that will be resolved by the backend proxy
-    // We add a salt (i) to ensure variety if the backend supports it, 
-    // but for now, we point to the reliable proxy endpoint
-    const images = [];
-    for (let i = 0; i < count; i++) {
-        // We use redirect=true so the Image component can load the binary data directly
-        // We add a timestamp (t) to bypass any aggressive local/CDN caching
-        images.push(`${apiClient.defaults.baseURL}/images/place/${encodeURIComponent(query)}?redirect=true&v=${i}&t=${Date.now()}`);
-    }
-    return images;
+    const response = await apiClient.get(
+      `/images/place/${encodeURIComponent(query)}/batch`,
+      { params: { count } }
+    );
+    // Backend returns { images: string[], source: string }
+    const images: string[] = response.data.images ?? [];
+    if (images.length > 0) return images;
+    throw new Error('Empty batch response');
   } catch (e) {
-    return [
-      'https://picsum.photos/id/10/1000/1000',
-      'https://picsum.photos/id/11/1000/1000',
-      'https://picsum.photos/id/12/1000/1000'
-    ];
+    console.warn('[ImageService] Batch fetch failed, using Picsum fallbacks...');
+    // Each seed is unique so the fallback images are visually distinct
+    return Array.from({ length: count }, (_, i) =>
+      `https://picsum.photos/seed/${encodeURIComponent(query)}-${i}/1000/1000`
+    );
   }
 };
 

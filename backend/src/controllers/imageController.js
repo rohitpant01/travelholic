@@ -11,6 +11,8 @@ const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY;
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
+const BACKEND_URL = process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com';
+
 /**
  * Fetch a random travel image for landing/home screens
  */
@@ -74,7 +76,109 @@ exports.getRandomImage = async (req, res) => {
 };
 
 /**
- * Fetch a specific place image
+ * Fetch a BATCH of distinct images for a place in a single request.
+ *
+ * Root cause of the "all images are the same" bug:
+ *   The old frontend called GET /images/place/:query N times with v=0,1,2…
+ *   Each call made its own Google Places text-search → same top result →
+ *   same photo_reference → same image every time.
+ *
+ * Fix: do the text-search ONCE here, collect ALL photo references from the
+ * top results, deduplicate them, then hand out N distinct proxy URLs.
+ *
+ * Route: GET /api/images/place/:query/batch?count=4
+ * Returns: { images: string[], source: string }
+ */
+exports.getPlaceImagesBatch = async (req, res) => {
+  const { query } = req.params;
+  const count = Math.min(parseInt(req.query.count, 10) || 3, 10); // cap at 10
+  const searchQuery = `${query} travel`;
+
+  // ── 1. Google Places (primary) ────────────────────────────────────────────
+  if (GOOGLE_PLACES_API_KEY) {
+    try {
+      const gRes = await axios.get(
+        'https://maps.googleapis.com/maps/api/place/textsearch/json',
+        { params: { query: searchQuery, key: GOOGLE_PLACES_API_KEY } }
+      );
+
+      const results = gRes.data.results || [];
+
+      // Collect every photo reference from the top 5 place results
+      const allRefs = [];
+      const seen = new Set();
+      for (const place of results.slice(0, 5)) {
+        for (const photo of (place.photos || [])) {
+          const ref = photo.photo_reference;
+          if (ref && !seen.has(ref)) {
+            seen.add(ref);
+            allRefs.push(ref);
+          }
+        }
+      }
+
+      if (allRefs.length > 0) {
+        // Build N proxy URLs, cycling through unique refs
+        const images = Array.from({ length: count }, (_, i) => {
+          const ref = allRefs[i % allRefs.length];
+          return `${BACKEND_URL}/api/images/google-photo?ref=${ref}`;
+        });
+
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.json({ images, source: 'Google Places' });
+      }
+    } catch (e) {
+      console.error('[ImageController] Google Places batch failed:', e.message);
+    }
+  }
+
+  // ── 2. Unsplash (fallback) ────────────────────────────────────────────────
+  if (UNSPLASH_ACCESS_KEY) {
+    try {
+      const response = await axios.get('https://api.unsplash.com/search/photos', {
+        params: { query: searchQuery, per_page: Math.max(count, 10), orientation: 'landscape' },
+        headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` }
+      });
+      const results = response.data.results || [];
+      if (results.length > 0) {
+        const images = Array.from({ length: count }, (_, i) =>
+          results[i % results.length].urls.regular
+        );
+        return res.json({ images, source: 'Unsplash' });
+      }
+    } catch (e) {
+      console.error('[ImageController] Unsplash batch failed:', e.message);
+    }
+  }
+
+  // ── 3. Pexels (fallback) ──────────────────────────────────────────────────
+  if (PEXELS_API_KEY) {
+    try {
+      const response = await axios.get('https://api.pexels.com/v1/search', {
+        params: { query: searchQuery, per_page: Math.max(count, 10) },
+        headers: { Authorization: PEXELS_API_KEY }
+      });
+      const photos = response.data.photos || [];
+      if (photos.length > 0) {
+        const images = Array.from({ length: count }, (_, i) =>
+          photos[i % photos.length].src.large2x
+        );
+        return res.json({ images, source: 'Pexels' });
+      }
+    } catch (e) {
+      console.error('[ImageController] Pexels batch failed:', e.message);
+    }
+  }
+
+  // ── 4. Picsum seeds (last resort, always unique) ──────────────────────────
+  const images = Array.from({ length: count }, (_, i) =>
+    `https://picsum.photos/seed/${encodeURIComponent(query)}-${i}/1000/600`
+  );
+  return res.json({ images, source: 'Picsum' });
+};
+
+/**
+ * Fetch a specific place image (single, used by detail screens etc.)
  */
 exports.getPlaceImage = async (req, res) => {
   const { query } = req.params;
@@ -88,15 +192,12 @@ exports.getPlaceImage = async (req, res) => {
 
   const searchQuery = `${query} travel`;
 
-  // Helper for response
   const sendRes = (imgUrl, source) => {
-    if (req.query.redirect === 'true') {
-      return res.redirect(imgUrl);
-    }
+    if (req.query.redirect === 'true') return res.redirect(imgUrl);
     return res.json({ image: imgUrl, source });
   };
 
-  // 2. Try Google Places Search (Fresh & High Quality)
+  // 2. Try Google Places Search
   if (GOOGLE_PLACES_API_KEY) {
     try {
       const gRes = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
@@ -105,20 +206,16 @@ exports.getPlaceImage = async (req, res) => {
 
       const results = gRes.data.results || [];
       if (results.length > 0) {
-        // Pool photos from the top 3 results to ensure maximum variety
         const allPhotos = [];
         results.slice(0, 3).forEach(r => {
-          if (r.photos) {
-            r.photos.forEach(p => allPhotos.push(p.photo_reference));
-          }
+          if (r.photos) r.photos.forEach(p => allPhotos.push(p.photo_reference));
         });
 
         if (allPhotos.length > 0) {
           const photoRef = allPhotos[imgIdx % allPhotos.length];
-          const finalUrl = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${photoRef}`;
-
+          const finalUrl = `${BACKEND_URL}/api/images/google-photo?ref=${photoRef}`;
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-          return sendRes(finalUrl, 'Google Places (Pooled)');
+          return sendRes(finalUrl, 'Google Places');
         }
       }
     } catch (e) {
@@ -135,8 +232,7 @@ exports.getPlaceImage = async (req, res) => {
       });
       const results = response.data.results || [];
       if (results.length > 0) {
-        const selected = results[imgIdx % results.length];
-        return sendRes(selected.urls.regular, 'Unsplash');
+        return sendRes(results[imgIdx % results.length].urls.regular, 'Unsplash');
       }
     } catch (e) { }
   }
@@ -150,15 +246,13 @@ exports.getPlaceImage = async (req, res) => {
       });
       const photos = response.data.photos || [];
       if (photos.length > 0) {
-        const selected = photos[imgIdx % photos.length];
-        return sendRes(selected.src.large2x, 'Pexels');
+        return sendRes(photos[imgIdx % photos.length].src.large2x, 'Pexels');
       }
     } catch (e) { }
   }
 
-  // Final Picsum placeholder with variety via seed
-  const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(query)}-${imgIdx}/1000/600`;
-  sendRes(fallbackUrl, 'Picsum');
+  // Final Picsum placeholder
+  sendRes(`https://picsum.photos/seed/${encodeURIComponent(query)}-${imgIdx}/1000/600`, 'Picsum');
 };
 
 /**
@@ -169,8 +263,6 @@ exports.getGooglePhoto = async (req, res) => {
   if (!ref || !GOOGLE_PLACES_API_KEY) {
     return res.status(400).send('Missing photo reference or API key');
   }
-  // Redirect to Google API (browser will follow and load the image)
-  // This keeps the key on the server side
   const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1000&photoreference=${ref}&key=${GOOGLE_PLACES_API_KEY}`;
   res.redirect(url);
 };

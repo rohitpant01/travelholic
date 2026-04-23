@@ -98,8 +98,10 @@ export default function PlaceDetailsScreen() {
 
     const loadData = async () => {
       // 1. Fetch images for gallery
-      const imgs = await fetchPlaceImages(saveTitle, 4);
-      setImages(imgs);
+      const imgs = await fetchPlaceImages(saveTitle, 5);
+      // Remove potential duplicates
+      const uniqueImgs = Array.from(new Set(imgs));
+      setImages(uniqueImgs);
 
       // 2. Fetch Deep AI Insights
       try {
@@ -226,45 +228,56 @@ export default function PlaceDetailsScreen() {
         
         {/* Swipable Gallery */}
         <View style={{ height: 320 }}>
-          {images.length > 0 ? (
-            <ScrollView 
-              horizontal 
-              pagingEnabled 
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(e) => {
-                const newIdx = Math.round(e.nativeEvent.contentOffset.x / W);
-                setActiveImgIdx(newIdx);
-              }}
+          {images.length > 1 ? (
+            <>
+              <ScrollView 
+                horizontal 
+                pagingEnabled 
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => {
+                  const newIdx = Math.round(e.nativeEvent.contentOffset.x / W);
+                  setActiveImgIdx(newIdx);
+                }}
+              >
+                {images.map((img, i) => (
+                  <TouchableOpacity 
+                    key={`${img}-${i}`} 
+                    activeOpacity={0.9} 
+                    onPress={() => { setCurrentZoomImg(img); setZoomVisible(true); }}
+                    style={styles.heroContainer}
+                  >
+                    <Image source={{ uri: img }} style={styles.heroImage} />
+                    <LinearGradient colors={['transparent', theme.background]} style={styles.heroOverlay} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              <View style={styles.dotsRow}>
+                {images.map((_, i) => (
+                  <View 
+                    key={`dot-${i}`} 
+                    style={[
+                      styles.dot, 
+                      { 
+                        backgroundColor: activeImgIdx === i ? '#fff' : 'rgba(255,255,255,0.4)', 
+                        width: activeImgIdx === i ? 20 : 8 
+                      }
+                    ]} 
+                  />
+                ))}
+              </View>
+            </>
+          ) : images.length === 1 ? (
+            <TouchableOpacity 
+              activeOpacity={0.9} 
+              onPress={() => { setCurrentZoomImg(images[0]); setZoomVisible(true); }}
+              style={styles.heroContainer}
             >
-              {images.map((img, i) => (
-                <TouchableOpacity 
-                  key={i} 
-                  activeOpacity={0.9} 
-                  onPress={() => { setCurrentZoomImg(img); setZoomVisible(true); }}
-                  style={styles.heroContainer}
-                >
-                  <Image source={{ uri: img }} style={styles.heroImage} />
-                  <LinearGradient colors={['transparent', theme.background]} style={styles.heroOverlay} />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+              <Image source={{ uri: images[0] }} style={styles.heroImage} />
+              <LinearGradient colors={['transparent', theme.background]} style={styles.heroOverlay} />
+            </TouchableOpacity>
           ) : (
              <View style={[styles.heroContainer, { backgroundColor: theme.card }]} />
-          )}
-
-          {/* Dots Indicator */}
-          {images.length > 1 && (
-            <View style={styles.dotsRow}>
-              {images.map((_, i) => (
-                <View 
-                  key={i} 
-                  style={[
-                    styles.dot, 
-                    { backgroundColor: activeImgIdx === i ? '#fff' : 'rgba(255,255,255,0.4)', width: activeImgIdx === i ? 20 : 8 }
-                  ]} 
-                />
-              ))}
-            </View>
           )}
         </View>
 
