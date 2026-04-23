@@ -682,7 +682,7 @@ export default function TripsScreen() {
               onPress={() => dispatch(setActiveTab('explore'))}
             >
               <Text style={[styles.tabText, activeTab === 'explore' && styles.tabTextActive]} numberOfLines={1}>
-                🌍 Explore
+                🌍 OnGoing Trips
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
