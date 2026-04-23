@@ -748,7 +748,6 @@ export default function AIItineraryScreen() {
 
         {/* REMOVED DAILY STAY RECS FROM BOTTOM OF DAILY PLAN */}
 
-        </View>
       </ScrollView>
     </View>
   );
