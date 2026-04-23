@@ -32,7 +32,7 @@ const GemCard = ({ gem }: any) => {
   }, [gem]);
 
   return (
-    <FlipCard 
+    <FlipCard
       style={styles.gemFlip}
       friction={6}
       perspective={1000}
@@ -55,7 +55,7 @@ const GemCard = ({ gem }: any) => {
       <View style={styles.gemBack}>
         <Text style={styles.gemStoryTitle}>Secret Story</Text>
         <Text style={styles.gemStory}>{gem.story}</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.gemMapBtn}
           onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${gem.lat},${gem.lng}`)}
         >
@@ -74,15 +74,16 @@ export default function PlaceDetailsScreen() {
   const styles = getStyles(theme);
   const dispatch = useDispatch();
   const { showToast } = useToast();
-  useSavedSync(); 
-  
+  useSavedSync();
+
   const { place } = route.params || {};
-  
+
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { ids: savedIds } = useSelector((state: RootState) => state.saved);
-  
+
   const [saving, setSaving] = useState(false);
   const [images, setImages] = useState<string[]>([]);
+  const [loadingImages, setLoadingImages] = useState(true); // ← track gallery load state
   const [insights, setInsights] = useState<any>(null);
   const [loadingInsights, setLoadingInsights] = useState(true);
   const [wikiDesc, setWikiDesc] = useState<string | null>(null);
@@ -97,11 +98,17 @@ export default function PlaceDetailsScreen() {
     if (!place) return;
 
     const loadData = async () => {
-      // 1. Fetch images for gallery
-      const imgs = await fetchPlaceImages(saveTitle, 5);
-      // Remove potential duplicates
-      const uniqueImgs = Array.from(new Set(imgs));
-      setImages(uniqueImgs);
+      // 1. Fetch images for gallery via the new batch endpoint
+      //    (returns distinct photo references in a single API call)
+      setLoadingImages(true);
+      try {
+        const imgs = await fetchPlaceImages(saveTitle, 5);
+        // Deduplicate by URL — safety net in case backend returns repeats
+        const uniqueImgs = Array.from(new Set(imgs));
+        setImages(uniqueImgs);
+      } finally {
+        setLoadingImages(false);
+      }
 
       // 2. Fetch Deep AI Insights
       try {
@@ -131,7 +138,7 @@ export default function PlaceDetailsScreen() {
         if (data.type === 'standard' && data.extract) {
           setWikiDesc(data.extract);
         }
-      } catch(e) {}
+      } catch (e) { }
     };
     if (!place.description && !place.story) fetchWiki();
 
@@ -201,10 +208,8 @@ export default function PlaceDetailsScreen() {
 
   const prettifyLocation = (loc: string) => {
     if (!loc) return 'India';
-    // Remove the place name itself from the location string if it's already there
     let clean = loc.replace(saveTitle, '').trim();
     if (clean.startsWith(',')) clean = clean.substring(1).trim();
-    
     const parts = clean.split(',').map(p => p.trim()).filter(p => !p.includes('+') && p.length > 0);
     return parts.join(', ') || loc;
   };
@@ -220,19 +225,24 @@ export default function PlaceDetailsScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>PLACE DETAILS</Text>
         <TouchableOpacity onPress={handleToggleSave} style={styles.backBtn}>
-           <Ionicons name={isSaved ? "heart" : "heart-outline"} size={24} color={isSaved ? "#FF5A5F" : theme.text} />
+          <Ionicons name={isSaved ? "heart" : "heart-outline"} size={24} color={isSaved ? "#FF5A5F" : theme.text} />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+
         {/* Swipable Gallery */}
         <View style={{ height: 320 }}>
-          {images.length > 1 ? (
+          {loadingImages ? (
+            // Skeleton while batch fetch is in progress
+            <View style={[styles.heroContainer, { backgroundColor: theme.card, alignItems: 'center', justifyContent: 'center' }]}>
+              <ActivityIndicator size="large" color={COLORS.teal} />
+            </View>
+          ) : images.length > 1 ? (
             <>
-              <ScrollView 
-                horizontal 
-                pagingEnabled 
+              <ScrollView
+                horizontal
+                pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={(e) => {
                   const newIdx = Math.round(e.nativeEvent.contentOffset.x / W);
@@ -240,36 +250,43 @@ export default function PlaceDetailsScreen() {
                 }}
               >
                 {images.map((img, i) => (
-                  <TouchableOpacity 
-                    key={`${img}-${i}`} 
-                    activeOpacity={0.9} 
+                  // ✅ FIX: key uses index only — avoids React glitches when
+                  //    two URLs coincidentally share a prefix
+                  <TouchableOpacity
+                    key={i}
+                    activeOpacity={0.9}
                     onPress={() => { setCurrentZoomImg(img); setZoomVisible(true); }}
                     style={styles.heroContainer}
                   >
-                    <Image source={{ uri: img }} style={styles.heroImage} />
+                    <Image
+                      source={{ uri: img }}
+                      style={styles.heroImage}
+                      // Forces a fresh load for each slide even if URLs look similar
+                      resizeMode="cover"
+                    />
                     <LinearGradient colors={['transparent', theme.background]} style={styles.heroOverlay} />
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              
+
               <View style={styles.dotsRow}>
                 {images.map((_, i) => (
-                  <View 
-                    key={`dot-${i}`} 
+                  <View
+                    key={i}
                     style={[
-                      styles.dot, 
-                      { 
-                        backgroundColor: activeImgIdx === i ? '#fff' : 'rgba(255,255,255,0.4)', 
-                        width: activeImgIdx === i ? 20 : 8 
+                      styles.dot,
+                      {
+                        backgroundColor: activeImgIdx === i ? '#fff' : 'rgba(255,255,255,0.4)',
+                        width: activeImgIdx === i ? 20 : 8
                       }
-                    ]} 
+                    ]}
                   />
                 ))}
               </View>
             </>
           ) : images.length === 1 ? (
-            <TouchableOpacity 
-              activeOpacity={0.9} 
+            <TouchableOpacity
+              activeOpacity={0.9}
               onPress={() => { setCurrentZoomImg(images[0]); setZoomVisible(true); }}
               style={styles.heroContainer}
             >
@@ -277,7 +294,7 @@ export default function PlaceDetailsScreen() {
               <LinearGradient colors={['transparent', theme.background]} style={styles.heroOverlay} />
             </TouchableOpacity>
           ) : (
-             <View style={[styles.heroContainer, { backgroundColor: theme.card }]} />
+            <View style={[styles.heroContainer, { backgroundColor: theme.card }]} />
           )}
         </View>
 
@@ -311,49 +328,49 @@ export default function PlaceDetailsScreen() {
 
           {/* STORY SECTION */}
           <View style={styles.storySection}>
-             <Text style={styles.sectionLabel}>THE SECRET STORY</Text>
-             <Text style={styles.descriptionText}>{finalDescription}</Text>
+            <Text style={styles.sectionLabel}>THE SECRET STORY</Text>
+            <Text style={styles.descriptionText}>{finalDescription}</Text>
           </View>
 
           {/* BEST TIME BADGE */}
           <View style={styles.insightBox}>
-             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-               <Ionicons name="calendar" size={16} color={COLORS.teal} />
-               <Text style={styles.sectionLabel}>BEST TIME TO VISIT</Text>
-             </View>
-             <Text style={styles.insightValue}>{place.bestTime && place.bestTime !== 'Year round' ? place.bestTime : 'Oct – Mar'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="calendar" size={16} color={COLORS.teal} />
+              <Text style={styles.sectionLabel}>BEST TIME TO VISIT</Text>
+            </View>
+            <Text style={styles.insightValue}>{place.bestTime && place.bestTime !== 'Year round' ? place.bestTime : 'Oct – Mar'}</Text>
           </View>
 
           {loadingInsights ? (
             <View style={{ padding: 40, alignItems: 'center' }}>
-               <ActivityIndicator size="large" color={COLORS.teal} />
-               <Text style={{ marginTop: 10, color: theme.textSecondary, fontWeight: '700' }}>Fetching AI Travel Guide...</Text>
+              <ActivityIndicator size="large" color={COLORS.teal} />
+              <Text style={{ marginTop: 10, color: theme.textSecondary, fontWeight: '700' }}>Fetching AI Travel Guide...</Text>
             </View>
           ) : insights ? (
             <>
               {/* HOW TO REACH */}
               <View style={[styles.insightBox, { borderLeftWidth: 4, borderLeftColor: COLORS.teal }]}>
-                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                   <Ionicons name="navigate-circle" size={18} color={COLORS.teal} />
-                   <Text style={styles.sectionLabel}>HOW TO REACH</Text>
-                 </View>
-                 <Text style={[styles.descriptionText, { marginTop: 10, fontSize: 14 }]}>{insights.how_to_reach}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="navigate-circle" size={18} color={COLORS.teal} />
+                  <Text style={styles.sectionLabel}>HOW TO REACH</Text>
+                </View>
+                <Text style={[styles.descriptionText, { marginTop: 10, fontSize: 14 }]}>{insights.how_to_reach}</Text>
               </View>
 
               {/* TRAVEL TIPS */}
               <View style={[styles.insightBox, { backgroundColor: theme.mode === 'dark' ? '#1c2e28' : '#e6f7f2', borderColor: 'transparent' }]}>
-                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                   <Ionicons name="bulb" size={18} color={COLORS.teal} />
-                   <Text style={[styles.sectionLabel, { color: COLORS.teal }]}>EXPERT TRAVEL TIPS</Text>
-                 </View>
-                 <View style={{ marginTop: 15, gap: 12 }}>
-                   {insights.travel_tips?.map((tip: string, i: number) => (
-                     <View key={i} style={{ flexDirection: 'row', gap: 10 }}>
-                       <Ionicons name="checkmark-circle" size={16} color={COLORS.teal} />
-                       <Text style={{ fontSize: 14, color: theme.text, flex: 1, lineHeight: 20 }}>{tip}</Text>
-                     </View>
-                   ))}
-                 </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="bulb" size={18} color={COLORS.teal} />
+                  <Text style={[styles.sectionLabel, { color: COLORS.teal }]}>EXPERT TRAVEL TIPS</Text>
+                </View>
+                <View style={{ marginTop: 15, gap: 12 }}>
+                  {insights.travel_tips?.map((tip: string, i: number) => (
+                    <View key={i} style={{ flexDirection: 'row', gap: 10 }}>
+                      <Ionicons name="checkmark-circle" size={16} color={COLORS.teal} />
+                      <Text style={{ fontSize: 14, color: theme.text, flex: 1, lineHeight: 20 }}>{tip}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
 
               {/* WHY TO VISIT */}
@@ -384,12 +401,12 @@ export default function PlaceDetailsScreen() {
           <View style={styles.divider} />
 
           <View style={styles.mapSection}>
-             <Text style={styles.sectionLabel}>📍 EXACT LOCATION</Text>
-             <TouchableOpacity style={styles.mapPreviewBtn} onPress={handleOpenMap}>
-                <Ionicons name="map" size={24} color={COLORS.teal} />
-                <Text style={styles.mapPreviewText}>Open in Google Maps for Navigation</Text>
-                <Ionicons name="chevron-forward" size={20} color={theme.textLight} />
-             </TouchableOpacity>
+            <Text style={styles.sectionLabel}>📍 EXACT LOCATION</Text>
+            <TouchableOpacity style={styles.mapPreviewBtn} onPress={handleOpenMap}>
+              <Ionicons name="map" size={24} color={COLORS.teal} />
+              <Text style={styles.mapPreviewText}>Open in Google Maps for Navigation</Text>
+              <Ionicons name="chevron-forward" size={20} color={theme.textLight} />
+            </TouchableOpacity>
           </View>
 
           <View style={{ height: 60 }} />
@@ -397,25 +414,25 @@ export default function PlaceDetailsScreen() {
       </ScrollView>
 
       <View style={styles.detailsFooter}>
-          <TouchableOpacity style={styles.footerActionBtn} onPress={handleOpenMap}>
-             <Ionicons name="paper-plane" size={20} color="#FFF" />
-             <Text style={styles.footerBtnText}>DIRECTIONS</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.footerSaveBtn, { borderColor: isSaved ? "#FF5A5F" : COLORS.teal }]} 
-            onPress={handleToggleSave}
-            disabled={saving}
-          >
-            {saving ? <ActivityIndicator size="small" color={COLORS.teal} /> : (
-              <>
-                <Ionicons name={isSaved ? "heart" : "heart-outline"} size={20} color={isSaved ? "#FF5A5F" : COLORS.teal} />
-                <Text style={[styles.footerSaveText, { color: isSaved ? "#FF5A5F" : COLORS.teal }]}>
-                   {isSaved ? "SAVED" : "SAVE BUCKET"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+        <TouchableOpacity style={styles.footerActionBtn} onPress={handleOpenMap}>
+          <Ionicons name="paper-plane" size={20} color="#FFF" />
+          <Text style={styles.footerBtnText}>DIRECTIONS</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.footerSaveBtn, { borderColor: isSaved ? "#FF5A5F" : COLORS.teal }]}
+          onPress={handleToggleSave}
+          disabled={saving}
+        >
+          {saving ? <ActivityIndicator size="small" color={COLORS.teal} /> : (
+            <>
+              <Ionicons name={isSaved ? "heart" : "heart-outline"} size={20} color={isSaved ? "#FF5A5F" : COLORS.teal} />
+              <Text style={[styles.footerSaveText, { color: isSaved ? "#FF5A5F" : COLORS.teal }]}>
+                {isSaved ? "SAVED" : "SAVE BUCKET"}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -428,9 +445,9 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20,
     backgroundColor: theme.background,
   },
-  backBtn: { 
-    width: 40, height: 40, borderRadius: 20, backgroundColor: theme.card, 
-    alignItems: 'center', justifyContent: 'center', ...SHADOW.sm 
+  backBtn: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: theme.card,
+    alignItems: 'center', justifyContent: 'center', ...SHADOW.sm
   },
   headerTitle: { fontSize: 13, fontWeight: '800', color: theme.textLight, letterSpacing: 1.5 },
   scrollContent: { paddingBottom: 100 },
@@ -439,7 +456,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   heroOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 120 },
   dotsRow: { position: 'absolute', bottom: 30, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.8)' },
-  
+
   contentBody: { paddingHorizontal: 24, marginTop: -20 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
   titleText: { fontSize: 32, fontWeight: '900', color: theme.text, letterSpacing: -1 },
@@ -452,23 +469,23 @@ const getStyles = (theme: any) => StyleSheet.create({
   sectionLabel: { fontSize: 10, fontWeight: '800', color: COLORS.teal, letterSpacing: 1.5, marginBottom: 8 },
   storySection: { marginBottom: 30 },
   descriptionText: { fontSize: 16, lineHeight: 26, color: theme.textSecondary, textAlign: 'justify' },
-  
+
   whySection: { marginBottom: 30 },
   reasonRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
   reasonText: { fontSize: 15, fontWeight: '500', color: theme.textSecondary },
-  
+
   divider: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginBottom: 30 },
-  
+
   insightBox: { backgroundColor: theme.card, padding: 20, borderRadius: RADIUS.xl, marginBottom: 30, ...SHADOW.sm, borderWidth: 1, borderColor: theme.border },
   insightValue: { fontSize: 16, fontWeight: '800', color: theme.text, marginTop: 4 },
-  
+
   mapSection: { marginBottom: 40 },
   mapPreviewBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 20, borderRadius: 20, gap: 15, ...SHADOW.sm },
   mapPreviewText: { flex: 1, fontSize: 14, fontWeight: '700', color: theme.text },
 
   detailsFooter: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 15, 
+    flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 15,
     paddingBottom: Platform.OS === 'ios' ? 40 : 20,
     backgroundColor: theme.background, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', gap: 12
   },
@@ -485,7 +502,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   gemName: { color: '#fff', fontSize: 18, fontWeight: '800' },
   gemRating: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   gemRatingText: { color: '#FFD700', fontWeight: '800', fontSize: 12 },
-  
+
   gemBack: { flex: 1, backgroundColor: theme.card, borderRadius: 20, padding: 15, justifyContent: 'center', borderWidth: 1, borderColor: theme.border },
   gemStoryTitle: { fontSize: 14, fontWeight: '900', color: theme.teal, marginBottom: 8, textTransform: 'uppercase' },
   gemStory: { fontSize: 13, color: theme.text, lineHeight: 20, marginBottom: 15 },

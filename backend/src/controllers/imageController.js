@@ -104,10 +104,22 @@ exports.getPlaceImagesBatch = async (req, res) => {
 
       const results = gRes.data.results || [];
 
-      // Collect every photo reference from the top 5 place results
       const allRefs = [];
       const seen = new Set();
-      for (const place of results.slice(0, 5)) {
+
+      // Priority: Fill with all photos from the #1 most relevant result first
+      if (results[0]?.photos) {
+        results[0].photos.forEach(p => {
+          if (p.photo_reference && !seen.has(p.photo_reference)) {
+            seen.add(p.photo_reference);
+            allRefs.push(p.photo_reference);
+          }
+        });
+      }
+
+      // Secondary: Fill remaining slots from other top results if the first place has few photos
+      for (const place of results.slice(1, 5)) {
+        if (allRefs.length >= 20) break; 
         for (const photo of (place.photos || [])) {
           const ref = photo.photo_reference;
           if (ref && !seen.has(ref)) {
