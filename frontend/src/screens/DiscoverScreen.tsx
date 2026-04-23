@@ -508,7 +508,7 @@ export default function DiscoverScreen() {
               <Slider
                 style={{ width: '100%', height: 40 }}
                 minimumValue={10}
-                maximumValue={500}
+                maximumValue={100}
                 step={5}
                 value={maxDistance}
                 onValueChange={setMaxDistance}
