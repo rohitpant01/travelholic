@@ -1,4 +1,4 @@
-# ✈️ TravelHolic — Full Stack Travel Companion App
+# ✈️ EkalGo — Full Stack Travel Companion App
 
 > **Find Your Travel Soulmate** — Tinder-style app for solo travelers.
 
@@ -7,7 +7,7 @@
 ## 📁 Project Structure
 
 ```
-travelholic/
+ekalgo/
 ├── backend/                   ← Node.js + Express API
 │   ├── server.js
 │   ├── .env.example           ← Copy to .env, fill API keys
@@ -154,7 +154,7 @@ npx expo start     # Opens Expo DevTools
 4. Build Command: `npm install`
 5. Start Command: `node server.js`
 6. Add all environment variables from `.env`
-7. Deploy → copy the URL (e.g. `https://travelholic-api.onrender.com`)
+7. Deploy → copy the URL (e.g. `https://ekalgo-api.onrender.com`)
 8. Update `API_BASE_URL` in `frontend/src/api/client.ts`
 
 ### Database → MongoDB Atlas (Free tier)

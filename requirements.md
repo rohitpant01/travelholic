@@ -1,6 +1,6 @@
-# 📋 TravelHolic Project Requirements
+# 📋 EkalGo Project Requirements
 
-This document provides a comprehensive overview of the dependencies and system requirements for the **TravelHolic** project.
+This document provides a comprehensive overview of the dependencies and system requirements for the **EkalGo** project.
 
 ---
 

@@ -20,6 +20,9 @@ const postSchema = new mongoose.Schema({
     type: Boolean, 
     default: true 
   },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { 
   timestamps: true,
   toJSON: { virtuals: true },

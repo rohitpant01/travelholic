@@ -1,8 +1,16 @@
 const Comment = require('../models/Comment');
 const Post = require('../models/Post');
 const { createNotification } = require('../utils/notificationService');
-const Filter = require('bad-words');
-const filter = new Filter();
+
+// Safe lazy-load for bad-words (CJS/ESM compat issue with Node v22)
+let filter = null;
+try {
+  const Filter = require('bad-words');
+  filter = new Filter();
+} catch (err) {
+  console.warn('[COMMENT] bad-words module failed to load, profanity filter disabled:', err.message);
+  filter = { isProfane: () => false, clean: (t) => t };
+}
 
 // @desc    Get comments for a post
 // @route   GET /api/comments/:postId

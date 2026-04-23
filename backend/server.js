@@ -29,6 +29,7 @@ const storyRoutes = require("./src/routes/storyRoutes");
 const commentRoutes = require("./src/routes/commentRoutes");
 const imageRoutes = require("./src/routes/imageRoutes");
 const checklistRoutes = require("./src/routes/checklistRoutes");
+const adminRoutes = require("./src/routes/adminRoutes");
 
 
 const app = express();
@@ -60,6 +61,12 @@ const chatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 40, // 40 messages per minute
   message: { error: "You are sending messages too fast. Slow down!" }
+});
+
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Route not found' }  // Generic — hides admin existence
 });
 
 // ── Global Request Logger (ABSOLUTE TOP) ──────────────────────
@@ -171,6 +178,7 @@ app.use("/api/stories", apiLimiter, storyRoutes);
 app.use("/api/comments", chatLimiter, commentRoutes);
 app.use("/api/images", apiLimiter, imageRoutes);
 app.use("/api/checklists", checklistRoutes);
+app.use("/api/admin", adminLimiter, adminRoutes);
 
 
 // 🛡️ CATCH-ALL ROUTE (MUST BE LAST)

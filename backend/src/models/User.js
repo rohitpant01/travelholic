@@ -123,6 +123,9 @@ const userSchema = new mongoose.Schema({
 
   // Status
   isActive: { type: Boolean, default: true },
+  role: { type: String, enum: ['user', 'admin', 'superadmin'], default: 'user' },
+  isSuspended: { type: Boolean, default: false },
+  warningCount: { type: Number, default: 0 },
   lastSeen: { type: Date, default: Date.now },
   isOnline: { type: Boolean, default: false },
   profileComplete: { type: Boolean, default: false },
@@ -217,14 +220,12 @@ const userSchema = new mongoose.Schema({
 
 // Indexes
 userSchema.index({ location: '2dsphere' });
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
-userSchema.index({ googleId: 1 }, { sparse: true });
 userSchema.index({ matches: 1 });
 userSchema.index({ likedBy: 1 });
 userSchema.index({ following: 1 });
 userSchema.index({ followers: 1 });
 userSchema.index({ isDeleted: 1, isActive: 1 }); // Frequent filter in feed
+userSchema.index({ role: 1 }); // Admin user lookups
 
 
 // Virtual: full name
@@ -306,6 +307,7 @@ userSchema.methods.toPublicProfile = function () {
     isOnline: obj.isOnline,
     profileComplete: obj.profileComplete,
     memberStatus: obj.memberStatus,
+    role: obj.role,
     likesReceived: obj.likesReceived,
     matchesCount: obj.matchesCount,
     tripsCompleted: obj.tripsCompleted,

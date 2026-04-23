@@ -1,6 +1,6 @@
-# Travelholic API & AI Architecture
+# EkalGo API & AI Architecture
 
-This document outlines the multi-API strategy used to power the Travelholic platform's intelligent features.
+This document outlines the multi-API strategy used to power the EkalGo platform's intelligent features.
 
 ## 1. AI Content Generation (Text & Planning)
 

@@ -45,4 +45,7 @@ export type RootStackParamList = {
   TripHistory: undefined;
   DeleteAccount: undefined;
   ProfileViews: undefined;
+  AdminPanel: undefined;
+  Checklist: undefined;
+  ChecklistDetail: { checklistId: string };
 };

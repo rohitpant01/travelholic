@@ -1,5 +1,5 @@
 const User = require('../models/User');
-const { generateToken } = require('../middleware/auth');
+const { generateToken, generateTokenWithRole } = require('../middleware/auth');
 const { sendOTP, verifyOTP } = require('../utils/otp');
 const { sendEmailOTP } = require('../utils/email');
 const { OAuth2Client } = require('google-auth-library');
@@ -151,13 +151,14 @@ const login = async (req, res) => {
     user.isOnline = true;
     await user.save({ validateBeforeSave: false });
 
-    const token = generateToken(user._id);
+    const token = generateTokenWithRole(user._id, user.role);
     console.log(`[AUTH] Login successful for ${emailOrPhone}`);
 
     res.json({
       message: user.isDeleted ? 'Account scheduled for deletion' : 'Login successful',
       token,
       user: user.toPublicProfile(),
+      role: user.role || 'user',
       isDeletionPending: user.isDeleted || false,
       deletionScheduledAt: user.deletionScheduledAt || null
     });
@@ -371,7 +372,7 @@ const googleLogin = async (req, res) => {
     }
 
     // Generate token
-    const token = generateToken(user._id);
+    const token = generateTokenWithRole(user._id, user.role);
     
     // Determine current effective step
     let effectiveStep = user.registrationStep || 4;
@@ -380,6 +381,7 @@ const googleLogin = async (req, res) => {
       message: user.isDeleted ? 'Account scheduled for deletion' : 'Google Sign-In successful',
       token,
       user: user.toPublicProfile(),
+      role: user.role || 'user',
       isNewUser: false,
       isDeletionPending: user.isDeleted || false,
       deletionScheduledAt: user.deletionScheduledAt || null

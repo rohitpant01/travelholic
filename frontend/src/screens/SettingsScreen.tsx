@@ -197,7 +197,20 @@ export default function SettingsScreen() {
         ))}
       </View>
 
-      <Text style={styles.versionText}>EkalGo v1.0.0 · Made with ✈️ & ❤️</Text>
+      {/* Version text with hidden admin gesture */}
+      <TouchableOpacity
+        onLongPress={() => {
+          const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+          if (isAdmin) {
+            navigation.navigate('AdminPanel');
+          }
+          // Non-admins: silently do nothing — zero exposure
+        }}
+        delayLongPress={3000}
+        activeOpacity={1}
+      >
+        <Text style={styles.versionText}>EkalGo v1.0.0 · Made with ✈️ & ❤️</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }

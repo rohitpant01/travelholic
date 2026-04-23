@@ -32,6 +32,11 @@ const protect = async (req, res, next) => {
         return res.status(401).json({ error: 'Account has been deactivated' });
       }
 
+      if (user.isSuspended) {
+        console.warn(`[AUTH] Blocking suspended user: ${user._id}`);
+        return res.status(403).json({ error: 'Account suspended. Contact support.' });
+      }
+
       if (user.isDeleted) {
         console.warn(`[AUTH] Blocking deleted user: ${user._id}`);
         return res.status(401).json({ error: 'Account is scheduled for deletion. Please restore it to continue.' });
@@ -51,6 +56,12 @@ const protect = async (req, res, next) => {
 
 const generateToken = (userId) => {
   return jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  });
+};
+
+const generateTokenWithRole = (userId, role) => {
+  return jwt.sign({ userId, role: role || 'user' }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 };
@@ -76,4 +87,4 @@ const protectOptional = async (req, res, next) => {
   }
 };
 
-module.exports = { protect, protectOptional, generateToken };
+module.exports = { protect, protectOptional, generateToken, generateTokenWithRole };

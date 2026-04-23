@@ -5,8 +5,16 @@ const User = require('../models/User');
 const Report = require('../models/Report');
 const { Match } = require('../models/Match');
 const { createNotification } = require('../utils/notificationService');
-const Filter = require('bad-words');
-const filter = new Filter();
+
+// Safe lazy-load for bad-words (CJS/ESM compat issue with Node v22)
+let filter = null;
+try {
+  const Filter = require('bad-words');
+  filter = new Filter();
+} catch (err) {
+  console.warn('[FEED] bad-words module failed to load, profanity filter disabled:', err.message);
+  filter = { isProfane: () => false, clean: (t) => t };
+}
 
 // @desc    Get feed (Nearby, Friends, Global)
 // @route   GET /api/feed

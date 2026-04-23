@@ -83,7 +83,7 @@ export default function DiscoverScreen() {
     }
   }, [user?.isEmailVerified, user?.registrationStep]);
 
-  const fetchProfiles = async (reset = false) => {
+  const fetchProfiles = useCallback(async (reset = false) => {
     if (loading && !reset) return;
     if (!reset && !hasMore) return;
 
@@ -119,7 +119,8 @@ export default function DiscoverScreen() {
         }
       }
 
-      // 📍 Call API with new pagination and search filters
+      console.log(`[DISCOVER] Fetching profiles - Page: ${targetPage}, Mode: ${travelModeCity ? 'Travel' : 'Near'}, City: ${travelModeCity || 'GPS'}`);
+
       const res = await discoverAPI.getProfiles(
         lat, 
         lng, 
@@ -127,14 +128,13 @@ export default function DiscoverScreen() {
         viewMode === 'list' ? 'distance' : undefined,
         targetPage,
         20,
-        travelModeCity // This triggers "Travel Buddy" mode on backend
+        travelModeCity
       );
 
       const newProfiles = res.data.profiles || [];
       
       setProfiles(prev => {
         const combined = reset ? newProfiles : [...prev, ...newProfiles];
-        // 🛡️ DEDUPLICATION: Strict unique check by ID
         const unique = Array.from(new Map(combined.map(p => [p._id, p])).values());
         return unique;
       });
@@ -148,12 +148,14 @@ export default function DiscoverScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [loading, hasMore, page, manualCoords, viewMode, travelModeCity]);
+
 
   useEffect(() => {
-    fetchProfiles(true); // Reset when view mode changes
+    fetchProfiles(true);
     dispatch(fetchNotifications());
-  }, [viewMode, manualCoords]); // Also reset when coordinates change
+  }, [viewMode, manualCoords, travelModeCity]); 
+
 
   const handleLike = async (index: number | string) => {
     const profile = typeof index === 'number' ? profiles[index] : profiles.find(p => p._id === index);
@@ -204,6 +206,22 @@ export default function DiscoverScreen() {
   const handleSwipedAll = () => {
     setProfiles([]); // Triggers the empty state UI
   };
+
+  const renderDiscoveryCard = useCallback((profile: any) => (
+    <View style={styles.cardWrapper}>
+      <TravelerDiscoveryCard
+        profile={profile}
+        onPressProfile={(p) => navigation.navigate('UserDetail', {
+          userId: p._id,
+          profile: p,
+          onActionPerformed: () => {
+            setProfiles(prev => prev.filter(item => item._id !== p._id));
+          }
+        })}
+      />
+    </View>
+  ), [navigation, theme, styles.cardWrapper]);
+
 
   const renderShimmer = () => (
     <View style={styles.shimmerContainer}>
@@ -275,20 +293,7 @@ export default function DiscoverScreen() {
                 key={`swiper-${profiles.length}-${viewMode}`}
                 ref={swiperRef}
                 cards={profiles}
-                renderCard={useCallback((profile: any) => (
-                  <View style={styles.cardWrapper}>
-                    <TravelerDiscoveryCard
-                      profile={profile}
-                      onPressProfile={(p) => navigation.navigate('UserDetail', {
-                        userId: p._id,
-                        profile: p,
-                        onActionPerformed: () => {
-                          setProfiles(prev => prev.filter(item => item._id !== p._id));
-                        }
-                      })}
-                    />
-                  </View>
-                ), [navigation, theme])}
+                renderCard={renderDiscoveryCard}
                 onSwipedRight={(index) => handleLike(index)}
                 onSwipedLeft={(index) => handleSkip(index)}
                 onSwipedTop={(index) => handleSuperLike(index)}

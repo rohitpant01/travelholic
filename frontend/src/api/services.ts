@@ -294,3 +294,20 @@ export const storyAPI = {
   addView: (storyId: string) => apiClient.post(`/stories/${storyId}/view`),
   getViewers: (storyId: string) => apiClient.get(`/stories/${storyId}/views`),
 };
+
+// ============================================================
+// ADMIN API (Hidden — only used by admin panel)
+// ============================================================
+export const adminAPI = {
+  getReports: (params?: any) => apiClient.get('/admin/reports', { params }),
+  resolveReport: (id: string, data: any) => apiClient.put(`/admin/reports/${id}/resolve`, data),
+  softDeleteContent: (id: string, reason?: string) => apiClient.put(`/admin/content/${id}/soft-delete`, { reason }),
+  restoreContent: (id: string) => apiClient.put(`/admin/content/${id}/restore`),
+  getUsers: (params?: any) => apiClient.get('/admin/users', { params }),
+  suspendUser: (id: string, reason: string) => apiClient.put(`/admin/users/${id}/suspend`, { reason }),
+  unsuspendUser: (id: string) => apiClient.put(`/admin/users/${id}/unsuspend`),
+  warnUser: (id: string, reason: string) => apiClient.put(`/admin/users/${id}/warn`, { reason }),
+  getStats: () => apiClient.get('/admin/stats'),
+  getLogs: (params?: any) => apiClient.get('/admin/logs', { params }),
+  changeUserRole: (id: string, role: string) => apiClient.put(`/admin/users/${id}/role`, { role }),
+};

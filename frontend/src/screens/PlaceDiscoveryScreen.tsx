@@ -344,9 +344,11 @@ export default function PlaceDiscoveryScreen() {
   }, [searchQuery]);
 
   const handleSearch = async (query: string, lat?: number, lng?: number, silent = false) => {
-    const sLat = lat || location?.coords.latitude;
-    const sLng = lng || location?.coords.longitude;
+    // 📍 FALLBACK: Prioritize searchCenter (e.g. Dehradun) over physical GPS location
+    const sLat = lat || searchCenter?.lat || location?.coords.latitude;
+    const sLng = lng || searchCenter?.lng || location?.coords.longitude;
     if (!sLat || !sLng) return;
+
 
     if (silent) setIsSyncing(true);
     else setLoading(true);
@@ -388,11 +390,14 @@ export default function PlaceDiscoveryScreen() {
   };
 
   const handleCategoryPress = (cat: typeof CATEGORY_MAP[0]) => {
-    if ((searchQuery || '').trim() === '' && sectionPositions.current[cat.key] !== undefined) {
+    // 📍 If the section is already rendered (present in the current search results), scroll to it
+    if (sectionPositions.current[cat.key] !== undefined) {
       scrollRef.current?.scrollTo({ y: sectionPositions.current[cat.key], animated: true });
       setActiveTab(cat.key);
     } else {
+      // 📍 If not present, perform a new search in the current context (Searched city or GPS)
       handleSearch(cat.label);
+      setActiveTab(cat.key);
     }
   };
 
