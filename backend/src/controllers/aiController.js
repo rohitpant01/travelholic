@@ -449,18 +449,24 @@ exports.generateItinerary = async (req, res) => {
     }
 
     // ── RATE LIMIT CHECK (2 generations per 24 hours) ────────
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentItineraries = await AIItinerary.find({
-      userId: req.user._id,
-      createdAt: { $gte: twentyFourHoursAgo }
-    }).sort({ createdAt: 1 });
+    const User = require("../models/User");
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User not found." });
 
-    if (recentItineraries.length >= 2) {
-      const oldestOfRecent = recentItineraries[0];
-      const nextAvailableAt = new Date(oldestOfRecent.createdAt.getTime() + 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Clean up old timestamps & check count
+    const recentGens = (user.travelMemory?.lyraGenerationTimestamps || []).filter(
+      (ts) => new Date(ts) >= twentyFourHoursAgo
+    );
+
+    if (recentGens.length >= 2) {
+      const oldestOfRecent = new Date(recentGens[0]);
+      const nextAvailableAt = new Date(oldestOfRecent.getTime() + 24 * 60 * 60 * 1000);
       return res.status(429).json({
-        error: "Generation limit reached (2 per 24 hours).",
-        nextAvailableAt
+        error: "Daily generation limit reached (2 per 24 hours).",
+        nextAvailableAt,
       });
     }
 
@@ -772,6 +778,17 @@ OUTPUT JSON FORMAT (STRICT — no markdown, no extra text):
     console.log(
       `[AI] ✅ Itinerary generation complete for "${destination}" (${days} days).`
     );
+
+    // ── LOG GENERATION (Track for rate limiting) ──────────────────
+    try {
+      await User.findByIdAndUpdate(req.user._id, {
+        $push: { "travelMemory.lyraGenerationTimestamps": new Date() },
+        $set: { "travelMemory.lastAiPlaformUsed": new Date() }
+      });
+    } catch (logErr) {
+      console.error("[AI] Failed to log generation timestamp:", logErr.message);
+    }
+
     data.budgetBreakdown = allocator.generateBudgetState();
     return res.json(data);
   } catch (error) {
