@@ -1091,7 +1091,10 @@ No markdown, no extra text.
   // --- Attempt Gemini first ---
   try {
     console.log("[fetchFromGemini] Attempting Gemini (latest)...");
-    places = await runGeminiJSON(prompt);
+    const geminiResult = await runGeminiJSON(prompt);
+    // Gemini returns { destinations: [...] } — extract the array
+    places = geminiResult.destinations || geminiResult.places || geminiResult.items || (Array.isArray(geminiResult) ? geminiResult : null);
+    console.log(`[fetchFromGemini] Gemini returned ${Array.isArray(places) ? places.length : 0} items.`);
   } catch (geminiErr) {
     console.warn(`[fetchFromGemini] Gemini failed: ${geminiErr.message}. Falling back to Groq...`);
     
@@ -1152,7 +1155,7 @@ exports.generateDestinations = async (req, res) => {
   if (_locks.has("generateDestinations")) {
     await sleep(3000);
     const doc = await GlobalDestination.findOne();
-    if (doc) return res.json({ destinations: doc.destinations });
+    if (doc) return res.json({ destinations: doc.destinations, cached: true, lastRefreshed: doc.createdAt });
   }
 
   _locks.add("generateDestinations");
@@ -1162,9 +1165,9 @@ exports.generateDestinations = async (req, res) => {
     const now = Date.now();
     const lastUpdate = doc ? new Date(doc.createdAt).getTime() : 0;
     const diffHours = (now - lastUpdate) / 3600000;
-    const isStale = !doc || (diffHours > 12);
+    const isStale = !doc || isNaN(diffHours) || (diffHours > 12);
 
-    console.log(`[generateDestinations] Check - Force: ${isForce}, LastUpdate: ${new Date(lastUpdate).toISOString()}, Diff: ${diffHours.toFixed(2)}h, Threshold: 12h, Result: ${isStale ? 'STALE' : 'FRESH'}`);
+    console.log(`[generateDestinations] Check - Force: ${isForce}, LastUpdate: ${new Date(lastUpdate).toISOString()}, Diff: ${isNaN(diffHours) ? 'NaN' : diffHours.toFixed(2)}h, Threshold: 12h, Result: ${isStale ? 'STALE' : 'FRESH'}`);
 
     if (isStale || isForce) {
       console.log(`[generateDestinations] Action: ${isForce ? 'Shuffle forced' : 'Data stale'} -> Regenerating via AI...`);
@@ -1183,14 +1186,15 @@ exports.generateDestinations = async (req, res) => {
           },
           { upsert: true, new: true }
         );
-        console.log(`[generateDestinations] SUCCESS: Refreshed destinations via AI.`);
+        console.log(`[generateDestinations] SUCCESS: Refreshed ${fresh.length} destinations via AI.`);
+        return res.json({ destinations: doc.destinations, cached: false, lastRefreshed: doc.createdAt });
       } catch (aiErr) {
         console.error(`[generateDestinations] AI ERROR: ${aiErr.message}`);
         if (doc) {
           console.warn(`[generateDestinations] FALLBACK: Regeneration failed, using existing DB data.`);
         } else {
           console.error(`[generateDestinations] CRITICAL: AI failed and DB is empty. Using STATIC_FALLBACK_GEMS.`);
-          return res.json({ destinations: STATIC_FALLBACK_GEMS });
+          return res.json({ destinations: STATIC_FALLBACK_GEMS, cached: false, lastRefreshed: null });
         }
       }
     } else {
@@ -1205,11 +1209,11 @@ exports.generateDestinations = async (req, res) => {
       destinations = [...destinations].sort(() => Math.random() - 0.5);
     }
 
-    return res.json({ destinations });
+    return res.json({ destinations, cached: true, lastRefreshed: doc ? doc.createdAt : null });
   } catch (e) {
     console.error(`[generateDestinations] FATAL FATAL ERROR: ${e.message}`, e.stack);
     // Absolute Last Resort
-    return res.json({ destinations: STATIC_FALLBACK_GEMS });
+    return res.json({ destinations: STATIC_FALLBACK_GEMS, cached: false, lastRefreshed: null });
   } finally {
     _locks.delete("generateDestinations");
   }

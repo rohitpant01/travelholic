@@ -25,7 +25,7 @@ EkalGo is a comprehensive, AI-powered travel companion application that blends s
 - **AI Models**: OpenAI (GPT-4o), Groq (Llama 3), Google Gemini (1.5 Flash)
 - **Location**: Google Places API & Geocoding API
 - **Verification**: AWS Rekognition (Face Comparison)
-- **SMS/OTP**: Twilio Verify
+- **Email/OTP**: EmailJS
 - **Images**: Cloudinary
 - **Hosting**: Render.com (API) & MongoDB Atlas (DB)
 
@@ -35,10 +35,10 @@ EkalGo is a comprehensive, AI-powered travel companion application that blends s
 
 ### A. Authentication & Onboarding
 The onboarding process is a multi-step high-conversion flow designed to build a complete user profile.
-- **Verification**: Uses Twilio for phone OTP and AWS Rekognition for "Face Verification" (comparing a live selfie with profile photos).
+- **Verification**: Uses EmailJS for email OTP and AWS Rekognition for "Face Verification" (comparing a live selfie with profile photos).
 - **Registration Flow (7 Steps)**:
     1. Account Creation (Email/Password)
-    2. OTP Verification (Twilio)
+    2. OTP Verification (EmailJS)
     3. Personal Details (Bio, Gender, DOB)
     4. Location Assignment (GPS + Geocoding)
     5. Photo Upload (Cloudinary, max 6 photos)
@@ -109,7 +109,7 @@ Tools for organizing and tracking journeys.
 - `/src/models`: Data structures and validation rules.
 - `/src/routes`: API endpoint definitions (RESTful).
 - `/src/socket`: Socket.io event handling.
-- `/src/utils`: Reusable helpers (AWS, Twilio, Geocoding).
+- `/src/utils`: Reusable helpers (AWS, EmailJS, Geocoding).
 
 ### Frontend (`/frontend`)
 - `/src/screens`: 40+ unique screens covering all user flows.

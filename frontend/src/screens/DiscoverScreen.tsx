@@ -11,7 +11,7 @@ import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { discoverAPI } from '../api/services';
+import { discoverAPI, aiAPI } from '../api/services';
 import { fetchDiscoveryProfiles, removeProfile, clearDiscovery } from '../store/slices/discoverSlice';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import { requestLocationPermission } from '../utils/permissionUtils';
@@ -20,7 +20,7 @@ const ShimmerPlaceholder = createShimmerPlaceholder(LinearGradient);
 
 
 import Swiper from 'react-native-deck-swiper';
-import { GOOGLE_MAPS_API_KEY } from '../api/client';
+import apiClient, { GOOGLE_MAPS_API_KEY } from '../api/client';
 
 // New Components
 import DiscoveryHeader from '../components/DiscoveryHeader';
@@ -81,9 +81,8 @@ export default function DiscoverScreen() {
       return;
     }
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&types=(cities)&key=${GOOGLE_MAPS_API_KEY}`;
-      const response = await fetch(url);
-      const data = await response.json();
+      const res = await aiAPI.autocomplete(text);
+      const data = res.data;
       if (data.status === 'OK') {
         setSuggestions(data.predictions);
         setShowSuggestions(true);
@@ -104,9 +103,8 @@ export default function DiscoverScreen() {
     setShowSuggestions(false);
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${item.place_id}&fields=geometry&key=${GOOGLE_MAPS_API_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
+      const res = await apiClient.get('/itinerary/location/geocode', { params: { address: fallbackText } });
+      const data = { status: 'OK', result: { geometry: { location: res.data.location } } };
 
       if (data.status === 'OK') {
         const lat = data.result.geometry.location.lat;

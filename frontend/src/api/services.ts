@@ -250,12 +250,14 @@ export const aiAPI = {
   }) => apiClient.post('/ai/generate', data),
   getPlaceInsights: (data: { placeName: string; lat?: number; lng?: number; }) => apiClient.post('/ai/place-insights', data),
   generateQuote: (destination?: string) => apiClient.post('/ai/quote', { destination }),
-  generateDestinations: () => apiClient.get('/ai/destinations'),
+  generateDestinations: (force?: boolean) => apiClient.get('/ai/destinations', { params: force ? { force: 'true' } : {} }),
   getTopDestinations: () => apiClient.get('/ai/top-destinations'),
   saveItinerary: (data: any) => apiClient.post('/ai/itinerary/save', data),
   getMyItineraries: () => apiClient.get('/ai/itinerary/my'),
   publishItinerary: (id: string) => apiClient.post(`/ai/itinerary/${id}/publish`),
   deleteItinerary: (id: string) => apiClient.delete(`/ai/itinerary/${id}`),
+  /** Proxy for Google Places Autocomplete — routes through backend to avoid API key issues */
+  autocomplete: (input: string) => apiClient.get('/ai/proxy/autocomplete', { params: { input } }),
 };
 
 // ============================================================

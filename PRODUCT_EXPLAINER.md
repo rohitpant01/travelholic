@@ -30,7 +30,7 @@ Planning a 10-day trip to Himachal? Tell the app "Plan a budget-friendly trip fo
 
 ### 3. Safety First 🛡️
 We take safety seriously so you can travel with peace of mind.
-*   **Identity Verification**: Every user goes through a "Face Verification" process. We compare a live selfie to their profile pictures to ensure they are who they say they are.
+*   **Identity Verification**: Every user goes through an Email Verification and "Face Verification" process. We compare a live selfie to their profile pictures to ensure they are who they say they are.
 *   **Verified Profiles**: Look for the verification badge before you decide to meet up or share plans.
 
 ### 4. Discover the Best of India (and Beyond) 📍

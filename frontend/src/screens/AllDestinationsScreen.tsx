@@ -322,6 +322,8 @@ const TopDestinationItem = ({ place, theme, navigation, styles }: any) => {
 };
 
 const DEST_KEY = '@explore_destinations';
+const DEST_TS_KEY = '@explore_destinations_ts';
+const LOCAL_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours in ms
 
 
 const AllDestinationsScreen = () => {
@@ -362,10 +364,12 @@ const AllDestinationsScreen = () => {
     }
   };
 
-  // ⚡ Show cached data instantly (Wait for fix if bad)
+  // ⚡ Show cached data instantly, but refresh from backend if stale (>12h)
   const loadDestinations = async () => {
+    let usedLocalCache = false;
     try {
       const stored = await AsyncStorage.getItem(DEST_KEY);
+      const storedTs = await AsyncStorage.getItem(DEST_TS_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         const isCorrupt = parsed?.some((d: any) => 
@@ -376,14 +380,20 @@ const AllDestinationsScreen = () => {
         if (parsed?.length > 0 && !isCorrupt) {
           setDestinations(parsed);
           setLoading(false);
-          // Only sync in background if it's been a while? 
-          // For now, return for speed.
-          return;
+          usedLocalCache = true;
+
+          // Check if local cache is still fresh (< 12 hours old)
+          const cacheAge = storedTs ? (Date.now() - parseInt(storedTs, 10)) : Infinity;
+          if (cacheAge < LOCAL_CACHE_TTL) {
+            console.log(`📦 [HIDDEN GEMS] Local cache is fresh (${(cacheAge / 3600000).toFixed(1)}h old). Skipping backend call.`);
+            return;
+          }
+          console.log(`⏰ [HIDDEN GEMS] Local cache is stale (${(cacheAge / 3600000).toFixed(1)}h old). Fetching fresh data in background...`);
         }
       }
     } catch (e) {}
 
-    setLoading(true);
+    if (!usedLocalCache) setLoading(true);
     try {
       const res = await aiAPI.generateDestinations();
       const apiData = res.data.destinations || [];
@@ -392,27 +402,31 @@ const AllDestinationsScreen = () => {
       if (apiData.length > 0) {
         setDestinations(apiData);
         await AsyncStorage.setItem(DEST_KEY, JSON.stringify(apiData));
+        await AsyncStorage.setItem(DEST_TS_KEY, String(Date.now()));
       }
     } catch (err) {
       console.error('Failed to fetch destinations:', err);
       // If we have no data, we can try to show stale data as a last resort
-      const stored = await AsyncStorage.getItem(DEST_KEY);
-      if (stored) setDestinations(JSON.parse(stored));
+      if (!usedLocalCache) {
+        const stored = await AsyncStorage.getItem(DEST_KEY);
+        if (stored) setDestinations(JSON.parse(stored));
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // 🔄 SHUFFLE — force backend to serve the current batch (or user can re-check)
+  // 🔄 SHUFFLE — force backend to regenerate fresh hidden gems via AI
   const shuffleDestinations = async () => {
     setLoading(true);
     setDestinations([]);
     try {
-      const res = await aiAPI.generateDestinations();
+      const res = await aiAPI.generateDestinations(true);
       const apiData = res.data.destinations || [];
       if (apiData.length > 0) {
         setDestinations(apiData);
         await AsyncStorage.setItem(DEST_KEY, JSON.stringify(apiData));
+        await AsyncStorage.setItem(DEST_TS_KEY, String(Date.now()));
       }
     } catch (err) {
       // Restore old data on failure

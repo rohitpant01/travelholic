@@ -86,11 +86,8 @@ export default function TripsScreen() {
     debounceRef.current = setTimeout(async () => {
       try {
         setFetchingSuggestions(true);
-        const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-        const res = await fetch(
-          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${q}&types=(cities)&key=${key}`
-        );
-        const data = await res.json();
+        const res = await aiAPI.autocomplete(q);
+        const data = res.data;
 
         if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
           console.warn(`[Google Places Error] Status: ${data.status}`);

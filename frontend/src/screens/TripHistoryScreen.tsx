@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { AppDispatch, RootState } from '../store';
 import { setUser } from '../store/slices/authSlice';
-import { userAPI } from '../api/services';
+import { userAPI, aiAPI } from '../api/services';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import { GOOGLE_MAPS_API_KEY } from '../api/client';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,9 +53,8 @@ export default function TripHistoryScreen() {
     }
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&types=(cities)&key=${GOOGLE_MAPS_API_KEY}`;
-      const response = await fetch(url);
-      const data = await response.json();
+      const res = await aiAPI.autocomplete(text);
+      const data = res.data;
 
       if (data.status === 'OK') {
         setSuggestions(data.predictions);

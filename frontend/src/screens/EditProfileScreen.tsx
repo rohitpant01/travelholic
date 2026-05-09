@@ -13,12 +13,12 @@ import { RootState } from '../store';
 import { updateUser } from '../store/slices/authSlice';
 import storage from '../utils/storage';
 import { useAppTheme, FONTS, RADIUS, SPACING, SHADOW } from '../utils/theme';
-import { authAPI, userAPI } from '../api/services';
+import { authAPI, userAPI, aiAPI } from '../api/services';
 import CountryPickerModal from '../components/CountryPickerModal';
 import { Dimensions } from 'react-native';
 
 const { width: W } = Dimensions.get('window');
-import { GOOGLE_MAPS_API_KEY } from '../api/client';
+import apiClient, { GOOGLE_MAPS_API_KEY } from '../api/client';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
@@ -175,15 +175,13 @@ export default function EditProfileScreen() {
     }
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&types=(cities)&key=${GOOGLE_MAPS_API_KEY}`;
-      const response = await fetch(url);
-      const data = await response.json();
+      const res = await aiAPI.autocomplete(text);
+      const data = res.data;
       
       if (data.status === 'OK') {
         setSuggestions(data.predictions);
         setShowSuggestions(true);
       } else {
-        // 🔍 DEBUG LOG: Catch API key / Permission issues
         if (data.status !== 'ZERO_RESULTS') {
           console.warn(`[Google Autocomplete Error] Status: ${data.status}`);
           console.warn(`[Google Autocomplete Error] Message: ${data.error_message || 'N/A'}`);
@@ -198,19 +196,16 @@ export default function EditProfileScreen() {
 
   const selectSuggestion = async (item: any) => {
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${item.place_id}&fields=address_components,geometry&key=${GOOGLE_MAPS_API_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
+      const res = await apiClient.get('/itinerary/location/geocode', { params: { address: item.description } });
+      const geoData = res.data;
 
-      if (data.status === 'OK') {
-        const comps = data.result.address_components;
-        const cityVal = comps.find((c: any) => c.types.includes('locality'))?.long_name || 
-                        comps.find((c: any) => c.types.includes('administrative_area_level_2'))?.long_name || 
-                        item.description.split(',')[0];
-        const countryVal = comps.find((c: any) => c.types.includes('country'))?.long_name || '';
+      if (geoData.location) {
+        const cityVal = item.structured_formatting?.main_text || item.description.split(',')[0];
+        const parts = item.description.split(',');
+        const countryVal = parts.length > 1 ? parts[parts.length - 1].trim() : '';
         
-        const lat = data.result.geometry.location.lat;
-        const lng = data.result.geometry.location.lng;
+        const lat = geoData.location.lat;
+        const lng = geoData.location.lng;
 
         if (activeField === 'city') {
           setCity(cityVal);
@@ -224,8 +219,7 @@ export default function EditProfileScreen() {
           setDestinationCoords([lng, lat]);
         }
       } else {
-        console.warn(`[Google Place Details Error] Status: ${data.status}`);
-        console.warn(`[Google Place Details Error] Message: ${data.error_message || 'N/A'}`);
+        console.warn(`[Geocode Error] No location data returned`);
       }
     } catch (e) {
       console.error('Error fetching place details:', e);
