@@ -131,8 +131,8 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
       const res = await placeService.getPlaceDetails(
         place.id,
         place.name,
-        place.address,
-        place.types[0] || 'point_of_interest',
+        place.address || '',
+        place.types?.[0] || 'point_of_interest',
         place.rating,
         place.distanceKm
       );
@@ -163,8 +163,8 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
         rating: place.rating || 0,
         bestTime: details?.quick_info?.find((i: string) => i.includes('Best time')) || 'Flexible',
         tags: details?.badges || [],
-        lat: place.location.lat,
-        lng: place.location.lng,
+        lat: place.location?.lat || 0,
+        lng: place.location?.lng || 0,
       };
 
       await userAPI.saveDestination(payload);
@@ -223,7 +223,7 @@ const PlaceCard = ({ place, onMapPress }: { place: Place, onMapPress: () => void
         <TouchableOpacity activeOpacity={0.8} onPress={() => setIsFlipped(false)}>
           <LinearGradient colors={[theme.teal, theme.tealDark]} style={styles.backHeader}>
             <Text style={styles.backTitle} numberOfLines={1}>{details?.title || place.name}</Text>
-            <Text style={styles.backSubTitle} numberOfLines={1}>{details?.location || place.address.split(',')[0]}</Text>
+            <Text style={styles.backSubTitle} numberOfLines={1}>{details?.location || place.address?.split(',')[0] || ''}</Text>
             <Ionicons name="chevron-down" size={12} color="#FFF" style={{ marginTop: 2, opacity: 0.8 }} />
           </LinearGradient>
         </TouchableOpacity>
@@ -320,20 +320,24 @@ export default function PlaceDiscoveryScreen() {
 
   useEffect(() => {
     (async () => {
-      // 1. Load Cache Immediately
-      const cache = await getDiscoveryCache();
-      if (cache) {
-        setPlaces(cache.results);
-        setLocationName(cache.locationName);
-      }
+      try {
+        // 1. Load Cache Immediately
+        const cache = await getDiscoveryCache();
+        if (cache) {
+          setPlaces(cache.results);
+          setLocationName(cache.locationName);
+        }
 
-      // 2. Begin Background Sync
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc);
-      setSearchCenter({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-      handleSearch('', loc.coords.latitude, loc.coords.longitude, !!cache);
+        // 2. Begin Background Sync
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const loc = await Location.getCurrentPositionAsync({});
+        setLocation(loc);
+        setSearchCenter({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+        handleSearch('', loc.coords.latitude, loc.coords.longitude, !!cache);
+      } catch (err) {
+        console.warn('Error fetching location or cache:', err);
+      }
     })();
   }, []);
 
@@ -379,7 +383,7 @@ export default function PlaceDiscoveryScreen() {
   };
 
   const handleViewOnMap = (item: Place) => {
-    const { lat, lng } = item.location;
+    const { lat, lng } = item.location || { lat: 0, lng: 0 };
     const label = encodeURIComponent(item.name);
     const url = Platform.select({
       ios: `maps:0,0?q=${label}@${lat},${lng}`,
@@ -543,7 +547,7 @@ export default function PlaceDiscoveryScreen() {
           {allPlaces.map((p, idx) => (
             <Marker
               key={p.id || `marker-${idx}`}
-              coordinate={{ latitude: Number(p.location.lat), longitude: Number(p.location.lng) }}
+              coordinate={{ latitude: Number(p.location?.lat || 0), longitude: Number(p.location?.lng || 0) }}
               title={p.name}
               description={p.distanceText}
             />
@@ -565,7 +569,7 @@ export default function PlaceDiscoveryScreen() {
           ) : places ? (
             CATEGORY_MAP.map((cat) => {
               const catPlaces = (places as any)[cat.key];
-              if (!catPlaces || catPlaces.length === 0) return null;
+              if (!Array.isArray(catPlaces) || catPlaces.length === 0) return null;
 
               return (
                 <View

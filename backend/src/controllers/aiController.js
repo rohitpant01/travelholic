@@ -43,7 +43,7 @@ const OPENAI_MODEL = "gpt-4o-mini";
 
 // Groq Initialization
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_MODEL = "qwen/qwen3.6-27b";
 
 // [NEW] Use separate key for Hotel/Nearby Place suggestion
 const groqHotel = new Groq({ apiKey: process.env.GROQ_HOTEL_API_KEY || process.env.GROQ_API_KEY });
@@ -939,8 +939,8 @@ Return ONLY this JSON (no markdown, no extra text):
   ]
 }`.trim();
 
-    // [B] Use Groq for teaser itinerary for speed/cost
-    const data = await runGroqJSON(prompt);
+    // [B] FIX: Use runAI
+    const data = await runAI(prompt);
     return res.json({ ...data, isTeaser: true });
   } catch (e) {
     console.error("[generateTeaserItinerary]", e.message);
@@ -1260,8 +1260,8 @@ Return ONLY this JSON (no markdown):
 }
 `.trim();
 
-    // [B] Use Groq for place insights for speed/cost
-    const data = await runGroqJSON(prompt);
+    // [B] FIX: Use runAI instead of runGroqJSON
+    const data = await runAI(prompt);
 
     // Verify each nearby place is genuinely close — sequential to avoid API bursts
     const verified = [];
@@ -1353,8 +1353,8 @@ rating (number), budget ("₹XXXX"), duration ("X Days"), search_query.
 No markdown, no extra text.
 `.trim();
 
-    // [B] Use Groq for top destinations for speed/cost
-    const result = await runGroqJSON(prompt);
+    // [B] FIX: Use runAI instead of runGroqJSON for stability
+    const result = await runAI(prompt);
     const places = result.destinations || [];
 
     // [D] FIX: sequential enrichment instead of Promise.all to avoid API bursts
@@ -1366,6 +1366,7 @@ No markdown, no extra text.
         const lat = coords.lat;
         const lng = coords.lng;
 
+        let image = "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2";
         // 📸 REAL IMAGE FETCH from Google Places
         if (coords.photo_reference) {
           image = `${process.env.BACKEND_URL || 'https://travelholic-zsqn.onrender.com'}/api/images/google-photo?ref=${coords.photo_reference}`;

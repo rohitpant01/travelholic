@@ -5,10 +5,10 @@ import {
   Platform, ActivityIndicator, Alert, Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING, useAppTheme } from '../utils/theme';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,73 +18,98 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   useSharedValue,
-  FadeIn
+  FadeIn,
+  interpolate,
+  withTiming,
+  runOnJS
 } from 'react-native-reanimated';
 import { fetchRandomTravelImages, getRichDestinations } from '../api/imageService';
-import { aiAPI, userAPI } from '../api/services';
+import { aiAPI, userAPI, authAPI } from '../api/services';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 
-const { width, height } = Dimensions.get('window');
-const ANIMATED_WORDS = ["Unseen", "Offbeat", "Hidden"];
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setUser, setToken } from '../store/slices/authSlice';
+import { setSavedDestinations } from '../store/slices/savedSlice';
+import apiClient from '../api/client';
 
+const { width, height } = Dimensions.get('window');
+
+// Configure Google Sign-In
+GoogleSignin.configure({
+  webClientId: '898480493172-uel9195jfcbbrp655ajv21frtsblpd5g.apps.googleusercontent.com',
+  offlineAccess: true,
+});
+
+const EXPLORER_TYPES = [
+  { id: 'solo', label: 'Solo', icon: 'person', family: 'Ionicons' },
+  { id: 'adventure', label: 'Adventure', icon: 'map', family: 'Ionicons' },
+  { id: 'hidden_gems', label: 'Hidden Gems', icon: 'diamond', family: 'MaterialCommunityIcons', highlight: true },
+  { id: 'wellness', label: 'Wellness', icon: 'leaf', family: 'Ionicons' },
+  { id: 'spiritual', label: 'Spiritual', icon: 'moon', family: 'Ionicons' },
+];
+
+const STORY_MESSAGES = [
+  "Your journey is more than just a destination...",
+  "It's a collection of moments...",
+  "Waiting to be discovered.",
+  "The world is a book, and those who do not travel read only one page.",
+  "Travel is the only thing you buy that makes you richer.",
+  "Collect moments, not things.",
+  "To travel is to live.",
+  "Discovery consists not in seeking new landscapes, but in having new eyes.",
+  "Not all those who wander are lost.",
+  "Adventure is worthwhile.",
+  "Travel far enough, you meet yourself.",
+  "Your next hidden gem is just a swipe away.",
+  "Don't just see the world, experience it.",
+  "Find your tribe among the mountains.",
+  "Where the road ends, the journey begins.",
+  "Every traveler has a story. What's yours?",
+  "Discover the unseen, embrace the unknown.",
+  "Life is either a daring adventure or nothing at all."
+];
 
 const LandingScreen = () => {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
 
   // States
   const [heroImage, setHeroImage] = useState('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000&auto=format&fit=crop');
-  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedExplorer, setSelectedExplorer] = useState('hidden_gems');
+  const [storyIndex, setStoryIndex] = useState(Math.floor(Math.random() * STORY_MESSAGES.length));
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
-  const [selectedPlace, setSelectedPlace] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   // Animation Shared Values
+  const storyOpacity = useSharedValue(0);
   const buttonScale = useSharedValue(1);
 
-  // Typing Animation States
-  const [displayText, setDisplayText] = useState("");
-  const [wordIndex, setWordIndex] = useState(0);
-  const [charIndex, setCharIndex] = useState(0);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showCursor, setShowCursor] = useState(true);
-
-  // Typing Logic
+  // Storytelling Rotation Logic
   useEffect(() => {
-    const currentWord = ANIMATED_WORDS[wordIndex];
-    const typingSpeed = isDeleting ? 40 : 100;
-    
-    const timeout = setTimeout(() => {
-      if (!isDeleting) {
-        setDisplayText(currentWord.substring(0, charIndex + 1));
-        setCharIndex(prev => prev + 1);
-        if (charIndex + 1 === currentWord.length) {
-          setTimeout(() => setIsDeleting(true), 2000); // Pause on full word
-        }
-      } else {
-        setDisplayText(currentWord.substring(0, charIndex - 1));
-        setCharIndex(prev => prev - 1);
-        if (charIndex - 1 === 0) {
-          setIsDeleting(false);
-          setWordIndex((prev) => (prev + 1) % ANIMATED_WORDS.length);
-        }
-      }
-    }, typingSpeed);
-    
-    return () => clearTimeout(timeout);
-  }, [charIndex, isDeleting, wordIndex]);
+    storyOpacity.value = 0;
+    storyOpacity.value = withTiming(1, { duration: 1500 });
 
-  // Cursor Blink
-  useEffect(() => {
     const interval = setInterval(() => {
-      setShowCursor(prev => !prev);
-    }, 530);
+      storyOpacity.value = withTiming(0, { duration: 1000 }, (finished) => {
+        if (finished) {
+          runOnJS(setStoryIndex)(Math.floor(Math.random() * STORY_MESSAGES.length));
+          storyOpacity.value = withTiming(1, { duration: 1500 });
+        }
+      });
+    }, 6000); // Increased time slightly for better readability
+
     return () => clearInterval(interval);
   }, []);
 
+  // Background Rotation Logic
   useEffect(() => {
     loadInitialData();
+    const bgInterval = setInterval(loadInitialData, 12000);
+    return () => clearInterval(bgInterval);
   }, []);
 
   const loadInitialData = async () => {
@@ -96,127 +121,210 @@ const LandingScreen = () => {
     }
   };
 
-
-  const pickHeroImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setHeroImage(result.assets[0].uri);
-    }
-  };
-
-
+  const storyStyle = useAnimatedStyle(() => ({
+    opacity: storyOpacity.value,
+    transform: [{ translateY: interpolate(storyOpacity.value, [0, 1], [10, 0]) }]
+  }));
 
   const btnAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: withSpring(buttonScale.value) }]
   }));
 
-  const handleDestinationClick = (item: any) => {
+  const handleStart = async () => {
+    buttonScale.value = withSpring(0.9, { damping: 10 }, () => {
+      buttonScale.value = withSpring(1);
+    });
+
+    setLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      try { await GoogleSignin.signOut(); } catch (e) {}
+      
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken;
+
+      if (!idToken) {
+        Alert.alert('Error', 'Could not get ID token from Google.');
+        setLoading(false);
+        return;
+      }
+
+      const res = await authAPI.googleLogin(idToken);
+      
+      if (res.data.isNewUser) {
+        setLoading(false);
+        (navigation.navigate as any)('Register_Step1', { googleProfile: res.data.googleProfile });
+        return;
+      }
+
+      const { token, user, isDeletionPending } = res.data;
+      
+      if (isDeletionPending) {
+        setLoading(false);
+        handleRestoreAccount(token, user);
+        return;
+      }
+
+      await finishLogin(token, user);
+    } catch (error: any) {
+      if (error.code !== statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert('Sign-In Failed', error.message || 'An unknown error occurred.');
+      }
+      setLoading(false);
+    }
+  };
+
+  const handleRestoreAccount = (token: string, user: any) => {
     Alert.alert(
-      '✨ ' + item.name,
-      'Login and explore the Explore tab to save this destination to your bucket list!',
+      'Restore Account?',
+      'Your account is scheduled for deletion. Restore now?',
       [
-        { text: 'OK', style: 'default' },
-        { text: 'Login', onPress: () => (navigation.navigate as any)('Login') }
+        { text: 'Keep Scheduled', style: 'destructive' },
+        { text: 'Restore Now', onPress: async () => {
+          try {
+            apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            const restoreRes = await userAPI.restoreAccount();
+            await finishLogin(token, restoreRes.data.user);
+            Alert.alert('Success', 'Account restored! ✨');
+          } catch (e) {
+            Alert.alert('Error', 'Failed to restore.');
+          }
+        }}
       ]
     );
   };
 
+  const finishLogin = async (token: string, user: any) => {
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('user', JSON.stringify(user));
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    dispatch(setToken(token));
+    dispatch(setUser(user));
+    if (user.savedDestinations) dispatch(setSavedDestinations(user.savedDestinations));
+    setLoading(false);
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* HERO SECTION */}
-        <ImageBackground source={{ uri: heroImage }} style={styles.hero}>
-          <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.1)', theme.background]}
-            style={styles.heroOverlay}
-          >
-            <SafeAreaView style={styles.heroHeader}>
-              <View style={styles.headerRow}>
-                <TouchableOpacity activeOpacity={0.8} onPress={() => setAboutModalVisible(true)}>
-                  <Animated.View entering={FadeIn.delay(200)} style={styles.logoTag}>
-                    <Image source={require('../../assets/logo.png')} style={{ width: 22, height: 22, borderRadius: 6 }} />
-                    <Text style={styles.logoTagText}>EKAL<Text style={{ color: '#F7A731' }}>GO</Text></Text>
-                  </Animated.View>
-                </TouchableOpacity>
-              </View>
-            </SafeAreaView>
+      {/* Cinematic Background */}
+      <ImageBackground source={{ uri: heroImage }} style={styles.hero} resizeMode="cover">
+        <LinearGradient
+          colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)']}
+          style={styles.heroOverlay}
+        >
+          <SafeAreaView style={styles.heroHeader}>
+            <View style={styles.headerRow}>
+              <TouchableOpacity activeOpacity={0.8} onPress={() => setAboutModalVisible(true)}>
+                <Animated.View entering={FadeIn.delay(200)} style={styles.logoTag}>
+                  <Image source={require('../../assets/logo.png')} style={{ width: 22, height: 22, borderRadius: 6 }} />
+                  <Text style={styles.logoTagText}>EKAL<Text style={{ color: '#F7A731' }}>GO</Text></Text>
+                </Animated.View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.loginLinkSmall}
+                onPress={() => (navigation.navigate as any)('Login')}
+              >
+                <Text style={styles.loginLinkSmallText}>Login</Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
 
-            <Animated.View entering={FadeInDown.duration(1000).springify()} style={styles.heroBottom}>
-              <View>
-                <Text style={styles.heroMain}>
-                  {displayText}
-                  <Text style={{ opacity: showCursor ? 1 : 0 }}>|</Text>
-                </Text>
-                <Text style={styles.heroSub}>with EKAL<Text style={{ color: '#F7A731' }}>GO</Text></Text>
-              </View>
-              <View style={styles.heroButtonsContainer}>
-                <GoogleSignInButton title="Continue with Google" />
+          {/* Animated Storytelling */}
+          <View style={styles.storyContainer}>
+            <Animated.Text style={[styles.storyText, storyStyle]}>
+              {STORY_MESSAGES[storyIndex]}
+            </Animated.Text>
+          </View>
 
-                <View style={[styles.dividerContainer, { marginVertical: 15 }]}>
-                  <View style={[styles.line, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
-                  <Text style={[styles.orText, { color: 'rgba(255,255,255,0.9)' }]}>OR</Text>
-                  <View style={[styles.line, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
-                </View>
+          {/* Explorer Selection & Action */}
+          <View style={styles.onboardingBottom}>
+            <Text style={styles.onboardingTitle}>What kind of explorer are you?</Text>
+            
+            <View style={styles.explorerGrid}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.explorerScroll}
+              >
+                {EXPLORER_TYPES.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedExplorer(item.id)}
+                    style={[
+                      styles.explorerBtn,
+                      selectedExplorer === item.id && styles.explorerBtnActive,
+                      item.highlight && styles.explorerBtnHighlight
+                    ]}
+                  >
+                    {item.family === 'MaterialCommunityIcons' ? (
+                      <MaterialCommunityIcons 
+                        name={item.icon as any} 
+                        size={18} 
+                        color={selectedExplorer === item.id ? '#fff' : 'rgba(255,255,255,0.7)'} 
+                      />
+                    ) : (
+                      <Ionicons 
+                        name={item.icon as any} 
+                        size={18} 
+                        color={selectedExplorer === item.id ? '#fff' : 'rgba(255,255,255,0.7)'} 
+                      />
+                    )}
+                    <Text style={[
+                      styles.explorerLabel,
+                      selectedExplorer === item.id && styles.explorerLabelActive
+                    ]}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
 
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPressIn={() => buttonScale.value = 0.95}
-                  onPressOut={() => buttonScale.value = 1}
-                  onPress={() => (navigation.navigate as any)('Login')}
+            {/* Main Action Button */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={handleStart}
+              disabled={loading}
+              style={styles.mainActionBtnWrapper}
+            >
+              <Animated.View style={[styles.mainActionBtn, btnAnimatedStyle]}>
+                <LinearGradient
+                  colors={['#14c8c4', '#00A8E8']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.mainActionGradient}
                 >
-                  <Animated.View style={[styles.mainBtn, btnAnimatedStyle, { height: 56 }]}>
-                    <LinearGradient
-                      colors={['#00C9A7', '#00A8E8']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.gradientBtn}
-                    >
-                      <Text style={styles.mainBtnText}>Continue Your Journey</Text>
-                    </LinearGradient>
-                  </Animated.View>
-                </TouchableOpacity>
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Text style={styles.mainActionText}>Begin Your Journey</Text>
+                      <Ionicons name="arrow-forward" size={20} color="#fff" />
+                    </>
+                  )}
+                </LinearGradient>
+              </Animated.View>
+            </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => (navigation.navigate as any)('Register_Step1')}
-                  style={styles.loginLink}
-                >
-                  <Text style={styles.loginLinkText}>
-                    Join the Journey
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-          </LinearGradient>
-        </ImageBackground>
+            <TouchableOpacity 
+              onPress={() => (navigation.navigate as any)('Register_Step1')}
+              style={styles.joinLink}
+            >
+              <Text style={styles.joinLinkText}>Don't have an account? <Text style={{ color: '#14c8c4' }}>Join now</Text></Text>
+            </TouchableOpacity>
+          </View>
 
-
-        {/* ACTIONS / Terms */}
-        <View style={styles.actions}>
-          <Text style={styles.footerText}>
-            By continuing, you agree to our{" "}
-            <Text style={styles.link} onPress={() => (navigation.navigate as any)("TermsScreen")}>
-              Terms
-            </Text>{" "}
-            and{" "}
-            <Text style={styles.link} onPress={() => (navigation.navigate as any)("PrivacyScreen")}>
-              Privacy Policy
-            </Text>
-          </Text>
-        </View>
-      </ScrollView>
-
+          <View style={styles.onboardingFooter}>
+             <Text style={styles.footerLegal}>
+                By continuing, you agree to our <Text style={styles.legalLink}>Terms</Text> and <Text style={styles.legalLink}>Privacy</Text>
+             </Text>
+          </View>
+        </LinearGradient>
+      </ImageBackground>
 
       {/* About App Modal */}
       <Modal
@@ -314,219 +422,63 @@ const LandingScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  hero: {
-    width: width,
-    height: height * 0.85,
-  },
-  heroOverlay: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingBottom: 30,
-  },
-  heroHeader: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: Platform.OS === 'android' ? 40 : 0,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cartBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  cartBadge: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: COLORS.teal,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-  cartBadgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '900',
-  },
+  container: { flex: 1, backgroundColor: '#000' },
+  hero: { width: width, height: height },
+  heroOverlay: { flex: 1, paddingBottom: 40, justifyContent: 'space-between' },
+  heroHeader: { paddingHorizontal: 24, paddingTop: Platform.OS === 'android' ? 40 : 10 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   logoTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backdropBlur: 10,
   },
-  logoTagText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginLeft: 6,
-    fontSize: 14,
+  logoTagText: { color: '#fff', fontWeight: 'bold', marginLeft: 8, fontSize: 16 },
+  loginLinkSmall: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)'
   },
-  iconBtn: {
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+  loginLinkSmallText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  storyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  storyText: {
+    color: '#fff', fontSize: 32, fontWeight: '800', textAlign: 'center',
+    lineHeight: 42, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 10,
   },
-  heroBottom: { position: 'absolute', bottom: 30, left: 24, right: 24, zIndex: 10 },
-  heroButtonsContainer: { marginTop: 24, width: '100%' },
-  startBtn: {
-    flex: 1,
-    height: 56,
-    backgroundColor: COLORS.teal,
-    borderRadius: RADIUS.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    ...SHADOW.md,
+
+  onboardingBottom: { paddingHorizontal: 24, paddingBottom: 20 },
+  onboardingTitle: { color: '#fff', fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 20 },
+  explorerGrid: { marginBottom: 30 },
+  explorerScroll: { gap: 12, paddingRight: 20 },
+  explorerBtn: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', gap: 8
   },
-  startBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  loginBtnMini: {
-    paddingHorizontal: 24,
-    height: 56,
-    borderRadius: RADIUS.lg,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+  explorerBtnActive: { backgroundColor: 'rgba(255,255,255,0.25)', borderColor: '#fff' },
+  explorerBtnHighlight: { backgroundColor: 'rgba(20,200,196,0.15)', borderColor: 'rgba(20,200,196,0.5)' },
+  explorerLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '600' },
+  explorerLabelActive: { color: '#fff' },
+
+  mainActionBtnWrapper: { width: '100%', marginBottom: 20 },
+  mainActionBtn: { height: 64, borderRadius: 32, ...SHADOW.lg },
+  mainActionGradient: {
+    flex: 1, borderRadius: 32, flexDirection: 'row', justifyContent: 'center',
+    alignItems: 'center', gap: 10,
   },
-  loginBtnMiniText: { color: '#fff', fontWeight: '700' },
-  heroMain: {
-    fontSize: 44,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: 1,
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  heroSub: {
-    fontSize: 16,
-    color: "#E0E0E0",
-    marginTop: 6,
-    letterSpacing: 0.5,
-    fontWeight: '600',
-  },
-  actions: {
-    paddingHorizontal: SPACING.lg,
-    marginTop: 40,
-  },
-  mainBtn: {
-    height: 60,
-    borderRadius: 30,
-    ...SHADOW.md,
-  },
-  gradientBtn: {
-    flex: 1,
-    borderRadius: 30,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mainBtnText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-    paddingHorizontal: 10,
-  },
-  line: {
-    flex: 1,
-    height: 1,
-  },
-  orText: {
-    marginHorizontal: 15,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  loginBtn: {
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  loginText: {
-    color: '#00A8E8',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  terms: {
-    textAlign: 'center',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  termsLink: {
-    fontWeight: 'bold',
-    textDecorationLine: 'underline',
-  },
-  loginLink: {
-    alignItems: 'center', marginTop: 15, backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignSelf: 'center',
-  },
-  loginLinkText: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalContent: {
-    padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
-    minHeight: 300,
-  },
-  modalHeaderImage: {
-    width: '100%', height: 200, position: 'absolute', top: 0, left: 0, right: 0,
-    borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, opacity: 0.6,
-  },
-  modalGradient: {
-    position: 'absolute', top: 0, left: 0, right: 0, height: 200,
-    borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
-  },
-  modalTitle: { fontSize: 24, fontWeight: '900', marginTop: 80, marginBottom: 8, textAlign: 'center' },
-  modalSubtitle: { fontSize: 14, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
-  modalActions: { width: '100%', marginTop: 16 },
-  modalBtn: {
-    width: '100%', height: 56, borderRadius: RADIUS.lg,
-    justifyContent: 'center', alignItems: 'center', ...SHADOW.md,
-  },
-  modalBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  mainActionText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+
+  joinLink: { alignSelf: 'center' },
+  joinLinkText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '600' },
+
+  onboardingFooter: { paddingBottom: 20 },
+  footerLegal: { color: 'rgba(255,255,255,0.4)', textAlign: 'center', fontSize: 11 },
+  legalLink: { textDecorationLine: 'underline' },
+
   aboutModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   aboutModalContent: {
     borderTopLeftRadius: 35, borderTopRightRadius: 35,
     minHeight: height * 0.75, maxHeight: height * 0.9,
     paddingTop: 15, paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -5 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 20,
   },
   aboutHeaderHandle: { width: 40, height: 5, backgroundColor: 'rgba(150,150,150,0.3)', borderRadius: 3, alignSelf: 'center', marginBottom: 20 },
   aboutHeaderGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 150, borderTopLeftRadius: 35, borderTopRightRadius: 35 },
@@ -551,16 +503,7 @@ const styles = StyleSheet.create({
   taglineText: { fontSize: 14, color: COLORS.teal, fontStyle: 'italic', fontWeight: '600' },
   aboutBtn: { width: '100%', height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', ...SHADOW.lg },
   aboutBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  footerText: {
-    color: "#999",
-    textAlign: "center",
-    fontSize: 12,
-    marginBottom: 40,
-  },
-  link: {
-    color: "#00C6FF",
-    fontWeight: "600",
-  },
 });
+
 
 export default LandingScreen;
