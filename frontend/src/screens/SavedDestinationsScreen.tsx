@@ -20,6 +20,54 @@ import ScreenWrapper from '../components/ScreenWrapper';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const DestinationCard = ({ item, index, theme, styles, navigation, handleRemove }: any) => {
+  const [imgError, setImgError] = useState(false);
+  
+  // We try to use Unsplash search as first fallback, if that fails, we use a static fallback.
+  const dynamicFallback = `https://travelholic-zsqn.onrender.com/api/images/place/${encodeURIComponent(item.title || item.name || 'travel')}?redirect=true&v=0`;
+
+  return (
+    <Animated.View 
+      entering={FadeInRight.delay(index * 100)}
+      style={styles.card}
+    >
+      <View style={styles.cardInner}>
+        <Image 
+          source={{ uri: imgError ? dynamicFallback : (item.image || dynamicFallback) }} 
+          style={styles.image} 
+          onError={() => {
+            if (!imgError) setImgError(true);
+          }}
+        />
+        <View style={styles.content}>
+          <Text style={[styles.name, { color: theme.text }]}>{item.title || item.name}</Text>
+          <Text style={[styles.locationText, { color: theme.textSecondary }]}>📍 {typeof item.location === 'string' ? item.location : (item.address || 'India')}</Text>
+          <Text style={[styles.cardDescription, { color: theme.textLight }]} numberOfLines={2}>
+            {item.description || "Discover the magic of this destination..."}
+          </Text>
+          
+          <View style={styles.cardActions}>
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.viewBtn]}
+              onPress={() => (navigation.navigate as any)('PlaceDetails', { place: item })}
+            >
+              <Text style={styles.viewBtnText}>View Details</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.trashBtn]}
+              onPress={() => handleRemove(item.id, item._id)}
+            >
+              <Ionicons name="trash-outline" size={18} color={theme.error} />
+              <Text style={[styles.trashBtnText, { color: theme.error }]}>Remove</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Animated.View>
+  );
+};
+
 const SavedDestinationsScreen = () => {
   const insets = useSafeAreaInsets();
   const theme = useAppTheme();
@@ -52,38 +100,7 @@ const SavedDestinationsScreen = () => {
   };
 
   const renderItem = ({ item, index }: { item: any, index: number }) => (
-    <Animated.View 
-      entering={FadeInRight.delay(index * 100)}
-      style={styles.card}
-    >
-      <View style={styles.cardInner}>
-        <Image source={{ uri: item.image }} style={styles.image} />
-        <View style={styles.content}>
-          <Text style={[styles.name, { color: theme.text }]}>{item.title || item.name}</Text>
-          <Text style={[styles.locationText, { color: theme.textSecondary }]}>📍 {typeof item.location === 'string' ? item.location : (item.address || 'India')}</Text>
-          <Text style={[styles.cardDescription, { color: theme.textLight }]} numberOfLines={2}>
-            {item.description || "Discover the magic of this destination..."}
-          </Text>
-          
-          <View style={styles.cardActions}>
-            <TouchableOpacity 
-              style={[styles.actionBtn, styles.viewBtn]}
-              onPress={() => (navigation.navigate as any)('PlaceDetails', { place: item })}
-            >
-              <Text style={styles.viewBtnText}>View Details</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionBtn, styles.trashBtn]}
-              onPress={() => handleRemove(item.id, item._id)}
-            >
-              <Ionicons name="trash-outline" size={18} color={theme.error} />
-              <Text style={[styles.trashBtnText, { color: theme.error }]}>Remove</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Animated.View>
+    <DestinationCard item={item} index={index} theme={theme} styles={styles} navigation={navigation} handleRemove={handleRemove} />
   );
 
   return (
